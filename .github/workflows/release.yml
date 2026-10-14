@@ -15,6 +15,9 @@ on:
   push:
     tags: ['v*']
 
+# One release at a time, so two tags pushed together can't race on update.json.
+concurrency: release
+
 permissions:
   contents: write
 
@@ -57,3 +60,35 @@ jobs:
           $pre = if ($tag -match '-') { '--prerelease' } else { $null }
           gh release create $tag dist/Launcher-windows-x64.zip dist/Launcher/Launcher.exe `
             --title "Launcher $($tag.TrimStart('v'))" --generate-notes $pre
+
+      # update.json is what launchers check first: served from raw.githubusercontent.com,
+      # so it isn't subject to the GitHub API's 60-an-hour limit. It lives on its own
+      # `updates` branch so releases never add commits to main.
+      - name: Publish update.json
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag  = '${{ github.ref_name }}'
+          $repo = '${{ github.repository }}'
+          $info = gh release view $tag --json body,publishedAt,isPrerelease | ConvertFrom-Json
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if (git ls-remote --heads origin updates) {
+            git fetch --depth 1 origin updates
+            git worktree add updates-branch FETCH_HEAD
+          } else {
+            # First release with update.json: start the branch with nothing else on it.
+            git worktree add --detach updates-branch
+            git -C updates-branch checkout --orphan updates
+            git -C updates-branch rm -rf --quiet .
+          }
+
+          ./tools/publish-update.ps1 -Entry dist/release-entry.json -Repo $repo -Tag $tag `
+            -UpdateJson updates-branch/update.json -Prerelease:$info.isPrerelease `
+            -Notes "$($info.body)" -Published "$($info.publishedAt)"
+
+          git -C updates-branch add update.json
+          git -C updates-branch commit -m "update.json for $tag"
+          git -C updates-branch push origin HEAD:refs/heads/updates

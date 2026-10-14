@@ -1,13 +1,14 @@
 //! Self-update from GitHub releases.
 //!
-//! A release is eligible when its tag parses as a semver version (a leading `v` is
-//! fine) and it carries the `Launcher-windows-x64.zip` package. The newest eligible
-//! release that is newer than this build wins.
+//! Releases are found through update.json on the repo's `updates` branch, served
+//! by GitHub's CDN with no API rate limit. If that can't be read, the GitHub API is
+//! asked, and if that's rate-limited, the website.
 //!
 //! The package is the whole program folder plus `launcher-manifest.json`, which
-//! lists every file with its size and SHA-256. An update is checked twice: the zip
-//! against the SHA-256 GitHub publishes for the asset, then every unpacked file
-//! against the manifest. Only then is anything swapped in.
+//! lists every file with its size and SHA-256. Before anything is swapped in, the
+//! zip must match its published SHA-256, every unpacked file must match the
+//! manifest, and (via update.json) the manifest must match the file list published
+//! separately for that release.
 //!
 //! Installing never overwrites a file in use: Windows lets a running exe or a
 //! loaded DLL be *renamed*, just not overwritten. So each file being replaced is
@@ -46,8 +47,18 @@ pub struct Release {
     pub prerelease: bool,
     pub asset_url: String,
     pub size: u64,
-    /// GitHub's own `sha256:<hex>` for the asset, when it reports one.
+    /// The package's `sha256:<hex>`, from update.json or GitHub's asset digest.
     pub digest: Option<String>,
+    /// The file list update.json published for this release. When present, the
+    /// manifest inside the downloaded package must match it exactly.
+    #[serde(skip)]
+    pub expected: Option<Expected>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Expected {
+    exe: String,
+    files: Vec<ManifestFile>,
 }
 
 pub enum Check {
@@ -84,8 +95,8 @@ struct Manifest {
     files: Vec<ManifestFile>,
 }
 
-#[derive(Deserialize)]
-struct ManifestFile {
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ManifestFile {
     path: String,
     size: u64,
     sha256: String,
@@ -127,8 +138,89 @@ fn api_base() -> String {
     "https://api.github.com".into()
 }
 
-/// Asks GitHub for the newest release this build could update to.
+/// update.json, published by the release workflow to the repo's `updates` branch.
+/// Served by GitHub's CDN, so it isn't subject to the API's hourly limit.
+fn update_json_url() -> String {
+    if cfg!(debug_assertions) {
+        if let Ok(url) = std::env::var("LAUNCHER_UPDATE_JSON") {
+            return url;
+        }
+    }
+    format!("https://raw.githubusercontent.com/{REPO}/updates/update.json")
+}
+
+#[derive(Deserialize)]
+struct UpdateJson {
+    channels: UpdateChannels,
+}
+
+#[derive(Deserialize)]
+struct UpdateChannels {
+    stable: Option<UpdateEntry>,
+    beta: Option<UpdateEntry>,
+}
+
+#[derive(Deserialize)]
+struct UpdateEntry {
+    version: String,
+    #[serde(default)]
+    published: String,
+    #[serde(default)]
+    notes: String,
+    page: String,
+    package: UpdatePackage,
+    exe: String,
+    files: Vec<ManifestFile>,
+}
+
+#[derive(Deserialize)]
+struct UpdatePackage {
+    url: String,
+    size: u64,
+    sha256: String,
+}
+
+/// Finds the newest release this build could update to. update.json first; if it
+/// can't be read, the GitHub API; if that's rate-limited, the website.
 pub fn check(prereleases: bool) -> Result<Check, String> {
+    check_via_update_json(prereleases).or_else(|_| check_via_api(prereleases))
+}
+
+fn check_via_update_json(prereleases: bool) -> Result<Check, String> {
+    let mut resp = agent().get(&update_json_url()).call().map_err(|e| e.to_string())?;
+    if resp.status() != 200 {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    let doc: UpdateJson = resp.body_mut().read_json().map_err(|e| e.to_string())?;
+
+    // With pre-releases on, whichever of the two channels is newer.
+    let candidates = [Some(doc.channels.stable), prereleases.then_some(doc.channels.beta)];
+    let best = candidates
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| Some((parse_version(&e.version)?, e)))
+        .max_by(|a, b| a.0.cmp(&b.0));
+
+    let Some((v, e)) = best else { return Ok(Check::UpToDate) };
+    if v <= current_version() {
+        return Ok(Check::UpToDate);
+    }
+    Ok(Check::Available(Release {
+        version: v.to_string(),
+        name: format!("Launcher {v}"),
+        notes: e.notes,
+        published: e.published,
+        page: e.page,
+        prerelease: !v.pre.is_empty(),
+        asset_url: e.package.url,
+        size: e.package.size,
+        digest: Some(format!("sha256:{}", e.package.sha256)),
+        expected: Some(Expected { exe: e.exe, files: e.files }),
+    }))
+}
+
+fn check_via_api(prereleases: bool) -> Result<Check, String> {
     let url = format!("{}/repos/{REPO}/releases?per_page=30", api_base());
     let mut resp = agent()
         .get(&url)
@@ -205,6 +297,7 @@ fn check_via_website() -> Result<Check, String> {
         asset_url: format!("https://github.com/{REPO}/releases/download/{tag}/{PACKAGE_ASSET}"),
         size: 0,
         digest: None,
+        expected: None,
     }))
 }
 
@@ -219,6 +312,7 @@ fn asset_release(r: &GhRelease, a: &GhAsset) -> Release {
         asset_url: a.browser_download_url.clone(),
         size: a.size,
         digest: a.digest.clone(),
+        expected: None,
     }
 }
 
@@ -323,13 +417,26 @@ fn download_into(stage: &Path, rel: &Release, mut progress: impl FnMut(u64, u64)
     if let Some(expected) = rel.digest.as_deref().and_then(|d| d.strip_prefix("sha256:")) {
         let got = format!("{:x}", hasher.finalize());
         if !got.eq_ignore_ascii_case(expected) {
-            return Err("The download didn't match GitHub's checksum.".into());
+            return Err("The download didn't match its published checksum.".into());
         }
     }
 
     let files = stage.join("files");
     extract(&zip_path, &files)?;
     let manifest = verify_files(&files)?;
+    // The package's own manifest came out of the zip, so on its own it only shows
+    // the zip is self-consistent. update.json's list comes separately; a package
+    // whose list differs from it in any file, size or hash is refused.
+    if let Some(expected) = &rel.expected {
+        let sorted = |files: &[ManifestFile]| {
+            let mut v = files.to_vec();
+            v.sort_by(|a, b| a.path.cmp(&b.path));
+            v
+        };
+        if manifest.exe != expected.exe || sorted(&manifest.files) != sorted(&expected.files) {
+            return Err("The update package doesn't match its published file list.".into());
+        }
+    }
     let _ = fs::remove_file(&zip_path);
     fs::write(ready_marker(), &manifest.version).map_err(|e| write_err(stage, e))
 }

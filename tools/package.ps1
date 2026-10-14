@@ -6,8 +6,9 @@
 # Writes:
 #   <Out>\Launcher\                     the portable folder, ready to run
 #   <Out>\Launcher-windows-x64.zip      that folder zipped: what the updater downloads
+#   <Out>\release-entry.json            this release's entry for update.json
 #
-# Anything in the repo's package\ folder ships too, subfolders included — put any
+# Anything in the repo's package\ folder ships too, subfolders included. Put any
 # file a future version needs beside the exe there and updates will carry it.
 #
 # Every file is listed in launcher-manifest.json with its size and SHA-256. The
@@ -68,4 +69,20 @@ try {
     }
 } finally { $zip.Dispose() }
 
-Write-Output "Packaged Launcher $version ($($files.Count) files) -> $zipPath"
+# This release's entry for update.json (see tools\publish-update.ps1): the same file
+# list, plus the zip's own size and hash.
+$zipInfo = Get-Item $zipPath
+$entry = [ordered]@{
+    version = $version
+    exe     = 'Launcher.exe'
+    package = [ordered]@{
+        name   = $zipInfo.Name
+        size   = $zipInfo.Length
+        sha256 = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+    }
+    files   = @($files)
+}
+[IO.File]::WriteAllText((Join-Path $Out 'release-entry.json'), ($entry | ConvertTo-Json -Depth 5),
+    (New-Object Text.UTF8Encoding $false))
+
+Write-Output "Packaged Launcher $version ($(@($files).Count) files) -> $zipPath"
