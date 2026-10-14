@@ -69,12 +69,10 @@ fn main() {
 
     // An update the user deferred with "Later" and never got applied on exit
     // (a crash, a power cut) goes in now, before anything else opens.
-    if let Ok(staged) = updater::staged_path() {
-        if staged.exists() {
-            if let Ok(exe) = updater::apply(&staged) {
-                if updater::relaunch(&exe).is_ok() {
-                    return;
-                }
+    if let Some(staged) = updater::staged() {
+        if let Ok(exe) = updater::apply(&staged) {
+            if updater::relaunch(&exe).is_ok() {
+                return;
             }
         }
     }
@@ -330,7 +328,8 @@ impl App {
 
     /// Returns true when the new copy is running and this one should exit.
     fn install_and_restart(&mut self, webview: &WebView) -> bool {
-        let result = updater::staged_path()
+        let result = updater::staged()
+            .ok_or_else(|| "The downloaded update has gone missing. Check again.".to_string())
             .and_then(|staged| updater::apply(&staged))
             .and_then(|exe| updater::relaunch(&exe));
         match result {
@@ -347,7 +346,7 @@ impl App {
     /// so the next open is already the new version.
     fn finish_on_exit(&mut self) {
         if let Update::Ready { .. } = self.update {
-            if let Ok(staged) = updater::staged_path() {
+            if let Some(staged) = updater::staged() {
                 let _ = updater::apply(&staged);
             }
         }

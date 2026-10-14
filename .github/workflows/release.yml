@@ -4,7 +4,8 @@
 #   2. git tag v0.2.0 && git push origin main v0.2.0
 #
 # The MSVC build links the C runtime and the WebView2 loader statically, so the
-# release is a single Launcher.exe that runs on a bare Windows 10/11 install.
+# exe needs nothing installed. tools/package.ps1 then packs the program folder
+# (the exe plus anything in package/) with a manifest of SHA-256 hashes.
 # Launchers already out there see the new release on their next start (or from
 # Settings > Check for updates) and replace themselves with it.
 
@@ -39,12 +40,20 @@ jobs:
       - name: Build
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
+      - name: Package
+        shell: pwsh
+        run: ./tools/package.ps1 -Exe target/x86_64-pc-windows-msvc/release/Launcher.exe -Out dist
+
+      # Launcher-windows-x64.zip is what launchers update from: every file in the
+      # folder, listed with its SHA-256 in launcher-manifest.json. Launcher.exe is
+      # also attached, for people who just want the exe and for 0.1.0, whose
+      # updater only knew how to fetch the exe.
       - name: Publish release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ github.ref_name }}'
-          Copy-Item target\x86_64-pc-windows-msvc\release\Launcher.exe Launcher.exe
           $pre = if ($tag -match '-') { '--prerelease' } else { $null }
-          gh release create $tag Launcher.exe --title "Launcher $($tag.TrimStart('v'))" --generate-notes $pre
+          gh release create $tag dist/Launcher-windows-x64.zip dist/Launcher/Launcher.exe `
+            --title "Launcher $($tag.TrimStart('v'))" --generate-notes $pre

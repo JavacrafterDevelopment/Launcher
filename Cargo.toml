@@ -19,6 +19,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
 sha2 = "0.10"
+# Pure-Rust deflate (zlib-rs): no C compiler needed for the GNU build.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]

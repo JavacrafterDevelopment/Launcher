@@ -5,11 +5,11 @@
 # Produces dist\Launcher\ — copy that folder anywhere (a USB stick, another PC)
 # and run Launcher.exe. Nothing is installed; settings live in data\ beside it.
 #
-#   -Zip      also writes dist\Launcher-<version>-portable.zip
+# Also writes dist\Launcher-windows-x64.zip, the same package a release ships.
+#
 #   -Icon     redraws assets\ from tools\make-icon.ps1 first
 
 param(
-    [switch]$Zip,
     [switch]$Icon
 )
 
@@ -60,14 +60,7 @@ Write-Host "  Compiling (release, $hostTriple)"
 & cargo build --release
 if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
 
-if (Test-Path $dist) {
-    # Leave data\ alone: it holds your settings and the browser profile.
-    Get-ChildItem $dist -Force | Where-Object { $_.Name -ne 'data' } | Remove-Item -Recurse -Force
-} else {
-    New-Item -ItemType Directory -Force $dist | Out-Null
-}
-Copy-Item (Join-Path $root 'target\release\Launcher.exe') $dist
-
+$extra = @()
 if ($gnu) {
     # MSVC builds link the WebView2 loader statically; GNU builds load it as a DLL,
     # so it has to travel with the exe. It ships inside the webview2-com-sys crate.
@@ -77,19 +70,15 @@ if ($gnu) {
         ForEach-Object { Join-Path $_.FullName "webview2-com-sys-$ver\x64\WebView2Loader.dll" } |
         Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $dll) { throw "WebView2Loader.dll for webview2-com-sys $ver not found under $registry" }
-    Copy-Item $dll $dist
+    $extra += $dll
 }
+
+# The same packaging the release workflow uses: folder, manifest and update zip.
+& (Join-Path $root 'tools\package.ps1') -Exe (Join-Path $root 'target\release\Launcher.exe') `
+    -Out (Join-Path $root 'dist') -Extra $extra | Out-Null
 
 $version = ((Get-Content (Join-Path $root 'Cargo.toml')) | Select-String '^version = "(.+)"').Matches[0].Groups[1].Value
 $size = [Math]::Round((Get-ChildItem $dist -File | Measure-Object Length -Sum).Sum / 1MB, 1)
 Write-Host "  Built Launcher $version -> $dist ($size MB)" -ForegroundColor Green
-
-if ($Zip) {
-    $zipPath = Join-Path $root "dist\Launcher-$version-portable.zip"
-    if (Test-Path $zipPath) { Remove-Item $zipPath }
-    # Program files only; never someone's data\ folder.
-    $files = Get-ChildItem $dist -File | ForEach-Object FullName
-    Compress-Archive -Path $files -DestinationPath $zipPath
-    Write-Host "  Zipped -> $zipPath" -ForegroundColor Green
-}
+Write-Host "  Package -> $(Join-Path $root 'dist\Launcher-windows-x64.zip')" -ForegroundColor Green
 Write-Host ''
