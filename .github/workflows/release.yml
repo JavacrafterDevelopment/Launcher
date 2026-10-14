@@ -1,0 +1,50 @@
+# Publishes a release whenever a version tag is pushed:
+#
+#   1. bump `version` in Cargo.toml (e.g. 0.2.0) and commit
+#   2. git tag v0.2.0 && git push origin main v0.2.0
+#
+# The MSVC build links the C runtime and the WebView2 loader statically, so the
+# release is a single Launcher.exe that runs on a bare Windows 10/11 install.
+# Launchers already out there see the new release on their next start (or from
+# Settings > Check for updates) and replace themselves with it.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches Cargo.toml
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $ver = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($tag -ne $ver) { throw "Tag v$tag doesn't match Cargo.toml version $ver" }
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          Copy-Item target\x86_64-pc-windows-msvc\release\Launcher.exe Launcher.exe
+          $pre = if ($tag -match '-') { '--prerelease' } else { $null }
+          gh release create $tag Launcher.exe --title "Launcher $($tag.TrimStart('v'))" --generate-notes $pre

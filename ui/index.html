@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en" data-theme="{{THEME}}">
+<head>
+  <meta charset="utf-8">
+  <title>Launcher</title>
+  <style>/*{{CSS}}*/</style>
+  <script>/*{{BOOT}}*/</script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- Masthead: the mark stands full height on the left, wordmark and page tabs
+         stacked beside it, window buttons pinned to the corner. The whole band is
+         the drag handle except the controls sitting on it. -->
+    <header id="top">
+      <svg id="mark" width="58" height="58" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="exhaustGlow">
+            <stop offset="0" stop-color="#C79A4A" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#C79A4A" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="flameFade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0"   stop-color="#C79A4A"/>
+            <stop offset=".7"  stop-color="#A8843F" stop-opacity=".55"/>
+            <stop offset="1"   stop-color="#A8843F" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Drawn first so the body and nozzle sit over the root of the exhaust. -->
+        <g class="sparks">
+          <circle cx="27" cy="56" r="1.1"/>
+          <circle cx="37" cy="58" r=".9"/>
+          <circle cx="32" cy="61" r="1"/>
+        </g>
+        <circle class="glow" cx="32" cy="54" r="10" fill="url(#exhaustGlow)"/>
+        <path class="flame" d="M26 49 Q32 66 38 49 Z" fill="url(#flameFade)"/>
+
+        <path class="fin" d="M22 33 L13 45 L13 53 L22 46 Z"/>
+        <path class="fin" d="M42 33 L51 45 L51 53 L42 46 Z"/>
+        <path class="body" d="M32 4 C40 10.5 42.5 19 42.5 31 V48.5 H21.5 V31 C21.5 19 24 10.5 32 4 Z"/>
+        <path class="band" d="M21.5 40 H42.5" stroke-width="3.4"/>
+        <circle class="fin" cx="32" cy="23" r="6.2"/>
+        <circle class="lamp" cx="32" cy="23" r="4"/>
+        <rect class="fin" x="25.5" y="47.5" width="13" height="4" rx="1"/>
+      </svg>
+
+      <div id="brandcol">
+        <div id="brandrow">
+          <span id="wordmark">Launcher</span>
+          <span id="byline">by Javacrafter</span>
+        </div>
+
+        <nav id="tabs">
+          <button class="chip on" data-page="library" title="Your apps and games">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="9" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            Library
+          </button>
+          <button class="chip" data-page="settings" title="Settings (Ctrl+,)">
+            <!-- A cog, not a sun: short thick teeth on a heavy ring around a hub hole. -->
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M13.2 8H15.0M2.8 8H1.0M10.6 12.5l.9 1.56M5.4 3.5l-.9-1.56M10.6 3.5l.9-1.56M5.4 12.5l-.9 1.56"
+                    stroke="currentColor" stroke-width="2.3" stroke-linecap="butt"/>
+              <circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="2.7"/>
+            </svg>
+            Settings
+          </button>
+        </nav>
+      </div>
+
+      <div id="winbtns">
+        <button class="winbtn" data-win="minimize" title="Minimise">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+        <button class="winbtn" data-win="maximize" title="Maximise">
+          <svg class="max" width="10" height="10" viewBox="0 0 10 10"><rect x="1.2" y="1.2" width="7.6" height="7.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+          <svg class="restore" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="1" y="3" width="6" height="6"/><path d="M3 3V1h6v6H7"/></svg>
+        </button>
+        <button class="winbtn close" data-win="close" title="Close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.4 1.4l7.2 7.2M8.6 1.4L1.4 8.6" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="body">
+
+      <!-- ------------------------------------------------------------ library -->
+      <section id="page-library" class="page on">
+        <div class="empty">
+          <svg width="46" height="56" viewBox="0 0 48 58" fill="none" opacity=".55" aria-hidden="true">
+            <path d="M17 26 L9 36 V42 L17 36 Z M31 26 L39 36 V42 L31 36 Z" fill="#8C7A66"/>
+            <path d="M24 3 C30 8 32 15 32 24 V37 H16 V24 C16 15 18 8 24 3 Z" fill="#8C7A66"/>
+            <circle cx="24" cy="18" r="3.4" fill="#A8843F"/>
+            <path d="M20.5 39.5 Q24 52 27.5 39.5 Z" fill="#A8843F" opacity=".8"/>
+            <path d="M6 55h36" stroke="#8C7A66" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>
+          </svg>
+          <h2>Nothing on the shelf yet</h2>
+          <p>Apps and games published on GitHub will appear here, ready to install and
+            launch. For now the launcher keeps itself up to date.</p>
+          <button class="btn ghost" data-goto="settings">Open settings</button>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------------- settings -->
+      <section id="page-settings" class="page">
+        <div class="column">
+          <h1 class="page-title">Settings</h1>
+
+          <div class="card" id="updates-card">
+            <div class="card-head">
+              <h3>Updates</h3>
+              <a class="link" id="repo-link" href="#" title="Open the releases page on GitHub"></a>
+            </div>
+
+            <div class="ver-block">
+              <div class="ver">
+                <span class="ver-label">Installed</span>
+                <span class="ver-num" id="ver-current"></span>
+              </div>
+              <div class="ver-status">
+                <span class="pill" id="upd-pill"><span class="dot"></span><span id="upd-pill-text">Not checked</span></span>
+                <p class="ver-detail" id="upd-detail">The launcher can check GitHub for a newer release.</p>
+              </div>
+            </div>
+
+            <div class="progress" id="upd-progress"><div class="bar" id="upd-bar"></div></div>
+
+            <div class="notes" id="upd-notes">
+              <div class="notes-head">
+                <span class="notes-title" id="upd-notes-title"></span>
+                <a class="link" id="upd-notes-link" href="#">View on GitHub</a>
+              </div>
+              <div class="notes-body" id="upd-notes-body"></div>
+            </div>
+
+            <div class="actions">
+              <button class="btn" id="btn-check">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
+                </svg>
+                Check for updates
+              </button>
+              <button class="btn primary" id="btn-download">Download &amp; install</button>
+              <button class="btn primary" id="btn-restart">Restart to update</button>
+              <span class="grow"></span>
+              <span class="meta" id="upd-last"></span>
+            </div>
+
+            <div class="set-row">
+              <label class="set-text" for="set-auto">
+                <span class="set-title">Update automatically</span>
+                <span class="set-desc">Each time the launcher opens it checks GitHub, and if
+                  there's a newer release it downloads it and restarts into it.</span>
+              </label>
+              <input type="checkbox" id="set-auto" class="switch">
+            </div>
+
+            <div class="set-row last">
+              <label class="set-text" for="set-pre">
+                <span class="set-title">Include pre-releases</span>
+                <span class="set-desc">Also offer releases marked as pre-release on GitHub.
+                  Earlier, and sometimes rougher.</span>
+              </label>
+              <input type="checkbox" id="set-pre" class="switch">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Appearance</h3></div>
+            <div class="set-row last">
+              <label class="set-text" for="set-dark">
+                <span class="set-title">Dark mode</span>
+                <span class="set-desc">The same walnut and gilt, dimmed for the evening.</span>
+              </label>
+              <input type="checkbox" id="set-dark" class="switch">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Portable</h3></div>
+            <div class="set-row last">
+              <div class="set-text">
+                <span class="set-title">Everything stays in this folder</span>
+                <span class="set-desc">Settings and the browser profile live in
+                  <code>data\</code> beside <code>Launcher.exe</code>. Copy the folder to a
+                  stick or another PC and it comes with you.</span>
+              </div>
+              <button class="btn small" id="btn-data">Open folder</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer id="status">
+      <span id="lamp"></span>
+      <span id="statusText">Starting up</span>
+      <span class="grow"></span>
+      <button id="status-update" class="statusbtn" title="Update settings">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2.5v8M4.6 7.3 8 10.7l3.4-3.4M3 13.5h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="status-update-text">Update</span>
+      </button>
+      <span id="version"></span>
+    </footer>
+  </div>
+
+  <!-- Shown for updates that run on their own at launch. -->
+  <div id="toast" role="status" aria-live="polite">
+    <div class="toast-row">
+      <span class="toast-lamp"></span>
+      <div class="toast-text">
+        <span class="toast-title" id="toast-title"></span>
+        <span class="toast-desc" id="toast-desc"></span>
+      </div>
+    </div>
+    <div class="progress small" id="toast-progress"><div class="bar" id="toast-bar"></div></div>
+    <div class="toast-actions" id="toast-actions">
+      <button class="btn small ghost" id="toast-later">Later</button>
+      <button class="btn small primary" id="toast-now">Restart now</button>
+    </div>
+  </div>
+
+  <!-- The webview fills the window, so the window never sees a hit test near its
+       border. These invisible strips sit on top and hand the resize back. -->
+  <div class="grips">
+    <div class="grip n"  data-dir="n"></div>
+    <div class="grip s"  data-dir="s"></div>
+    <div class="grip w"  data-dir="w"></div>
+    <div class="grip e"  data-dir="e"></div>
+    <div class="grip nw" data-dir="nw"></div>
+    <div class="grip ne" data-dir="ne"></div>
+    <div class="grip sw" data-dir="sw"></div>
+    <div class="grip se" data-dir="se"></div>
+  </div>
+
+  <script>/*{{JS}}*/</script>
+</body>
+</html>
