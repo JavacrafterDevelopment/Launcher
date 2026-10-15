@@ -46,6 +46,8 @@ pub enum Task {
     Checking,
     Downloading { done: u64, total: u64 },
     Installing,
+    Verifying { done: usize, total: usize },
+    Repairing { done: u64, total: u64 },
     Error { message: String },
 }
 
@@ -56,6 +58,11 @@ pub enum AppEvent {
     Installing,
     Log(String),
     Finished(Result<(), String>),
+    VerifyProgress(usize, usize),
+    /// The installed files that are missing or don't match their SHA-256.
+    Verified(Result<Vec<String>, String>),
+    RepairProgress(u64, u64),
+    Repaired(Result<(), String>),
 }
 
 /// One line of an app's activity log, shown in the drawer under its card.
@@ -80,6 +87,8 @@ struct AppState {
     checked: bool,
     task: Task,
     log: Vec<LogLine>,
+    /// Files the last verify found missing or changed; Repair fetches these.
+    damaged: Vec<String>,
 }
 
 impl AppState {
@@ -98,7 +107,14 @@ impl AppState {
     }
 
     fn busy(&self) -> bool {
-        matches!(self.task, Task::Checking | Task::Downloading { .. } | Task::Installing)
+        matches!(
+            self.task,
+            Task::Checking
+                | Task::Downloading { .. }
+                | Task::Installing
+                | Task::Verifying { .. }
+                | Task::Repairing { .. }
+        )
     }
 
     fn log(&mut self, kind: &'static str, text: impl Into<String>) {
@@ -130,6 +146,7 @@ impl Library {
                     checked: false,
                     task: Task::Idle,
                     log: Vec::new(),
+                    damaged: Vec::new(),
                 };
                 a.refresh_installed();
                 a
@@ -161,6 +178,7 @@ impl Library {
                     "updateAvailable": a.update_available(),
                     "task": a.task,
                     "log": a.log,
+                    "damaged": a.damaged,
                 })
             })
             .collect();
@@ -255,6 +273,7 @@ impl Library {
             AppEvent::Log(line) => a.log("info", line),
             AppEvent::Finished(Ok(())) => {
                 a.refresh_installed();
+                a.damaged.clear();
                 let done = format!("Done: {} v{} is installed", a.info.name, a.installed.as_deref().unwrap_or("?"));
                 a.log("ok", done);
                 a.task = Task::Idle;
@@ -264,7 +283,93 @@ impl Library {
                 a.log("error", format!("Stopped: {message}"));
                 a.task = Task::Error { message };
             }
+            AppEvent::VerifyProgress(done, total) => a.task = Task::Verifying { done, total },
+            AppEvent::Verified(Ok(damaged)) => {
+                a.damaged = damaged;
+                a.log(if a.damaged.is_empty() { "ok" } else { "error" }, match a.damaged.len() {
+                    0 => "Verify finished: nothing to repair".to_string(),
+                    n => format!("Verify finished: {n} file{} to repair. Press Repair to fetch just those.", if n == 1 { "" } else { "s" }),
+                });
+                a.task = Task::Idle;
+            }
+            AppEvent::Verified(Err(message)) => {
+                a.log("error", format!("Couldn't verify: {message}"));
+                a.task = Task::Error { message };
+            }
+            AppEvent::RepairProgress(done, total) => a.task = Task::Repairing { done, total },
+            AppEvent::Repaired(Ok(())) => {
+                a.damaged.clear();
+                a.log("ok", format!("Done: {} is repaired", a.info.name));
+                a.task = Task::Idle;
+            }
+            AppEvent::Repaired(Err(message)) => {
+                a.log("error", format!("Repair stopped: {message}"));
+                a.task = Task::Error { message };
+            }
         }
+    }
+
+    /// Checks every installed file against its SHA-256. Damaged files are only
+    /// reported; Repair fixes them.
+    pub fn verify(&mut self, id: &str) {
+        let proxy = self.proxy.clone();
+        let Some(a) = self.get(id) else { return };
+        if a.busy() || a.installed.is_none() {
+            return;
+        }
+        a.log.clear();
+        a.log("info", format!("Verifying {} v{}", a.info.name, a.installed.as_deref().unwrap_or("?")));
+        a.task = Task::Verifying { done: 0, total: 0 };
+        let (id, target) = (a.info.id, a.target());
+        std::thread::spawn(move || {
+            let send = |e: AppEvent| {
+                let _ = proxy.send_event(UserEvent::App(id, e));
+            };
+            let mut last = 0;
+            let progress = |done, total| {
+                // A message every few files keeps the page current without flooding it.
+                if done == total || done - last >= 5 {
+                    last = done;
+                    send(AppEvent::VerifyProgress(done, total));
+                }
+            };
+            let result = target.verify(progress, &|line| send(AppEvent::Log(line)));
+            send(AppEvent::Verified(result));
+        });
+    }
+
+    /// Re-downloads only the files the last verify found damaged.
+    pub fn repair(&mut self, id: &str) {
+        let proxy = self.proxy.clone();
+        let Some(a) = self.get(id) else { return };
+        if a.busy() || a.damaged.is_empty() {
+            return;
+        }
+        let target = a.target();
+        if target.exe_in_use() {
+            let message = format!("{} is running. Close it, then repair.", a.info.name);
+            a.log("error", message.clone());
+            a.task = Task::Error { message };
+            return;
+        }
+        a.log("info", format!("Repairing {} file{}", a.damaged.len(), if a.damaged.len() == 1 { "" } else { "s" }));
+        a.task = Task::Repairing { done: 0, total: 0 };
+        let (id, paths) = (a.info.id, a.damaged.clone());
+        std::thread::spawn(move || {
+            let send = |e: AppEvent| {
+                let _ = proxy.send_event(UserEvent::App(id, e));
+            };
+            let mut last_pct = u64::MAX;
+            let progress = |done, total| {
+                let pct = if total > 0 { done * 100 / total } else { 0 };
+                if pct != last_pct {
+                    last_pct = pct;
+                    send(AppEvent::RepairProgress(done, total));
+                }
+            };
+            let result = target.repair(&paths, progress, &|line| send(AppEvent::Log(line)));
+            send(AppEvent::Repaired(result));
+        });
     }
 
     pub fn launch(&mut self, id: &str) {

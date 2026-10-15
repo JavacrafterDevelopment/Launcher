@@ -206,13 +206,15 @@ impl App {
                 self.library.check_all(self.settings.prereleases);
                 send(webview, self.library.snapshot());
             }
-            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" => {
+            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" | "appVerify" | "appRepair" => {
                 let id = msg["id"].as_str().unwrap_or_default();
                 match cmd {
                     "appCheck" => self.library.check_all(self.settings.prereleases),
                     "appInstall" => self.library.install(id),
                     "appLaunch" => self.library.launch(id),
                     "appFolder" => self.library.open_folder(id),
+                    "appVerify" => self.library.verify(id),
+                    "appRepair" => self.library.repair(id),
                     _ => self.library.uninstall(id),
                 }
                 send(webview, self.library.snapshot());

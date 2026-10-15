@@ -525,6 +525,170 @@ impl Target {
         Ok(())
     }
 
+    fn installed_manifest(&self) -> Result<Manifest, String> {
+        let raw = fs::read(self.dir.join(MANIFEST))
+            .map_err(|_| "Its file list (launcher-manifest.json) is missing. Reinstall it instead.".to_string())?;
+        serde_json::from_slice(&raw)
+            .map_err(|_| "Its file list (launcher-manifest.json) is damaged. Reinstall it instead.".to_string())
+    }
+
+    /// Where an installed file lives; the launcher's own exe may have been renamed.
+    fn installed_path(&self, m: &Manifest, rel: &Path) -> PathBuf {
+        match &self.self_exe {
+            Some(exe) if rel == Path::new(&m.exe) => exe.clone(),
+            _ => self.dir.join(rel),
+        }
+    }
+
+    /// The package of one particular version, which is where repairs come from.
+    fn package_url(&self, version: &str) -> String {
+        if cfg!(debug_assertions) {
+            if let Ok(base) = std::env::var("LAUNCHER_UPDATE_BASE") {
+                let name = self.repo.rsplit('/').next().unwrap_or_default();
+                return format!("{}/{name}/v{version}/{}", base.trim_end_matches('/'), self.package);
+            }
+        }
+        format!("https://github.com/{}/releases/download/v{version}/{}", self.repo, self.package)
+    }
+
+    /// Hashes every installed program file against the installed manifest. Returns
+    /// the paths that are missing or don't match. `data\` isn't part of the list:
+    /// settings are meant to change. `progress` gets (files checked, total).
+    pub fn verify(&self, mut progress: impl FnMut(usize, usize), log: &dyn Fn(String)) -> Result<Vec<String>, String> {
+        let m = self.installed_manifest()?;
+        log(format!("Checking {} files of v{} against their SHA-256", m.files.len(), m.version));
+        let mut bad = Vec::new();
+        for (i, f) in m.files.iter().enumerate() {
+            let verdict = match safe_relative(&f.path) {
+                None => Some("listed with an unsafe path"),
+                Some(rel) => match sha256_file(&self.installed_path(&m, &rel)) {
+                    Err(_) => Some("missing"),
+                    Ok((size, _)) if size != f.size => Some("wrong size"),
+                    Ok((_, hash)) if !hash.eq_ignore_ascii_case(&f.sha256) => Some("contents changed"),
+                    Ok(_) => None,
+                },
+            };
+            if let Some(why) = verdict {
+                log(format!("Damaged: {} ({why})", f.path));
+                bad.push(f.path.clone());
+            }
+            progress(i + 1, m.files.len());
+        }
+        log(match bad.len() {
+            0 => format!("All {} files are intact", m.files.len()),
+            n => format!("{n} of {} files need repairing", m.files.len()),
+        });
+        Ok(bad)
+    }
+
+    /// Re-downloads just the given files, from the installed version's own release
+    /// package. Only the zip's index and the bytes of those files are fetched (HTTP
+    /// range requests); each file must match its SHA-256 before it replaces the
+    /// damaged one. `progress` gets (bytes written, total).
+    pub fn repair(&self, paths: &[String], mut progress: impl FnMut(u64, u64), log: &dyn Fn(String)) -> Result<(), String> {
+        let m = self.installed_manifest()?;
+        let wanted: Vec<&ManifestFile> = m.files.iter().filter(|f| paths.contains(&f.path)).collect();
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let url = self.package_url(&m.version);
+        log(format!("Reading the v{} package's index from {url}", m.version));
+
+        let stage = self.stage_dir().join("repair");
+        let _ = fs::remove_dir_all(&stage);
+        fs::create_dir_all(&stage).map_err(|e| write_err(&stage, e))?;
+        let result = self.repair_from(&m, &wanted, &url, &stage, &mut progress, log);
+        let _ = fs::remove_dir_all(self.stage_dir());
+        result
+    }
+
+    fn repair_from(
+        &self,
+        m: &Manifest,
+        wanted: &[&ManifestFile],
+        url: &str,
+        stage: &Path,
+        progress: &mut dyn FnMut(u64, u64),
+        log: &dyn Fn(String),
+    ) -> Result<(), String> {
+        let fetched = std::rc::Rc::new(std::cell::Cell::new((0u64, 0u32)));
+        let source = open_package(url, stage, fetched.clone(), log)?;
+        let mut archive = zip::ZipArchive::new(source).map_err(|e| format!("Couldn't read the package's index ({e})"))?;
+
+        // The repair must come from exactly the release that's installed: its own
+        // file list has to agree with the installed one for every file replaced.
+        let remote: Manifest = {
+            let mut entry = archive
+                .by_name(MANIFEST)
+                .map_err(|_| "The release package has no file list.".to_string())?;
+            let mut raw = Vec::new();
+            entry.read_to_end(&mut raw).map_err(|e| format!("Couldn't read the release's file list ({e})"))?;
+            serde_json::from_slice(&raw).map_err(|e| format!("The release's file list is unreadable ({e})"))?
+        };
+        if remote.version != m.version || wanted.iter().any(|f| !remote.files.contains(f)) {
+            return Err(format!(
+                "The installed file list doesn't match the published v{}. Reinstall it instead.",
+                m.version
+            ));
+        }
+        log("The release's file list agrees with the installed one".into());
+
+        let total: u64 = wanted.iter().map(|f| f.size).sum();
+        let mut done = 0u64;
+        let mut ready = Vec::new();
+        for f in wanted {
+            let rel = safe_relative(&f.path).ok_or_else(|| format!("Unsafe path in the file list: {}", f.path))?;
+            let mut entry = archive
+                .by_name(&f.path)
+                .map_err(|_| format!("{} isn't in the release package.", f.path))?;
+            let tmp = stage.join(&rel);
+            if let Some(parent) = tmp.parent() {
+                fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
+            }
+            let mut out = File::create(&tmp).map_err(|e| write_err(&tmp, e))?;
+            let mut hasher = Sha256::new();
+            let mut buf = vec![0u8; 64 * 1024];
+            loop {
+                let n = entry.read(&mut buf).map_err(|e| format!("Couldn't fetch {} ({e})", f.path))?;
+                if n == 0 {
+                    break;
+                }
+                out.write_all(&buf[..n]).map_err(|e| write_err(&tmp, e))?;
+                hasher.update(&buf[..n]);
+                done += n as u64;
+                progress(done, total);
+            }
+            out.sync_all().map_err(|e| write_err(&tmp, e))?;
+            let hash = format!("{:x}", hasher.finalize());
+            if !hash.eq_ignore_ascii_case(&f.sha256) {
+                return Err(format!("The downloaded {} didn't match its SHA-256.", f.path));
+            }
+            log(format!("Fetched {} ({}), SHA-256 matches", f.path, mb(f.size)));
+            ready.push((tmp, self.installed_path(m, &rel)));
+        }
+
+        for (tmp, dst) in &ready {
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
+            }
+            if dst.exists() {
+                fs::rename(dst, aside(dst)).map_err(|e| write_err(dst, e))?;
+            }
+            fs::rename(tmp, dst).map_err(|e| write_err(dst, e))?;
+        }
+        let (bytes, requests) = fetched.get();
+        if requests > 0 {
+            log(format!(
+                "Repaired {} files, downloading {} in {requests} requests",
+                ready.len(),
+                mb(bytes)
+            ));
+        } else {
+            log(format!("Repaired {} files", ready.len()));
+        }
+        Ok(())
+    }
+
     /// Removes what the last update moved aside and any half-finished download.
     /// Replaced files may still be held for a moment by a copy that's exiting, so
     /// the deleting retries briefly off-thread. `data\`, the staging folder and the
@@ -579,6 +743,10 @@ impl Target {
 }
 
 fn agent() -> ureq::Agent {
+    agent_with_redirects(10)
+}
+
+fn agent_with_redirects(redirects: u32) -> ureq::Agent {
     ureq::Agent::config_builder()
         // SChannel and the Windows trust store: no certificates to bundle or go stale.
         .tls_config(
@@ -591,8 +759,134 @@ fn agent() -> ureq::Agent {
         .timeout_connect(Some(Duration::from_secs(10)))
         .timeout_recv_response(Some(Duration::from_secs(20)))
         .http_status_as_error(false)
+        .max_redirects(redirects)
         .build()
         .into()
+}
+
+/// A release package on the server, read in pieces with HTTP range requests so
+/// the zip reader can pick out single files without downloading the rest. Blocks
+/// already fetched are kept, since the zip's index is read more than once.
+struct RangeReader {
+    url: String,
+    len: u64,
+    pos: u64,
+    blocks: std::collections::HashMap<u64, Vec<u8>>,
+    /// Bytes actually downloaded and requests made, for the log.
+    fetched: std::rc::Rc<std::cell::Cell<(u64, u32)>>,
+}
+
+const RANGE_BLOCK: u64 = 256 * 1024;
+
+impl RangeReader {
+    fn block(&mut self, index: u64) -> std::io::Result<&[u8]> {
+        if !self.blocks.contains_key(&index) {
+            let start = index * RANGE_BLOCK;
+            let end = (start + RANGE_BLOCK).min(self.len) - 1;
+            let mut resp = agent()
+                .get(&self.url)
+                .header("Range", format!("bytes={start}-{end}"))
+                .call()
+                .map_err(std::io::Error::other)?;
+            if resp.status() != 206 {
+                return Err(std::io::Error::other(format!("HTTP {} for a partial download", resp.status().as_u16())));
+            }
+            let bytes = resp.body_mut().read_to_vec().map_err(std::io::Error::other)?;
+            let (b, n) = self.fetched.get();
+            self.fetched.set((b + bytes.len() as u64, n + 1));
+            self.blocks.insert(index, bytes);
+        }
+        Ok(&self.blocks[&index])
+    }
+}
+
+impl Read for RangeReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.pos >= self.len || buf.is_empty() {
+            return Ok(0);
+        }
+        let (index, offset) = (self.pos / RANGE_BLOCK, (self.pos % RANGE_BLOCK) as usize);
+        let block = self.block(index)?;
+        let n = buf.len().min(block.len().saturating_sub(offset));
+        buf[..n].copy_from_slice(&block[offset..offset + n]);
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+impl std::io::Seek for RangeReader {
+    fn seek(&mut self, to: std::io::SeekFrom) -> std::io::Result<u64> {
+        use std::io::SeekFrom;
+        let pos = match to {
+            SeekFrom::Start(p) => p as i64,
+            SeekFrom::End(d) => self.len as i64 + d,
+            SeekFrom::Current(d) => self.pos as i64 + d,
+        };
+        if pos < 0 {
+            return Err(std::io::Error::other("seek before the start of the package"));
+        }
+        self.pos = pos as u64;
+        Ok(self.pos)
+    }
+}
+
+/// Either the package on the server, read in ranges, or (if the server won't do
+/// ranges) the whole package downloaded to disk.
+trait ReadSeek: Read + std::io::Seek {}
+impl<T: Read + std::io::Seek> ReadSeek for T {}
+
+fn open_package(
+    url: &str,
+    stage: &Path,
+    fetched: std::rc::Rc<std::cell::Cell<(u64, u32)>>,
+    log: &dyn Fn(String),
+) -> Result<Box<dyn ReadSeek>, String> {
+    // Redirects are followed by hand: GitHub sends release downloads on to its
+    // storage host, and the Range header has to reach that final address.
+    let mut url = url.to_string();
+    let no_redirects = agent_with_redirects(0);
+    for _ in 0..8 {
+        let mut resp = no_redirects
+            .get(&url)
+            .header("Range", "bytes=0-0")
+            .call()
+            .map_err(|e| format!("Couldn't reach the release ({e})"))?;
+        match resp.status().as_u16() {
+            301 | 302 | 303 | 307 | 308 => {
+                url = resp
+                    .headers()
+                    .get("location")
+                    .and_then(|v| v.to_str().ok())
+                    .ok_or("The release download redirected nowhere.")?
+                    .to_string();
+            }
+            206 => {
+                let len = resp
+                    .headers()
+                    .get("content-range")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.rsplit('/').next()?.parse::<u64>().ok())
+                    .ok_or("The server didn't say how big the package is.")?;
+                log(format!("Package is {}; fetching only the parts needed", mb(len)));
+                return Ok(Box::new(RangeReader { url, len, pos: 0, blocks: Default::default(), fetched }));
+            }
+            200 => {
+                // No partial downloads here: take the whole package, then still
+                // replace only the damaged files.
+                log("The server won't send parts of the package; downloading all of it".into());
+                let path = stage.join("package.zip");
+                let mut file = File::create(&path).map_err(|e| write_err(&path, e))?;
+                std::io::copy(&mut resp.body_mut().as_reader(), &mut file)
+                    .map_err(|e| format!("Download interrupted ({e})"))?;
+                drop(file);
+                let file = File::open(&path).map_err(|e| write_err(&path, e))?;
+                return Ok(Box::new(file));
+            }
+            404 => return Err("That version's release package is no longer on GitHub. Reinstall instead.".into()),
+            s => return Err(format!("The release download answered HTTP {s}.")),
+        }
+    }
+    Err("The release download redirected too many times.".into())
 }
 
 fn parse_version(tag: &str) -> Option<semver::Version> {
@@ -749,5 +1043,46 @@ pub fn relaunch(exe: &Path) -> Result<(), String> {
 }
 
 fn mb(bytes: u64) -> String {
-    format!("{:.1} MB", bytes as f64 / 1_048_576.0)
+    match bytes {
+        b if b < 1024 => format!("{b} bytes"),
+        b if b < 1_048_576 => format!("{:.0} KB", b as f64 / 1024.0),
+        b => format!("{:.1} MB", b as f64 / 1_048_576.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Damages an installed app, then verifies and repairs it from its real GitHub
+    /// release. Network-bound, so it only runs when asked for:
+    ///
+    ///   set LAUNCHER_TEST_APP_DIR=<a folder holding an installed Lighthouse>
+    ///   cargo test repair_from_github -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn repair_from_github() {
+        let dir = PathBuf::from(std::env::var("LAUNCHER_TEST_APP_DIR").expect("LAUNCHER_TEST_APP_DIR"));
+        let target = Target {
+            repo: "JavacrafterDevelopment/Lighthouse".into(),
+            package: "Lighthouse-windows-x64.zip".into(),
+            dir: dir.clone(),
+            self_exe: None,
+        };
+        let log = |line: String| println!("  {line}");
+
+        // One file with its contents changed, one deleted outright.
+        fs::write(dir.join("wwwroot/app.css"), b"not the real stylesheet").unwrap();
+        fs::remove_file(dir.join("Lighthouse.dll")).unwrap();
+
+        println!("verify:");
+        let damaged = target.verify(|_, _| {}, &log).unwrap();
+        assert_eq!(damaged.len(), 2, "{damaged:?}");
+
+        println!("repair:");
+        target.repair(&damaged, |_, _| {}, &log).unwrap();
+
+        println!("verify again:");
+        assert!(target.verify(|_, _| {}, &log).unwrap().is_empty());
+    }
 }

@@ -244,6 +244,7 @@ const ICONS = {
   folder: '<path d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.5 1.6h5.1c.8 0 1.4.6 1.4 1.4v6.1c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
   notes:  '<path d="M4 1.8h5.6L12.5 4.7v9.5H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8h4.5M6 10.7h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
   trash:  '<path d="M2.5 4.2h11M6.3 4.2V2.6h3.4v1.6M4 4.2l.7 9.4h6.6l.7-9.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  verify: '<path d="M8 1.6 13.2 3.5v4c0 3.2-2.2 5.6-5.2 6.9-3-1.3-5.2-3.7-5.2-6.9v-4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.6 8.1 7.3 9.8 10.5 6.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 function h(tag, cls, text) {
@@ -340,7 +341,8 @@ function appLog(a) {
 
 function appCard(a) {
   const t = a.task;
-  const busy = t.state === 'checking' || t.state === 'downloading' || t.state === 'installing';
+  const busy = ['checking', 'downloading', 'installing', 'verifying', 'repairing'].includes(t.state);
+  const damaged = a.damaged.length;
   const latest = a.latest;
   const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
 
@@ -372,6 +374,12 @@ function appCard(a) {
   // Buttons.
   const actions = h('div', 'app-actions');
   if (a.installed) {
+    if (damaged) {
+      const fix = textButton(`Repair ${damaged} file${damaged > 1 ? 's' : ''}`, 'gilt', () => post({ cmd: 'appRepair', id: a.id }));
+      fix.title = 'Download just the damaged files again';
+      fix.disabled = busy;
+      actions.append(fix);
+    }
     if (a.updateAvailable) {
       const up = textButton(`Update to v${latest.version}`, 'gilt', () => post({ cmd: 'appInstall', id: a.id }));
       up.disabled = busy;
@@ -381,6 +389,10 @@ function appCard(a) {
     launch.disabled = busy;
     actions.append(launch);
     actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
+    const check = iconButton('verify', 'Verify files: check every file against its SHA-256',
+      () => post({ cmd: 'appVerify', id: a.id }));
+    check.disabled = busy;
+    actions.append(check);
     if (latest) {
       actions.append(iconButton('notes', 'Release notes on GitHub', () => post({ cmd: 'openUrl', url: latest.page })));
     }
@@ -408,6 +420,18 @@ function appCard(a) {
     status.append(bar, t.total ? `Downloading ${pctDone}% of ${fmtMB(t.total)}` : 'Downloading…');
   } else if (t.state === 'installing') {
     status.append('Checking every file and installing…');
+  } else if (t.state === 'verifying' || t.state === 'repairing') {
+    const frac = t.total ? t.done / t.total : 0;
+    const bar = h('div', 'progress');
+    const fill = h('div', 'bar');
+    fill.style.width = `${Math.floor(frac * 100)}%`;
+    bar.append(fill);
+    status.append(bar, t.state === 'verifying'
+      ? (t.total ? `Verifying ${t.done} of ${t.total} files` : 'Verifying…')
+      : (t.total ? `Repairing ${Math.floor(frac * 100)}% of ${fmtMB(t.total)}` : 'Reading the package index…'));
+  } else if (damaged && t.state !== 'error') {
+    status.classList.add('bad');
+    status.append(`${damaged} file${damaged > 1 ? 's are' : ' is'} damaged or missing. Repair downloads just ${damaged > 1 ? 'those' : 'that one'}.`);
   } else if (t.state === 'checking' && a.installed) {
     status.append('Checking for updates…');
   } else if (t.state === 'error') {

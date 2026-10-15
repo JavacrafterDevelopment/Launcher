@@ -53,7 +53,7 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 
 **Install** puts an app in `portableApplications\<Name>\`. Each card then offers
 **Launch** (started the way Explorer would, so an app that wants administrator
-rights can ask), its folder, its release notes, and uninstall (two clicks; it
+rights can ask), its folder, **Verify files**, its release notes, and uninstall (two clicks; it
 deletes the folder, the app's settings included).
 
 App updates are **found** automatically — on every start and from **Check for
@@ -62,6 +62,35 @@ a gilt **Update to vX** button and the Library tab shows a count. An app updates
 with exactly the same verified download and file swap as the launcher itself (see
 below), never touches the app's `data\` folder so its settings survive, and won't
 start while the app is running (close it first).
+
+Under each card a **log** drawer opens while something happens to that app:
+download progress, the package and per-file SHA-256 checks, the files moved,
+replaced and removed. The arrow folds it to one line.
+
+### Verify and repair
+
+**Verify files** (the shield on an installed card) hashes every program file
+against the SHA-256 in the installed `launcher-manifest.json` and lists anything
+missing or changed. `data\` isn't checked; settings are meant to change.
+
+If something's damaged, **Repair** fetches only those files from the installed
+version's own release. A release zip ends with an index saying where each file
+sits, and GitHub serves byte ranges, so the launcher reads that index and then
+just the bytes of the damaged files. Replacing a DLL and a stylesheet in
+Lighthouse downloads about 0.5 MB, not the 46 MB package. The release's own
+file list must agree with the installed one, and every fetched file must match
+its SHA-256 before it replaces the damaged copy. If a server ever refused ranges,
+it would download the whole package and still replace only the damaged files.
+
+Repair needs that version's release to still exist on GitHub, so keep old
+releases rather than deleting them.
+
+To exercise it against the live Lighthouse release from a terminal:
+
+```bash
+set LAUNCHER_TEST_APP_DIR=C:\path\to\portableApplications\Lighthouse
+cargo test repair_from_github -- --ignored --nocapture
+```
 
 ### Adding an app
 
