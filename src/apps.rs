@@ -65,6 +65,11 @@ pub const CATALOG: &[AppInfo] = &[
 
 /// How long to wait for an app to quit when asked before ending it outright.
 const STOP_GRACE: Duration = Duration::from_secs(10);
+/// What an app's quit argument exits with when the app is in the middle of
+/// something it shouldn't drop (RustWinUtil running a job) and is asking in its
+/// own window whether to close once it's done. Ending it would cut that work off,
+/// so the launcher leaves it running and notices when it does quit.
+const QUIT_DEFERRED: i32 = 2;
 /// How long a just-launched app counts as "starting" before it's seen running.
 /// Generous, because Lighthouse may be sitting at an elevation prompt.
 const START_GRACE: Duration = Duration::from_secs(45);
@@ -96,6 +101,8 @@ pub enum AppEvent {
     RepairProgress(u64, u64),
     Repaired(Result<(), String>),
     Stopped(Result<(), String>),
+    /// Asked to quit, the app said it's busy and is asking in its own window instead.
+    StopDeferred(String),
 }
 
 /// One line of an app's activity log, shown in the drawer under its card.
@@ -355,6 +362,11 @@ impl Library {
                 a.log("error", format!("Repair stopped: {message}"));
                 a.task = Task::Error { message };
             }
+            AppEvent::StopDeferred(message) => {
+                a.running = a.target().exe_in_use();
+                a.log("info", message);
+                a.task = Task::Idle;
+            }
             AppEvent::Stopped(result) => {
                 a.running = a.target().exe_in_use();
                 a.task = match result {
@@ -514,8 +526,16 @@ impl Library {
                         .arg(arg)
                         .current_dir(&dir)
                         .status();
-                    if let Err(e) = asked {
-                        log(format!("Couldn't ask it ({e})"));
+                    match asked {
+                        Err(e) => log(format!("Couldn't ask it ({e})")),
+                        Ok(status) if status.code() == Some(QUIT_DEFERRED) => {
+                            let message = format!(
+                                "{name} is in the middle of a job, so it's asking in its own window whether to close once it's done"
+                            );
+                            let _ = proxy.send_event(UserEvent::App(id, AppEvent::StopDeferred(message)));
+                            return;
+                        }
+                        Ok(_) => {}
                     }
                 }
                 Stop::CloseWindows => {

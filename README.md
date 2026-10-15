@@ -76,6 +76,9 @@ the launcher never starts a second copy. Stop asks the app to quit properly:
   would (Lighthouse 0.0.2 and later).
 - **ScreenshotApp** has its windows asked to close, as clicking ✕ would.
 - **RustWinUtil** also runs as administrator, so Stop runs `RustWinUtil.exe --quit`.
+  If it's in the middle of a job it doesn't quit straight away: it asks in its own
+  window whether to close once the job is done (`--quit` exits with 2 to say so), and
+  the launcher leaves it running rather than ending it.
 
 If an app hasn't quit after 10 seconds it's ended outright. All three apps also
 refuse to run twice from the same folder on their own, so opening one from
