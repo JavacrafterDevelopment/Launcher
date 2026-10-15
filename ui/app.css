@@ -310,29 +310,133 @@ code {
 }
 .page::-webkit-scrollbar-thumb:hover { background: var(--ink-ghost); }
 
-/* --------------------------------------------------------- empty library */
+/* --------------------------------------------------------------- library */
 
-.empty {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+.column.wide { width: min(860px, 100%); }
+
+.lib-head { display: flex; align-items: baseline; gap: 12px; }
+.lib-head .btn { align-self: center; }
+
+.lib-note {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  margin-top: -6px;
+  max-width: 620px;
+}
+
+.lib-note b { font-weight: 600; color: var(--ink-soft); }
+
+.apps { display: flex; flex-direction: column; gap: 12px; }
+
+.app {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 4px 18px;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--ink-ghost);
-  text-align: center;
-  padding: 32px;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--rule-strong);
+  border-radius: 13px;
+  box-shadow: var(--shadow-soft);
+  transition: border-color .15s ease;
 }
 
-.empty h2 {
+.app.has-update { border-color: var(--gilt); }
+
+/* A bound-book spine of a tile: the app's initial in the wordmark's serif. */
+.app-tile {
+  grid-row: span 2;
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
   font-family: var(--serif);
-  font-weight: normal;
-  font-size: 20px;
-  color: var(--ink-soft);
+  font-size: 27px;
+  color: var(--gilt-wash);
+  background: linear-gradient(160deg, var(--walnut) 0%, var(--walnut-deep) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 6px var(--shadow-drop);
 }
 
-.empty p { font-size: 13px; max-width: 400px; line-height: 1.6; }
-.empty .btn { margin-top: 4px; }
+:root[data-theme="dark"] .app-tile { color: #2A2119; }
+
+.app-tile.dim { opacity: .55; filter: saturate(.6); }
+
+.app-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.app-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.app-name {
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--walnut-deep);
+}
+
+.app-ver { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.app-ver .new { color: var(--gilt); font-weight: 600; }
+
+.app-tagline { font-size: 12.5px; line-height: 1.5; color: var(--ink-faint); }
+
+.app-actions { grid-row: span 2; display: flex; align-items: center; gap: 6px; }
+
+.app-status {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+}
+
+.app-status:empty { display: none; }
+.app-status.bad { color: var(--danger); }
+
+.app-status .progress { flex: 1; margin: 0; display: block; max-width: 340px; }
+
+.iconbtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-faint);
+  display: grid;
+  place-items: center;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+
+.iconbtn:hover:not(:disabled) { background: var(--card-hover); border-color: var(--rule-strong); color: var(--ink); }
+.iconbtn.danger:hover:not(:disabled) { color: var(--danger); }
+.iconbtn.armed,
+.iconbtn.armed:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #FFF6EC; }
+.iconbtn:disabled { opacity: .4; }
+
+.btn.gilt {
+  background: var(--gilt);
+  border-color: var(--gilt);
+  color: var(--on-accent);
+}
+
+.btn.gilt:hover:not(:disabled) { background: var(--walnut); border-color: var(--walnut); }
+
+.badge {
+  display: none;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--gilt);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+}
+
+.badge.on { display: inline-block; }
+.chip.on .badge { background: var(--on-accent); color: var(--walnut); }
 
 /* ------------------------------------------------------------- settings */
 

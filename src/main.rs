@@ -1,6 +1,7 @@
 // No console window in release builds; debug builds keep one for logs.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod apps;
 mod instance;
 mod settings;
 mod updater;
@@ -15,8 +16,9 @@ use tao::platform::windows::WindowBuilderExtWindows;
 use tao::window::{Icon, ResizeDirection, Window, WindowBuilder};
 use wry::{WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 
+use apps::{AppEvent, Library};
 use settings::{app_dir, data_dir, Settings};
-use updater::Release;
+use updater::{Release, Target};
 
 const INDEX_HTML: &str = include_str!("../ui/index.html");
 const APP_CSS: &str = include_str!("../ui/app.css");
@@ -45,11 +47,13 @@ impl Update {
     }
 }
 
-enum UserEvent {
+pub(crate) enum UserEvent {
     Ipc(String),
-    /// From the update worker. `auto` means this run was started on launch and
-    /// should carry straight through to downloading.
+    /// From the self-update worker. `auto` means this run was started on launch
+    /// and should carry straight through to downloading.
     Update { update: Update, auto: bool },
+    /// From an app's check or install worker.
+    App(&'static str, AppEvent),
 }
 
 struct App {
@@ -57,6 +61,7 @@ struct App {
     update: Update,
     /// True when the current update run began automatically on launch.
     auto_run: bool,
+    library: Library,
     proxy: EventLoopProxy<UserEvent>,
 }
 
@@ -69,14 +74,15 @@ fn main() {
 
     // An update the user deferred with "Later" and never got applied on exit
     // (a crash, a power cut) goes in now, before anything else opens.
-    if let Some(staged) = updater::staged() {
-        if let Ok(exe) = updater::apply(&staged) {
+    let me = Target::launcher();
+    if me.has_staged() && me.apply().is_ok() {
+        if let Ok(exe) = std::env::current_exe() {
             if updater::relaunch(&exe).is_ok() {
                 return;
             }
         }
     }
-    updater::sweep_leftovers();
+    me.sweep_leftovers();
 
     // A fixed-version WebView2 runtime dropped in a `WebView2` folder beside the exe
     // is used in preference to the system one, for machines without Edge.
@@ -121,7 +127,8 @@ fn main() {
         }
     };
 
-    let mut app = App { settings, update: Update::Idle, auto_run: false, proxy };
+    let library = Library::new(proxy.clone());
+    let mut app = App { settings, update: Update::Idle, auto_run: false, library, proxy };
 
     event_loop.run(move |event, _, flow| {
         *flow = ControlFlow::Wait;
@@ -147,6 +154,10 @@ fn main() {
             }
             Event::UserEvent(UserEvent::Update { update, auto }) => {
                 app.on_update(update, auto, &webview);
+            }
+            Event::UserEvent(UserEvent::App(id, event)) => {
+                app.library.on_event(id, event);
+                send(&webview, app.library.snapshot());
             }
             _ => {}
         }
@@ -190,6 +201,21 @@ impl App {
                 if self.settings.auto_update {
                     self.start_check(true);
                 }
+                // App updates are always looked for, never installed unasked.
+                self.library.sweep();
+                self.library.check_all(self.settings.prereleases);
+                send(webview, self.library.snapshot());
+            }
+            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" => {
+                let id = msg["id"].as_str().unwrap_or_default();
+                match cmd {
+                    "appCheck" => self.library.check_all(self.settings.prereleases),
+                    "appInstall" => self.library.install(id),
+                    "appLaunch" => self.library.launch(id),
+                    "appFolder" => self.library.open_folder(id),
+                    _ => self.library.uninstall(id),
+                }
+                send(webview, self.library.snapshot());
             }
             "window" => match msg["action"].as_str().unwrap_or_default() {
                 "drag" => {
@@ -289,9 +315,12 @@ impl App {
         self.update = Update::Checking;
         let _ = proxy.send_event(UserEvent::Update { update: Update::Checking, auto });
         std::thread::spawn(move || {
-            let update = match updater::check(prereleases) {
-                Ok(updater::Check::UpToDate) => Update::UpToDate,
-                Ok(updater::Check::Available(release)) => Update::Available { release },
+            let current = updater::current_version();
+            let update = match Target::launcher().latest(prereleases) {
+                Ok(Some(release)) if release.semver().is_some_and(|v| v > current) => {
+                    Update::Available { release }
+                }
+                Ok(_) => Update::UpToDate,
                 Err(message) => Update::Error { message },
             };
             let _ = proxy.send_event(UserEvent::Update { update, auto });
@@ -307,7 +336,7 @@ impl App {
         self.update = Update::Downloading { release: release.clone(), done: 0, total };
         std::thread::spawn(move || {
             let mut last_pct = u64::MAX;
-            let result = updater::download(&release, |done, total| {
+            let result = Target::launcher().download(&release, |done, total| {
                 // One message per percent is plenty for a progress bar.
                 let pct = if total > 0 { done * 100 / total } else { done / 1_000_000 };
                 if pct != last_pct {
@@ -328,10 +357,15 @@ impl App {
 
     /// Returns true when the new copy is running and this one should exit.
     fn install_and_restart(&mut self, webview: &WebView) -> bool {
-        let result = updater::staged()
-            .ok_or_else(|| "The downloaded update has gone missing. Check again.".to_string())
-            .and_then(|staged| updater::apply(&staged))
-            .and_then(|exe| updater::relaunch(&exe));
+        let me = Target::launcher();
+        let result = if me.has_staged() {
+            me.apply().and_then(|_| {
+                let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+                updater::relaunch(&exe)
+            })
+        } else {
+            Err("The downloaded update has gone missing. Check again.".to_string())
+        };
         match result {
             Ok(()) => true,
             Err(message) => {
@@ -346,8 +380,9 @@ impl App {
     /// so the next open is already the new version.
     fn finish_on_exit(&mut self) {
         if let Update::Ready { .. } = self.update {
-            if let Some(staged) = updater::staged() {
-                let _ = updater::apply(&staged);
+            let me = Target::launcher();
+            if me.has_staged() {
+                let _ = me.apply();
             }
         }
     }

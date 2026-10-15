@@ -1,4 +1,5 @@
-//! Self-update from GitHub releases.
+//! Updates from GitHub releases, for the launcher itself and for the apps it
+//! installs. Both work the same way; a [`Target`] says which repo and which folder.
 //!
 //! Releases are found through update.json on the repo's `updates` branch, served
 //! by GitHub's CDN with no API rate limit. If that can't be read, the GitHub API is
@@ -12,8 +13,8 @@
 //!
 //! Installing never overwrites a file in use: Windows lets a running exe or a
 //! loaded DLL be *renamed*, just not overwritten. So each file being replaced is
-//! renamed to `<name>.launcher-old`, the new one takes its place, and the new copy
-//! is started. The next launch sweeps up the leftovers.
+//! renamed to `<name>.launcher-old` and the new one takes its place. The next
+//! launch sweeps up the leftovers. An app's `data\` folder is never touched.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -27,12 +28,12 @@ use crate::settings::app_dir;
 
 /// The repository this launcher publishes its own releases to.
 pub const REPO: &str = "JavacrafterDevelopment/Launcher";
-/// The release asset holding the whole program folder. Built by tools\package.ps1.
-pub const PACKAGE_ASSET: &str = "Launcher-windows-x64.zip";
 /// Lists every file in a package; also kept beside the installed exe.
 const MANIFEST: &str = "launcher-manifest.json";
 const STAGE_DIR: &str = ".launcher-update";
 const OLD_SUFFIX: &str = ".launcher-old";
+/// Where installed apps live, inside the launcher's folder.
+pub const APPS_DIR: &str = "portableApplications";
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,15 +56,16 @@ pub struct Release {
     pub expected: Option<Expected>,
 }
 
+impl Release {
+    pub fn semver(&self) -> Option<semver::Version> {
+        parse_version(&self.version)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Expected {
     exe: String,
     files: Vec<ManifestFile>,
-}
-
-pub enum Check {
-    UpToDate,
-    Available(Release),
 }
 
 #[derive(Deserialize)]
@@ -89,8 +91,7 @@ struct GhAsset {
 #[derive(Deserialize)]
 struct Manifest {
     version: String,
-    /// Which entry is the launcher itself; it takes the running exe's place even
-    /// if someone renamed their copy.
+    /// Which entry is the program itself.
     exe: String,
     files: Vec<ManifestFile>,
 }
@@ -100,53 +101,6 @@ pub struct ManifestFile {
     path: String,
     size: u64,
     sha256: String,
-}
-
-fn agent() -> ureq::Agent {
-    ureq::Agent::config_builder()
-        // SChannel and the Windows trust store: no certificates to bundle or go stale.
-        .tls_config(
-            TlsConfig::builder()
-                .provider(TlsProvider::NativeTls)
-                .root_certs(RootCerts::PlatformVerifier)
-                .build(),
-        )
-        .user_agent(format!("JavacrafterLauncher/{VERSION}"))
-        .timeout_connect(Some(Duration::from_secs(10)))
-        .timeout_recv_response(Some(Duration::from_secs(20)))
-        .http_status_as_error(false)
-        .build()
-        .into()
-}
-
-fn parse_version(tag: &str) -> Option<semver::Version> {
-    semver::Version::parse(tag.trim().trim_start_matches(['v', 'V'])).ok()
-}
-
-pub fn current_version() -> semver::Version {
-    semver::Version::parse(VERSION).expect("crate version is semver")
-}
-
-/// Debug builds can be pointed at a stand-in for the GitHub API to test updates
-/// end to end without publishing anything. Release builds always use GitHub.
-fn api_base() -> String {
-    if cfg!(debug_assertions) {
-        if let Ok(base) = std::env::var("LAUNCHER_UPDATE_API") {
-            return base.trim_end_matches('/').to_string();
-        }
-    }
-    "https://api.github.com".into()
-}
-
-/// update.json, published by the release workflow to the repo's `updates` branch.
-/// Served by GitHub's CDN, so it isn't subject to the API's hourly limit.
-fn update_json_url() -> String {
-    if cfg!(debug_assertions) {
-        if let Ok(url) = std::env::var("LAUNCHER_UPDATE_JSON") {
-            return url;
-        }
-    }
-    format!("https://raw.githubusercontent.com/{REPO}/updates/update.json")
 }
 
 #[derive(Deserialize)]
@@ -180,128 +134,456 @@ struct UpdatePackage {
     sha256: String,
 }
 
-/// Finds the newest release this build could update to. update.json first; if it
-/// can't be read, the GitHub API; if that's rate-limited, the website.
-pub fn check(prereleases: bool) -> Result<Check, String> {
-    check_via_update_json(prereleases).or_else(|_| check_via_api(prereleases))
+/// What an installed copy's manifest says about it.
+pub struct Installed {
+    pub version: String,
+    pub exe: String,
 }
 
-fn check_via_update_json(prereleases: bool) -> Result<Check, String> {
-    let mut resp = agent().get(&update_json_url()).call().map_err(|e| e.to_string())?;
-    if resp.status() != 200 {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
-    }
-    let doc: UpdateJson = resp.body_mut().read_json().map_err(|e| e.to_string())?;
-
-    // With pre-releases on, whichever of the two channels is newer.
-    let candidates = [Some(doc.channels.stable), prereleases.then_some(doc.channels.beta)];
-    let best = candidates
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| Some((parse_version(&e.version)?, e)))
-        .max_by(|a, b| a.0.cmp(&b.0));
-
-    let Some((v, e)) = best else { return Ok(Check::UpToDate) };
-    if v <= current_version() {
-        return Ok(Check::UpToDate);
-    }
-    Ok(Check::Available(Release {
-        version: v.to_string(),
-        name: format!("Launcher {v}"),
-        notes: e.notes,
-        published: e.published,
-        page: e.page,
-        prerelease: !v.pre.is_empty(),
-        asset_url: e.package.url,
-        size: e.package.size,
-        digest: Some(format!("sha256:{}", e.package.sha256)),
-        expected: Some(Expected { exe: e.exe, files: e.files }),
-    }))
+/// One thing that can be installed and updated: the launcher, or an app.
+pub struct Target {
+    repo: String,
+    /// The release asset holding the program folder.
+    package: String,
+    /// The install folder.
+    dir: PathBuf,
+    /// Set for the launcher: the running exe, which the package's exe replaces
+    /// even if someone renamed their copy.
+    self_exe: Option<PathBuf>,
 }
 
-fn check_via_api(prereleases: bool) -> Result<Check, String> {
-    let url = format!("{}/repos/{REPO}/releases?per_page=30", api_base());
-    let mut resp = agent()
-        .get(&url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .call()
-        .map_err(|e| format!("Couldn't reach GitHub ({e})"))?;
-
-    match resp.status().as_u16() {
-        200 => {}
-        // The anonymous API allows 60 requests an hour per IP, which a VPN or a
-        // shared network can use up. The website isn't limited that way.
-        403 | 429 => {
-            return check_via_website().map_err(|_| {
-                "GitHub's hourly request limit is used up. Try again in a little while.".into()
-            });
+impl Target {
+    pub fn launcher() -> Self {
+        Self {
+            repo: REPO.into(),
+            package: "Launcher-windows-x64.zip".into(),
+            dir: app_dir(),
+            self_exe: std::env::current_exe().ok(),
         }
-        404 => return Err(format!("The repository {REPO} wasn't found, or it's private.")),
-        s => return Err(format!("GitHub answered with HTTP {s}.")),
     }
 
-    let releases: Vec<GhRelease> = resp
-        .body_mut()
-        .read_json()
-        .map_err(|e| format!("GitHub sent something unreadable ({e})"))?;
-
-    let current = current_version();
-    let best = releases
-        .into_iter()
-        .filter(|r| !r.draft && (prereleases || !r.prerelease))
-        .filter_map(|r| {
-            let v = parse_version(&r.tag_name)?;
-            let asset = r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(PACKAGE_ASSET))?;
-            Some((v, asset_release(&r, asset)))
-        })
-        .max_by(|a, b| a.0.cmp(&b.0));
-
-    Ok(match best {
-        Some((v, mut rel)) if v > current => {
-            rel.version = v.to_string();
-            Check::Available(rel)
+    /// An app published as `<name>-windows-x64.zip` in `repo`, installed at
+    /// `portableApplications\<name>` beside the launcher.
+    pub fn app(repo: &str, name: &str) -> Self {
+        Self {
+            repo: repo.into(),
+            package: format!("{name}-windows-x64.zip"),
+            dir: app_dir().join(APPS_DIR).join(name),
+            self_exe: None,
         }
-        _ => Check::UpToDate,
-    })
-}
-
-/// Fallback without the API: `/releases/latest` redirects to the newest stable
-/// release's tag page, and its assets download from a fixed URL. No notes, size or
-/// GitHub digest this way, and no pre-releases, but it answers when the API won't.
-/// The manifest inside the package still checks every file.
-fn check_via_website() -> Result<Check, String> {
-    use ureq::ResponseExt;
-
-    let resp = agent()
-        .head(format!("https://github.com/{REPO}/releases/latest"))
-        .call()
-        .map_err(|e| e.to_string())?;
-    let landed = resp.get_uri().path().to_string();
-    // With no releases at all it lands on /releases rather than /releases/tag/<tag>.
-    let Some(tag) = landed.rsplit_once("/releases/tag/").map(|(_, t)| t.to_string()) else {
-        return Ok(Check::UpToDate);
-    };
-    let Some(v) = parse_version(&tag) else { return Ok(Check::UpToDate) };
-    if v <= current_version() {
-        return Ok(Check::UpToDate);
     }
-    Ok(Check::Available(Release {
-        version: v.to_string(),
-        name: format!("Launcher {v}"),
-        notes: String::new(),
-        published: String::new(),
-        page: format!("https://github.com/{REPO}/releases/tag/{tag}"),
-        prerelease: false,
-        asset_url: format!("https://github.com/{REPO}/releases/download/{tag}/{PACKAGE_ASSET}"),
-        size: 0,
-        digest: None,
-        expected: None,
-    }))
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// The installed copy's version and exe, from its manifest. None if it isn't
+    /// installed (or wasn't installed by the launcher).
+    pub fn installed(&self) -> Option<Installed> {
+        let raw = fs::read(self.dir.join(MANIFEST)).ok()?;
+        let m: Manifest = serde_json::from_slice(&raw).ok()?;
+        Some(Installed { version: m.version, exe: m.exe })
+    }
+
+    /// True while the installed program is running: Windows won't let a running
+    /// exe be opened for writing.
+    pub fn exe_in_use(&self) -> bool {
+        use std::os::windows::fs::OpenOptionsExt;
+        let Some(installed) = self.installed() else { return false };
+        let Some(rel) = safe_relative(&installed.exe) else { return false };
+        fs::OpenOptions::new()
+            .write(true)
+            .share_mode(0)
+            .open(self.dir.join(rel))
+            .is_err_and(|e| e.raw_os_error() == Some(32)) // ERROR_SHARING_VIOLATION
+    }
+
+    fn update_json_url(&self) -> String {
+        if cfg!(debug_assertions) {
+            if let Ok(base) = std::env::var("LAUNCHER_UPDATE_BASE") {
+                let name = self.repo.rsplit('/').next().unwrap_or_default();
+                return format!("{}/{name}/update.json", base.trim_end_matches('/'));
+            }
+        }
+        format!("https://raw.githubusercontent.com/{}/updates/update.json", self.repo)
+    }
+
+    /// The newest published release, whatever is installed. update.json first;
+    /// if it can't be read, the GitHub API; if that's rate-limited, the website.
+    /// Ok(None) means nothing has been published yet.
+    pub fn latest(&self, prereleases: bool) -> Result<Option<Release>, String> {
+        self.latest_via_update_json(prereleases)
+            .or_else(|_| self.latest_via_api(prereleases))
+    }
+
+    fn latest_via_update_json(&self, prereleases: bool) -> Result<Option<Release>, String> {
+        let mut resp = agent().get(&self.update_json_url()).call().map_err(|e| e.to_string())?;
+        if resp.status() != 200 {
+            return Err(format!("HTTP {}", resp.status().as_u16()));
+        }
+        let doc: UpdateJson = resp.body_mut().read_json().map_err(|e| e.to_string())?;
+
+        // With pre-releases on, whichever of the two channels is newer.
+        let candidates = [Some(doc.channels.stable), prereleases.then_some(doc.channels.beta)];
+        let best = candidates
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| Some((parse_version(&e.version)?, e)))
+            .max_by(|a, b| a.0.cmp(&b.0));
+
+        Ok(best.map(|(v, e)| Release {
+            version: v.to_string(),
+            name: format!("v{v}"),
+            notes: e.notes,
+            published: e.published,
+            page: e.page,
+            prerelease: !v.pre.is_empty(),
+            asset_url: e.package.url,
+            size: e.package.size,
+            digest: Some(format!("sha256:{}", e.package.sha256)),
+            expected: Some(Expected { exe: e.exe, files: e.files }),
+        }))
+    }
+
+    fn latest_via_api(&self, prereleases: bool) -> Result<Option<Release>, String> {
+        let url = format!("{}/repos/{}/releases?per_page=30", api_base(), self.repo);
+        let mut resp = agent()
+            .get(&url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .call()
+            .map_err(|_| "Couldn't reach GitHub. Are you online?".to_string())?;
+
+        match resp.status().as_u16() {
+            200 => {}
+            // The anonymous API allows 60 requests an hour per IP, which a VPN or a
+            // shared network can use up. The website isn't limited that way.
+            403 | 429 => {
+                return self.latest_via_website().map_err(|_| {
+                    "GitHub's hourly request limit is used up. Try again in a little while.".into()
+                });
+            }
+            404 => return Err(format!("The repository {} wasn't found, or it's private.", self.repo)),
+            s => return Err(format!("GitHub answered with HTTP {s}.")),
+        }
+
+        let releases: Vec<GhRelease> = resp
+            .body_mut()
+            .read_json()
+            .map_err(|e| format!("GitHub sent something unreadable ({e})"))?;
+
+        Ok(releases
+            .into_iter()
+            .filter(|r| !r.draft && (prereleases || !r.prerelease))
+            .filter_map(|r| {
+                let v = parse_version(&r.tag_name)?;
+                let a = r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&self.package))?;
+                Some((v, release_from_api(&r, a)))
+            })
+            .max_by(|a, b| a.0.cmp(&b.0))
+            .map(|(v, mut rel)| {
+                rel.version = v.to_string();
+                rel
+            }))
+    }
+
+    /// Fallback without the API: `/releases/latest` redirects to the newest stable
+    /// release's tag page, and its assets download from a fixed URL. No notes or
+    /// published SHA-256 this way, and no pre-releases, but it answers when the API
+    /// won't. The manifest inside the package still checks every file.
+    fn latest_via_website(&self) -> Result<Option<Release>, String> {
+        use ureq::ResponseExt;
+
+        let resp = agent()
+            .head(format!("https://github.com/{}/releases/latest", self.repo))
+            .call()
+            .map_err(|e| e.to_string())?;
+        let landed = resp.get_uri().path().to_string();
+        // With no releases at all it lands on /releases rather than /releases/tag/<tag>.
+        let Some(tag) = landed.rsplit_once("/releases/tag/").map(|(_, t)| t.to_string()) else {
+            return Ok(None);
+        };
+        let Some(v) = parse_version(&tag) else { return Ok(None) };
+        Ok(Some(Release {
+            version: v.to_string(),
+            name: format!("v{v}"),
+            notes: String::new(),
+            published: String::new(),
+            page: format!("https://github.com/{}/releases/tag/{tag}", self.repo),
+            prerelease: false,
+            asset_url: format!("https://github.com/{}/releases/download/{tag}/{}", self.repo, self.package),
+            size: 0,
+            digest: None,
+            expected: None,
+        }))
+    }
+
+    /// Where a download is unpacked and checked, inside the install folder so the
+    /// swap is a rename on the same drive.
+    fn stage_dir(&self) -> PathBuf {
+        self.dir.join(STAGE_DIR)
+    }
+
+    /// Written only once every file in the package has been verified.
+    fn ready_marker(&self) -> PathBuf {
+        self.stage_dir().join("ready")
+    }
+
+    /// True when a verified update is waiting to be swapped in.
+    pub fn has_staged(&self) -> bool {
+        self.ready_marker().exists()
+    }
+
+    /// Downloads the release package, checks it against its published SHA-256,
+    /// unpacks it and checks every file. Leaves it staged for [`Target::apply`].
+    /// `progress` gets (bytes so far, total).
+    pub fn download(&self, rel: &Release, progress: impl FnMut(u64, u64)) -> Result<(), String> {
+        let stage = self.stage_dir();
+        let _ = fs::remove_dir_all(&stage);
+        let result = self.download_into(&stage, rel, progress);
+        if result.is_err() {
+            let _ = fs::remove_dir_all(&stage);
+        }
+        result
+    }
+
+    fn download_into(&self, stage: &Path, rel: &Release, mut progress: impl FnMut(u64, u64)) -> Result<(), String> {
+        fs::create_dir_all(stage).map_err(|e| write_err(stage, e))?;
+        let zip_path = stage.join("package.zip");
+
+        let mut resp = agent()
+            .get(&rel.asset_url)
+            .call()
+            .map_err(|e| format!("Download failed ({e})"))?;
+        if resp.status() != 200 {
+            return Err(format!("Download failed: HTTP {}", resp.status().as_u16()));
+        }
+
+        // The website fallback doesn't know the size up front; the response does.
+        let total = match rel.size {
+            0 => resp
+                .headers()
+                .get("content-length")
+                .and_then(|v| v.to_str().ok()?.parse().ok())
+                .unwrap_or(0),
+            n => n,
+        };
+        let mut file = File::create(&zip_path).map_err(|e| write_err(&zip_path, e))?;
+        let mut reader = resp.body_mut().as_reader();
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut done = 0u64;
+
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted ({e})"))?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n]).map_err(|e| write_err(&zip_path, e))?;
+            hasher.update(&buf[..n]);
+            done += n as u64;
+            progress(done, total);
+        }
+        file.sync_all().map_err(|e| write_err(&zip_path, e))?;
+        drop(file);
+
+        if total > 0 && done != total {
+            return Err(format!("Download was incomplete ({done} of {total} bytes)."));
+        }
+        if let Some(expected) = rel.digest.as_deref().and_then(|d| d.strip_prefix("sha256:")) {
+            let got = format!("{:x}", hasher.finalize());
+            if !got.eq_ignore_ascii_case(expected) {
+                return Err("The download didn't match its published checksum.".into());
+            }
+        }
+
+        let files = stage.join("files");
+        extract(&zip_path, &files)?;
+        let manifest = verify_files(&files)?;
+        // The package's own manifest came out of the zip, so on its own it only shows
+        // the zip is self-consistent. update.json's list comes separately; a package
+        // whose list differs from it in any file, size or hash is refused.
+        if let Some(expected) = &rel.expected {
+            let sorted = |files: &[ManifestFile]| {
+                let mut v = files.to_vec();
+                v.sort_by(|a, b| a.path.cmp(&b.path));
+                v
+            };
+            if manifest.exe != expected.exe || sorted(&manifest.files) != sorted(&expected.files) {
+                return Err("The update package doesn't match its published file list.".into());
+            }
+        }
+        let _ = fs::remove_file(&zip_path);
+        fs::write(self.ready_marker(), &manifest.version).map_err(|e| write_err(stage, e))
+    }
+
+    /// Swaps every file in the staged package into the install folder, moving the
+    /// files it replaces aside, and retires files the new version no longer ships.
+    /// Any failure puts back what was already moved.
+    pub fn apply(&self) -> Result<(), String> {
+        let stage = self.stage_dir();
+        let files = stage.join("files");
+        // Checked again here: a staged update may have sat on disk since a previous run.
+        let manifest = verify_files(&files)?;
+        let exe_rel = PathBuf::from(&manifest.exe);
+        let target = |rel: &Path| match &self.self_exe {
+            Some(exe) if rel == exe_rel => exe.clone(),
+            _ => self.dir.join(rel),
+        };
+
+        let incoming: Vec<PathBuf> = manifest
+            .files
+            .iter()
+            .filter_map(|f| safe_relative(&f.path))
+            .chain(std::iter::once(PathBuf::from(MANIFEST)))
+            .collect();
+        let previous = installed_files(&self.dir);
+
+        let mut moved: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+        for rel in &incoming {
+            let (src, dst) = (files.join(rel), target(rel));
+            let step = || -> std::io::Result<Option<PathBuf>> {
+                if let Some(parent) = dst.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                let backup = if dst.exists() {
+                    let b = aside(&dst);
+                    fs::rename(&dst, &b)?;
+                    Some(b)
+                } else {
+                    None
+                };
+                if let Err(e) = fs::rename(&src, &dst) {
+                    if let Some(b) = &backup {
+                        let _ = fs::rename(b, &dst);
+                    }
+                    return Err(e);
+                }
+                Ok(backup)
+            };
+            match step() {
+                Ok(backup) => moved.push((dst, backup)),
+                Err(e) => {
+                    // Undo in reverse so the old version is whole again.
+                    for (done, backup) in moved.into_iter().rev() {
+                        let _ = fs::remove_file(&done);
+                        if let Some(b) = backup {
+                            let _ = fs::rename(b, &done);
+                        }
+                    }
+                    return Err(write_err(&dst, e));
+                }
+            }
+        }
+
+        // Files the old version shipped that the new one doesn't: moved aside, and
+        // deleted with the rest of the leftovers on the next start.
+        let keep: std::collections::HashSet<String> =
+            incoming.iter().map(|p| p.to_string_lossy().to_lowercase()).collect();
+        for rel in previous {
+            if !keep.contains(&rel.to_string_lossy().to_lowercase()) {
+                let p = self.dir.join(&rel);
+                if p.is_file() {
+                    let _ = fs::rename(&p, aside(&p));
+                }
+            }
+        }
+
+        let _ = fs::remove_dir_all(&stage);
+        Ok(())
+    }
+
+    /// Removes what the last update moved aside and any half-finished download.
+    /// Replaced files may still be held for a moment by a copy that's exiting, so
+    /// the deleting retries briefly off-thread. `data\`, the staging folder and the
+    /// launcher's `portableApplications\` are never walked into.
+    pub fn sweep_leftovers(&self) {
+        // A download that never reached the ready marker is useless. Cleared here,
+        // before a check can start a new one in the same folder.
+        if !self.has_staged() {
+            let _ = fs::remove_dir_all(self.stage_dir());
+        }
+        // 0.1.0 moved its exe aside as `Launcher.exe.old`; clear those up too.
+        let legacy = self
+            .self_exe
+            .as_ref()
+            .map(|exe| exe.file_name().unwrap_or_default().to_string_lossy().to_ascii_lowercase());
+        let root = self.dir.clone();
+
+        std::thread::spawn(move || {
+            for _ in 0..20 {
+                let mut remaining = 0;
+                let mut pending = vec![root.clone()];
+                while let Some(dir) = pending.pop() {
+                    let Ok(entries) = fs::read_dir(&dir) else { continue };
+                    for e in entries.flatten() {
+                        let name = e.file_name().to_string_lossy().to_ascii_lowercase();
+                        let path = e.path();
+                        if path.is_dir() {
+                            let skip = dir == root
+                                && ["data", STAGE_DIR, &APPS_DIR.to_ascii_lowercase()].contains(&name.as_str());
+                            if !skip {
+                                pending.push(path);
+                            }
+                            continue;
+                        }
+                        let legacy_old = legacy.as_ref().is_some_and(|l| {
+                            dir == root
+                                && name.starts_with(l.as_str())
+                                && (name.ends_with(".old") || name.ends_with(".download"))
+                        });
+                        if (name.ends_with(OLD_SUFFIX) || legacy_old) && fs::remove_file(&path).is_err() {
+                            remaining += 1;
+                        }
+                    }
+                }
+                if remaining == 0 {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        });
+    }
 }
 
-fn asset_release(r: &GhRelease, a: &GhAsset) -> Release {
+fn agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        // SChannel and the Windows trust store: no certificates to bundle or go stale.
+        .tls_config(
+            TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .root_certs(RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .user_agent(format!("JavacrafterLauncher/{VERSION}"))
+        .timeout_connect(Some(Duration::from_secs(10)))
+        .timeout_recv_response(Some(Duration::from_secs(20)))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
+fn parse_version(tag: &str) -> Option<semver::Version> {
+    semver::Version::parse(tag.trim().trim_start_matches(['v', 'V'])).ok()
+}
+
+pub fn current_version() -> semver::Version {
+    semver::Version::parse(VERSION).expect("crate version is semver")
+}
+
+/// Debug builds can be pointed at a stand-in for the GitHub API to test the
+/// fallback without GitHub. Release builds always use GitHub.
+fn api_base() -> String {
+    if cfg!(debug_assertions) {
+        if let Ok(base) = std::env::var("LAUNCHER_UPDATE_API") {
+            return base.trim_end_matches('/').to_string();
+        }
+    }
+    "https://api.github.com".into()
+}
+
+fn release_from_api(r: &GhRelease, a: &GhAsset) -> Release {
     Release {
         version: String::new(),
         name: r.name.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| r.tag_name.clone()),
@@ -314,26 +596,6 @@ fn asset_release(r: &GhRelease, a: &GhAsset) -> Release {
         digest: a.digest.clone(),
         expected: None,
     }
-}
-
-fn exe_path() -> Result<PathBuf, String> {
-    std::env::current_exe().map_err(|e| format!("Couldn't locate the launcher's own file ({e})"))
-}
-
-/// Where a download is unpacked and checked, beside the exe so the swap is a
-/// rename on the same drive.
-fn stage_dir() -> PathBuf {
-    app_dir().join(STAGE_DIR)
-}
-
-/// Written only once every file in the package has been verified.
-fn ready_marker() -> PathBuf {
-    stage_dir().join("ready")
-}
-
-/// The verified update waiting to be swapped in, if there is one.
-pub fn staged() -> Option<PathBuf> {
-    ready_marker().exists().then(stage_dir)
 }
 
 /// A package path made safe to join onto the install folder: relative, no `..`,
@@ -355,90 +617,6 @@ fn sha256_file(path: &Path) -> std::io::Result<(u64, String)> {
     let mut hasher = Sha256::new();
     let size = std::io::copy(&mut file, &mut hasher)?;
     Ok((size, format!("{:x}", hasher.finalize())))
-}
-
-/// Downloads the release package, checks it against GitHub's SHA-256, unpacks it
-/// and checks every file against the package's manifest. Returns the staging
-/// folder. `progress` gets (bytes so far, total).
-pub fn download(rel: &Release, progress: impl FnMut(u64, u64)) -> Result<PathBuf, String> {
-    let stage = stage_dir();
-    let _ = fs::remove_dir_all(&stage);
-    let result = download_into(&stage, rel, progress);
-    if result.is_err() {
-        let _ = fs::remove_dir_all(&stage);
-    }
-    result.map(|_| stage)
-}
-
-fn download_into(stage: &Path, rel: &Release, mut progress: impl FnMut(u64, u64)) -> Result<(), String> {
-    fs::create_dir_all(stage).map_err(|e| write_err(stage, e))?;
-    let zip_path = stage.join("package.zip");
-
-    let mut resp = agent()
-        .get(&rel.asset_url)
-        .call()
-        .map_err(|e| format!("Download failed ({e})"))?;
-    if resp.status() != 200 {
-        return Err(format!("Download failed: HTTP {}", resp.status().as_u16()));
-    }
-
-    // The website fallback doesn't know the size up front; the response does.
-    let total = match rel.size {
-        0 => resp
-            .headers()
-            .get("content-length")
-            .and_then(|v| v.to_str().ok()?.parse().ok())
-            .unwrap_or(0),
-        n => n,
-    };
-    let mut file = File::create(&zip_path).map_err(|e| write_err(&zip_path, e))?;
-    let mut reader = resp.body_mut().as_reader();
-    let mut hasher = Sha256::new();
-    let mut buf = vec![0u8; 64 * 1024];
-    let mut done = 0u64;
-
-    loop {
-        let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted ({e})"))?;
-        if n == 0 {
-            break;
-        }
-        file.write_all(&buf[..n]).map_err(|e| write_err(&zip_path, e))?;
-        hasher.update(&buf[..n]);
-        done += n as u64;
-        progress(done, total);
-    }
-    file.sync_all().map_err(|e| write_err(&zip_path, e))?;
-    drop(file);
-
-    if total > 0 && done != total {
-        return Err(format!("Download was incomplete ({done} of {total} bytes)."));
-    }
-    // GitHub publishes a SHA-256 for every release asset; the package has to match it.
-    if let Some(expected) = rel.digest.as_deref().and_then(|d| d.strip_prefix("sha256:")) {
-        let got = format!("{:x}", hasher.finalize());
-        if !got.eq_ignore_ascii_case(expected) {
-            return Err("The download didn't match its published checksum.".into());
-        }
-    }
-
-    let files = stage.join("files");
-    extract(&zip_path, &files)?;
-    let manifest = verify_files(&files)?;
-    // The package's own manifest came out of the zip, so on its own it only shows
-    // the zip is self-consistent. update.json's list comes separately; a package
-    // whose list differs from it in any file, size or hash is refused.
-    if let Some(expected) = &rel.expected {
-        let sorted = |files: &[ManifestFile]| {
-            let mut v = files.to_vec();
-            v.sort_by(|a, b| a.path.cmp(&b.path));
-            v
-        };
-        if manifest.exe != expected.exe || sorted(&manifest.files) != sorted(&expected.files) {
-            return Err("The update package doesn't match its published file list.".into());
-        }
-    }
-    let _ = fs::remove_file(&zip_path);
-    fs::write(ready_marker(), &manifest.version).map_err(|e| write_err(stage, e))
 }
 
 fn extract(zip_path: &Path, dest: &Path) -> Result<(), String> {
@@ -472,7 +650,7 @@ fn verify_files(files: &Path) -> Result<Manifest, String> {
         serde_json::from_slice(&raw).map_err(|e| format!("The update manifest is unreadable ({e})"))?;
 
     if !manifest.files.iter().any(|f| f.path == manifest.exe) {
-        return Err("The update package doesn't contain the launcher.".into());
+        return Err("The update package doesn't contain its program.".into());
     }
     for f in &manifest.files {
         let rel = safe_relative(&f.path)
@@ -487,9 +665,9 @@ fn verify_files(files: &Path) -> Result<Manifest, String> {
     let mut head = [0u8; 2];
     File::open(files.join(&manifest.exe))
         .and_then(|mut f| f.read_exact(&mut head))
-        .map_err(|e| format!("Couldn't read the new launcher ({e})"))?;
+        .map_err(|e| format!("Couldn't read the new program ({e})"))?;
     if &head != b"MZ" {
-        return Err("The new launcher isn't a Windows program.".into());
+        return Err("The new program isn't a Windows program.".into());
     }
     Ok(manifest)
 }
@@ -522,86 +700,12 @@ fn aside(path: &Path) -> PathBuf {
 }
 
 /// Paths the installed copy's manifest says it shipped, if it has one.
-fn installed_files() -> Vec<PathBuf> {
-    fs::read(app_dir().join(MANIFEST))
+fn installed_files(dir: &Path) -> Vec<PathBuf> {
+    fs::read(dir.join(MANIFEST))
         .ok()
         .and_then(|raw| serde_json::from_slice::<Manifest>(&raw).ok())
         .map(|m| m.files.iter().filter_map(|f| safe_relative(&f.path)).collect())
         .unwrap_or_default()
-}
-
-/// Swaps every file in the verified package into the install folder, moving the
-/// files it replaces aside, and retires files the new version no longer ships.
-/// Any failure puts back what was already moved. Returns the exe path.
-pub fn apply(stage: &Path) -> Result<PathBuf, String> {
-    let files = stage.join("files");
-    // Checked again here: a staged update may have sat on disk since a previous run.
-    let manifest = verify_files(&files)?;
-    let dir = app_dir();
-    let exe = exe_path()?;
-    let exe_rel = PathBuf::from(&manifest.exe);
-    let target = |rel: &Path| if rel == exe_rel { exe.clone() } else { dir.join(rel) };
-
-    let incoming: Vec<PathBuf> = manifest
-        .files
-        .iter()
-        .filter_map(|f| safe_relative(&f.path))
-        .chain(std::iter::once(PathBuf::from(MANIFEST)))
-        .collect();
-    let previous = installed_files();
-
-    let mut moved: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
-    for rel in &incoming {
-        let (src, dst) = (files.join(rel), target(rel));
-        let step = || -> std::io::Result<Option<PathBuf>> {
-            if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let backup = if dst.exists() {
-                let b = aside(&dst);
-                fs::rename(&dst, &b)?;
-                Some(b)
-            } else {
-                None
-            };
-            if let Err(e) = fs::rename(&src, &dst) {
-                if let Some(b) = &backup {
-                    let _ = fs::rename(b, &dst);
-                }
-                return Err(e);
-            }
-            Ok(backup)
-        };
-        match step() {
-            Ok(backup) => moved.push((dst, backup)),
-            Err(e) => {
-                // Undo in reverse so the old version is whole again.
-                for (done, backup) in moved.into_iter().rev() {
-                    let _ = fs::remove_file(&done);
-                    if let Some(b) = backup {
-                        let _ = fs::rename(b, &done);
-                    }
-                }
-                return Err(write_err(&dst, e));
-            }
-        }
-    }
-
-    // Files the old version shipped that the new one doesn't: moved aside, and
-    // deleted with the rest of the leftovers on the next start.
-    let keep: std::collections::HashSet<String> =
-        incoming.iter().map(|p| p.to_string_lossy().to_lowercase()).collect();
-    for rel in previous {
-        if !keep.contains(&rel.to_string_lossy().to_lowercase()) {
-            let p = dir.join(&rel);
-            if p.is_file() {
-                let _ = fs::rename(&p, aside(&p));
-            }
-        }
-    }
-
-    let _ = fs::remove_dir_all(stage);
-    Ok(exe)
 }
 
 pub fn relaunch(exe: &Path) -> Result<(), String> {
@@ -611,50 +715,4 @@ pub fn relaunch(exe: &Path) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("Couldn't start the new version ({e})"))
-}
-
-/// Removes what the last update moved aside and any half-finished download.
-/// Replaced files may still be held for a moment by the copy that's exiting, so
-/// the deleting retries briefly off-thread.
-pub fn sweep_leftovers() {
-    // A download that never reached the ready marker is useless. Cleared here,
-    // before the launch-time check can start a new one in the same folder.
-    if staged().is_none() {
-        let _ = fs::remove_dir_all(stage_dir());
-    }
-    let Ok(exe) = exe_path() else { return };
-    // 0.1.0 moved its exe aside as `Launcher.exe.old`; clear those up too.
-    let legacy = exe.file_name().unwrap_or_default().to_string_lossy().to_ascii_lowercase();
-
-    std::thread::spawn(move || {
-        let root = app_dir();
-        for _ in 0..20 {
-            let mut remaining = 0;
-            let mut pending = vec![root.clone()];
-            while let Some(dir) = pending.pop() {
-                let Ok(entries) = fs::read_dir(&dir) else { continue };
-                for e in entries.flatten() {
-                    let name = e.file_name().to_string_lossy().to_ascii_lowercase();
-                    let path = e.path();
-                    if path.is_dir() {
-                        if dir != root || (name != "data" && name != STAGE_DIR) {
-                            pending.push(path);
-                        }
-                        continue;
-                    }
-                    let leftover = name.ends_with(OLD_SUFFIX)
-                        || (dir == root
-                            && name.starts_with(&legacy)
-                            && (name.ends_with(".old") || name.ends_with(".download")));
-                    if leftover && fs::remove_file(&path).is_err() {
-                        remaining += 1;
-                    }
-                }
-            }
-            if remaining == 0 {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(500));
-        }
-    });
 }

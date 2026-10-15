@@ -228,6 +228,156 @@ el.repoLink.dataset.url = `https://github.com/${BOOT.repo}/releases`;
 el.repoLink.addEventListener('click', openRepo);
 el.notesLink.addEventListener('click', openRepo);
 
+/* ------------------------------------------------------------- library */
+
+/* The host sends the whole library on every change; the cards are rebuilt from
+   it each time. Nothing installs on its own: an update only shows a button. */
+const library = {
+  apps: [],
+  armed: null,        // id of the app whose uninstall button is waiting for a second click
+  armedTimer: null,
+};
+
+const ICONS = {
+  folder: '<path d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.5 1.6h5.1c.8 0 1.4.6 1.4 1.4v6.1c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  notes:  '<path d="M4 1.8h5.6L12.5 4.7v9.5H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8h4.5M6 10.7h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  trash:  '<path d="M2.5 4.2h11M6.3 4.2V2.6h3.4v1.6M4 4.2l.7 9.4h6.6l.7-9.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+
+function h(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function iconButton(icon, title, onClick, extra = '') {
+  const b = h('button', `iconbtn ${extra}`);
+  b.title = title;
+  b.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">${ICONS[icon]}</svg>`;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function textButton(label, cls, onClick) {
+  const b = h('button', `btn small ${cls}`, label);
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function renderLibrary() {
+  const apps = library.apps;
+  const updates = apps.filter((a) => a.updateAvailable).length;
+  const installed = apps.filter((a) => a.installed).length;
+
+  const badge = $('lib-badge');
+  badge.textContent = updates;
+  badge.classList.toggle('on', updates > 0);
+  $('lib-summary').textContent =
+    `${apps.length} apps · ${installed} installed` + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
+  $('lib-check').disabled = apps.some((a) => a.task.state === 'checking');
+
+  $('apps').replaceChildren(...apps.map(appCard));
+}
+
+function appCard(a) {
+  const t = a.task;
+  const busy = t.state === 'checking' || t.state === 'downloading' || t.state === 'installing';
+  const latest = a.latest;
+  const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
+
+  const tile = h('div', `app-tile${a.installed ? '' : ' dim'}`, a.name[0]);
+  card.append(tile);
+
+  // Name, version line, tagline.
+  const main = h('div', 'app-main');
+  const title = h('div', 'app-title');
+  title.append(h('span', 'app-name', a.name));
+  const ver = h('span', 'app-ver');
+  if (a.installed) {
+    ver.append(`v${a.installed}`);
+    if (a.updateAvailable) {
+      ver.append(' → ');
+      ver.append(h('span', 'new', `v${latest.version}`));
+    } else if (a.checked && latest) {
+      ver.append(' · up to date');
+    }
+  } else if (latest) {
+    ver.append(`v${latest.version} available` + (latest.size ? ` · ${fmtMB(latest.size)}` : ''));
+  } else if (a.checked && t.state !== 'error') {
+    ver.append('No release published yet');
+  }
+  title.append(ver);
+  main.append(title, h('div', 'app-tagline', a.tagline));
+  card.append(main);
+
+  // Buttons.
+  const actions = h('div', 'app-actions');
+  if (a.installed) {
+    if (a.updateAvailable) {
+      const up = textButton(`Update to v${latest.version}`, 'gilt', () => post({ cmd: 'appInstall', id: a.id }));
+      up.disabled = busy;
+      actions.append(up);
+    }
+    const launch = textButton('Launch', 'primary', () => post({ cmd: 'appLaunch', id: a.id }));
+    launch.disabled = busy;
+    actions.append(launch);
+    actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
+    if (latest) {
+      actions.append(iconButton('notes', 'Release notes on GitHub', () => post({ cmd: 'openUrl', url: latest.page })));
+    }
+    const armed = library.armed === a.id;
+    const del = iconButton('trash', armed ? 'Click again to delete it and its settings' : 'Uninstall',
+      () => uninstallClick(a.id), armed ? 'danger armed' : 'danger');
+    del.disabled = busy;
+    actions.append(del);
+  } else {
+    const label = !latest && t.state === 'checking' ? 'Checking…' : 'Install';
+    const install = textButton(label, 'primary', () => post({ cmd: 'appInstall', id: a.id }));
+    install.disabled = busy || !latest;
+    actions.append(install);
+  }
+  card.append(actions);
+
+  // What it's doing right now, if anything.
+  const status = h('div', 'app-status');
+  if (t.state === 'downloading') {
+    const pctDone = t.total ? Math.floor((t.done / t.total) * 100) : 0;
+    const bar = h('div', 'progress');
+    const fill = h('div', 'bar');
+    fill.style.width = `${pctDone}%`;
+    bar.append(fill);
+    status.append(bar, t.total ? `Downloading ${pctDone}% of ${fmtMB(t.total)}` : 'Downloading…');
+  } else if (t.state === 'installing') {
+    status.append('Checking every file and installing…');
+  } else if (t.state === 'checking' && a.installed) {
+    status.append('Checking for updates…');
+  } else if (t.state === 'error') {
+    status.classList.add('bad');
+    status.append(t.message);
+  } else if (library.armed === a.id) {
+    status.classList.add('bad');
+    status.append(`Click the bin again to delete ${a.name} and its settings.`);
+  }
+  card.append(status);
+  return card;
+}
+
+/* Uninstalling deletes the app's settings too, so it takes a second click. */
+function uninstallClick(id) {
+  clearTimeout(library.armedTimer);
+  if (library.armed === id) {
+    library.armed = null;
+    post({ cmd: 'appUninstall', id });
+  } else {
+    library.armed = id;
+    library.armedTimer = setTimeout(() => { library.armed = null; renderLibrary(); }, 4000);
+  }
+  renderLibrary();
+}
+
+$('lib-check').addEventListener('click', () => post({ cmd: 'appCheck' }));
+
 /* --------------------------------------------------------------- toast */
 
 /* Only updates that started on their own at launch get a toast — if you pressed
@@ -309,6 +459,10 @@ window.onHost = (msg) => {
       break;
     case 'window':
       el.root.classList.toggle('maximized', !!msg.maximized);
+      break;
+    case 'apps':
+      library.apps = msg.apps;
+      renderLibrary();
       break;
   }
 };

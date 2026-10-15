@@ -1,16 +1,14 @@
 # Launcher
 
 A small, portable launcher for Javacrafter apps and games, written in Rust. It
-keeps itself up to date from this repository's GitHub releases.
+installs, launches and updates apps published on GitHub, and keeps itself up to
+date from this repository's releases.
 
 Built on [wry](https://github.com/tauri-apps/wry) and
 [tao](https://github.com/tauri-apps/tao): a borderless native window hosting the
 system WebView2, the same engine and the same cream-walnut-and-gilt look as
 [Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse). The release
 exe is a few MB and has no runtime to install.
-
-> The library (installing and launching your published apps) is the next stage.
-> This first stage is the shell and self-update.
 
 ---
 
@@ -26,6 +24,9 @@ Launcher\
   data\
     settings.json     your settings
     webview\          the WebView2 profile
+  portableApplications\
+    Lighthouse\       each installed app in its own folder
+    ScreenshotApp\
 ```
 
 It needs the Microsoft Edge WebView2 Runtime, which ships with Windows 11 and
@@ -40,6 +41,39 @@ forward.
 |---|---|
 | **Ctrl+,** | Settings |
 | **Esc** | Back to the library |
+
+## Library
+
+The Library page lists the apps in [src/apps.rs](src/apps.rs):
+
+| App | Repository |
+|---|---|
+| Lighthouse | [JavacrafterDevelopment/Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse) |
+| ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) |
+
+**Install** puts an app in `portableApplications\<Name>\`. Each card then offers
+**Launch** (started the way Explorer would, so an app that wants administrator
+rights can ask), its folder, its release notes, and uninstall (two clicks; it
+deletes the folder, the app's settings included).
+
+App updates are **found** automatically — on every start and from **Check for
+updates** — but **never installed on their own**. A card with a newer release gets
+a gilt **Update to vX** button and the Library tab shows a count. An app updates
+with exactly the same verified download and file swap as the launcher itself (see
+below), never touches the app's `data\` folder so its settings survive, and won't
+start while the app is running (close it first).
+
+### Adding an app
+
+Each app repo needs the same release pipeline as this one: a workflow that, on a
+`v*` tag, builds the app into a folder, packs it with `tools/release-package.ps1`
+as `<Name>-windows-x64.zip`, publishes the release, and writes `update.json` to an
+`updates` branch with `tools/publish-update.ps1`. Lighthouse and ScreenshotApp both
+have it in `.github/workflows/release.yml` — copy theirs. Then add an entry to
+`CATALOG` in [src/apps.rs](src/apps.rs): the name must match the zip's `<Name>`.
+
+Apps version independently: Lighthouse can be on v0.0.5 while ScreenshotApp is on
+v0.0.1.
 
 ## Updates
 
@@ -161,7 +195,8 @@ Debug builds read two overrides; release builds ignore both:
 
 ```
 src/main.rs        window, webview, messages between page and host
-src/updater.rs     GitHub release check, download, verify, swap, relaunch
+src/updater.rs     release check, download, verify, swap (launcher and apps)
+src/apps.rs        the app catalog: install, update, launch, uninstall
 src/settings.rs    data\settings.json beside the exe
 src/instance.rs    one launcher per folder
 ui/                the page: index.html, app.css, app.js (embedded in the exe)
