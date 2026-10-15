@@ -27,6 +27,7 @@ Launcher\
   portableApplications\
     Lighthouse\       each installed app in its own folder
     ScreenshotApp\
+    RustWinUtil\
 ```
 
 It needs the Microsoft Edge WebView2 Runtime, which ships with Windows 11 and
@@ -50,6 +51,7 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 |---|---|
 | Lighthouse | [JavacrafterDevelopment/Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse) |
 | ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) |
+| RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) |
 
 **Install** puts an app in `portableApplications\<Name>\`. Each card then offers
 **Launch** (started the way Explorer would, so an app that wants administrator
@@ -73,8 +75,9 @@ the launcher never starts a second copy. Stop asks the app to quit properly:
   `Lighthouse.exe --quit`, which tells the running copy to exit as tray → Exit
   would (Lighthouse 0.0.2 and later).
 - **ScreenshotApp** has its windows asked to close, as clicking ✕ would.
+- **RustWinUtil** also runs as administrator, so Stop runs `RustWinUtil.exe --quit`.
 
-If an app hasn't quit after 10 seconds it's ended outright. Both apps also
+If an app hasn't quit after 10 seconds it's ended outright. All three apps also
 refuse to run twice from the same folder on their own, so opening one from
 Explorer while it's running brings the open window forward instead.
 

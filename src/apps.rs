@@ -53,6 +53,14 @@ pub const CATALOG: &[AppInfo] = &[
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
         stop: Stop::CloseWindows,
     },
+    AppInfo {
+        id: "rustwinutil",
+        name: "RustWinUtil",
+        repo: "JavacrafterDevelopment/RustWinUtil",
+        tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
+        // Runs as administrator, so the launcher can't close it itself.
+        stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
+    },
 ];
 
 /// How long to wait for an app to quit when asked before ending it outright.
