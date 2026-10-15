@@ -9,8 +9,10 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
 use tao::event_loop::EventLoopProxy;
 
+use crate::procs;
 use crate::updater::{Release, Target};
 use crate::UserEvent;
 
@@ -21,6 +23,18 @@ pub struct AppInfo {
     pub name: &'static str,
     pub repo: &'static str,
     pub tagline: &'static str,
+    pub stop: Stop,
+}
+
+/// How the Stop button asks an app to quit.
+#[derive(Clone, Copy)]
+pub enum Stop {
+    /// Run the app's exe again with this argument; it tells the running copy to
+    /// exit properly. For apps that run as administrator, which the launcher can't
+    /// close or end itself.
+    QuitArg { arg: &'static str, since: &'static str },
+    /// Ask its windows to close, as clicking ✕ would.
+    CloseWindows,
 }
 
 pub const CATALOG: &[AppInfo] = &[
@@ -29,14 +43,23 @@ pub const CATALOG: &[AppInfo] = &[
         name: "Lighthouse",
         repo: "JavacrafterDevelopment/Lighthouse",
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
+        // Runs as administrator, and its close button only hides it to the tray.
+        stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
     },
     AppInfo {
         id: "screenshotapp",
         name: "ScreenshotApp",
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
+        stop: Stop::CloseWindows,
     },
 ];
+
+/// How long to wait for an app to quit when asked before ending it outright.
+const STOP_GRACE: Duration = Duration::from_secs(10);
+/// How long a just-launched app counts as "starting" before it's seen running.
+/// Generous, because Lighthouse may be sitting at an elevation prompt.
+const START_GRACE: Duration = Duration::from_secs(45);
 
 /// What an app is busy with, if anything.
 #[derive(Clone, Serialize)]
@@ -47,6 +70,7 @@ pub enum Task {
     Downloading { done: u64, total: u64 },
     Installing,
     Verifying { done: usize, total: usize },
+    Stopping,
     Repairing { done: u64, total: u64 },
     Error { message: String },
 }
@@ -63,6 +87,7 @@ pub enum AppEvent {
     Verified(Result<Vec<String>, String>),
     RepairProgress(u64, u64),
     Repaired(Result<(), String>),
+    Stopped(Result<(), String>),
 }
 
 /// One line of an app's activity log, shown in the drawer under its card.
@@ -89,6 +114,10 @@ struct AppState {
     log: Vec<LogLine>,
     /// Files the last verify found missing or changed; Repair fetches these.
     damaged: Vec<String>,
+    /// Whether its exe is running right now, however it was started.
+    running: bool,
+    /// Set when Launch is pressed, until the app is seen running.
+    starting: Option<Instant>,
 }
 
 impl AppState {
@@ -114,6 +143,7 @@ impl AppState {
                 | Task::Installing
                 | Task::Verifying { .. }
                 | Task::Repairing { .. }
+                | Task::Stopping
         )
     }
 
@@ -147,6 +177,8 @@ impl Library {
                     task: Task::Idle,
                     log: Vec::new(),
                     damaged: Vec::new(),
+                    running: false,
+                    starting: None,
                 };
                 a.refresh_installed();
                 a
@@ -179,6 +211,8 @@ impl Library {
                     "task": a.task,
                     "log": a.log,
                     "damaged": a.damaged,
+                    "running": a.running,
+                    "starting": a.starting.is_some(),
                 })
             })
             .collect();
@@ -313,6 +347,19 @@ impl Library {
                 a.log("error", format!("Repair stopped: {message}"));
                 a.task = Task::Error { message };
             }
+            AppEvent::Stopped(result) => {
+                a.running = a.target().exe_in_use();
+                a.task = match result {
+                    Ok(()) => {
+                        a.log("ok", format!("{} has stopped", a.info.name));
+                        Task::Idle
+                    }
+                    Err(message) => {
+                        a.log("error", message.clone());
+                        Task::Error { message }
+                    }
+                };
+            }
         }
         if repair_next {
             self.repair(id);
@@ -382,19 +429,119 @@ impl Library {
         });
     }
 
+    /// Notices apps starting and stopping, whether through this launcher or not.
+    /// Returns true when anything changed and the page needs a new snapshot.
+    pub fn refresh_running(&mut self) -> bool {
+        let mut changed = false;
+        for a in self.apps.iter_mut().filter(|a| a.installed.is_some()) {
+            let running = a.target().exe_in_use();
+            if running != a.running {
+                a.running = running;
+                changed = true;
+            }
+            let starting = a.starting.is_some_and(|t| !running && t.elapsed() < START_GRACE);
+            if starting != a.starting.is_some() {
+                a.starting = None;
+                changed = true;
+            }
+        }
+        changed
+    }
+
     pub fn launch(&mut self, id: &str) {
         let Some(a) = self.get(id) else { return };
         let target = a.target();
         let Some(installed) = target.installed() else { return };
+        // The button turns into Stop while it runs; this covers a click that
+        // arrived just before that, or an app started some other way.
+        if a.running || a.starting.is_some() || target.exe_in_use() {
+            a.running = target.exe_in_use();
+            a.log("info", format!("{} is already running", a.info.name));
+            return;
+        }
         let exe = target.dir().join(&installed.exe);
         match shell_open(&exe, target.dir()) {
-            Ok(()) => a.log("info", format!("Started {}", exe.display())),
+            Ok(()) => {
+                a.log("info", format!("Started {}", exe.display()));
+                a.starting = Some(Instant::now());
+            }
             Err(message) => {
                 let message = format!("Couldn't start {}: {message}", a.info.name);
                 a.log("error", message.clone());
                 a.task = Task::Error { message };
             }
         }
+    }
+
+    /// Asks a running app to quit, and ends it if it hasn't after a while.
+    pub fn stop(&mut self, id: &str) {
+        let proxy = self.proxy.clone();
+        let Some(a) = self.get(id) else { return };
+        if a.busy() || !a.running {
+            return;
+        }
+        let (id, name, how, target) = (a.info.id, a.info.name, a.info.stop, a.target());
+        let Some(installed) = target.installed() else { return };
+        a.task = Task::Stopping;
+        a.starting = None;
+        std::thread::spawn(move || {
+            let log = |line: String| {
+                let _ = proxy.send_event(UserEvent::App(id, AppEvent::Log(line)));
+            };
+            let dir = target.dir().to_path_buf();
+            // Versions from before an app learned its quit argument would just start
+            // another copy if given it, so those get their windows closed instead.
+            let how = match how {
+                Stop::QuitArg { since, .. }
+                    if semver::Version::parse(&installed.version).ok() < semver::Version::parse(since).ok() =>
+                {
+                    Stop::CloseWindows
+                }
+                other => other,
+            };
+            match how {
+                Stop::QuitArg { arg, .. } => {
+                    log(format!("Asking {name} to quit ({} {arg})", installed.exe));
+                    let asked = std::process::Command::new(dir.join(&installed.exe))
+                        .arg(arg)
+                        .current_dir(&dir)
+                        .status();
+                    if let Err(e) = asked {
+                        log(format!("Couldn't ask it ({e})"));
+                    }
+                }
+                Stop::CloseWindows => {
+                    let pids = procs::running_in(&dir);
+                    let asked = procs::close_windows(&pids);
+                    log(format!("Asking {name} to close ({asked} window{})", if asked == 1 { "" } else { "s" }));
+                }
+            }
+
+            let gone = |within: Duration| {
+                let until = Instant::now() + within;
+                while Instant::now() < until {
+                    if !target.exe_in_use() {
+                        return true;
+                    }
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                !target.exe_in_use()
+            };
+            let result = if gone(STOP_GRACE) {
+                Ok(())
+            } else {
+                log(format!("{name} didn't quit within {} seconds; ending it", STOP_GRACE.as_secs()));
+                let ended = procs::terminate(&procs::running_in(&dir));
+                if ended > 0 && gone(Duration::from_secs(3)) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "Couldn't stop {name}. If it's running as administrator, quit it from its own window or tray."
+                    ))
+                }
+            };
+            let _ = proxy.send_event(UserEvent::App(id, AppEvent::Stopped(result)));
+        });
     }
 
     pub fn open_folder(&self, id: &str) {

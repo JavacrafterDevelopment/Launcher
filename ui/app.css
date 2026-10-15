@@ -493,6 +493,32 @@ code {
 .log-line.ok .log-text { color: var(--ok); }
 .log-line.error .log-text { color: var(--danger); }
 
+/* Stop, where Launch sits while the app is running. */
+.btn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #FFF6EC;
+}
+
+.btn.danger:hover:not(:disabled) { filter: brightness(1.08); background: var(--danger); border-color: var(--danger); }
+
+.running {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ok);
+}
+
+.running .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-wash);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
 .badge {
   display: none;
   min-width: 17px;

@@ -63,6 +63,21 @@ with exactly the same verified download and file swap as the launcher itself (se
 below), never touches the app's `data\` folder so its settings survive, and won't
 start while the app is running (close it first).
 
+The launcher notices when an installed app is running, however it was started,
+by checking every couple of seconds whether Windows has its exe locked. While it
+runs, the card shows **running** and **Launch** turns into a red **Stop**, so
+the launcher never starts a second copy. Stop asks the app to quit properly:
+
+- **Lighthouse** runs as administrator, which a normal program can't close or
+  end, and its close button only hides it to the tray. So Stop runs
+  `Lighthouse.exe --quit`, which tells the running copy to exit as tray → Exit
+  would (Lighthouse 0.0.2 and later).
+- **ScreenshotApp** has its windows asked to close, as clicking ✕ would.
+
+If an app hasn't quit after 10 seconds it's ended outright. Both apps also
+refuse to run twice from the same folder on their own, so opening one from
+Explorer while it's running brings the open window forward instead.
+
 Under each card a **log** drawer opens while something happens to that app:
 download progress, the package and per-file SHA-256 checks, the files moved,
 replaced and removed. The arrow folds it to one line.
@@ -227,7 +242,8 @@ Debug builds read two overrides; release builds ignore both:
 ```
 src/main.rs        window, webview, messages between page and host
 src/updater.rs     release check, download, verify, swap (launcher and apps)
-src/apps.rs        the app catalog: install, update, launch, uninstall
+src/apps.rs        the app catalog: install, update, launch, stop, uninstall
+src/procs.rs       finding, closing and ending an app's processes
 src/settings.rs    data\settings.json beside the exe
 src/instance.rs    one launcher per folder
 ui/                the page: index.html, app.css, app.js (embedded in the exe)

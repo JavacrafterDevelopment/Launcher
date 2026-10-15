@@ -341,7 +341,7 @@ function appLog(a) {
 
 function appCard(a) {
   const t = a.task;
-  const busy = ['checking', 'downloading', 'installing', 'verifying', 'repairing'].includes(t.state);
+  const busy = ['checking', 'downloading', 'installing', 'verifying', 'repairing', 'stopping'].includes(t.state);
   const damaged = a.damaged.length;
   const latest = a.latest;
   const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
@@ -352,6 +352,7 @@ function appCard(a) {
   // Name, version line, tagline.
   const main = h('div', 'app-main');
   const title = h('div', 'app-title');
+  let live = null;
   title.append(h('span', 'app-name', a.name));
   const ver = h('span', 'app-ver');
   if (a.installed) {
@@ -362,12 +363,17 @@ function appCard(a) {
     } else if (a.checked && latest) {
       ver.append(' · up to date');
     }
+    if (a.running) {
+      live = h('span', 'running');
+      live.append(h('span', 'dot'), 'running');
+    }
   } else if (latest) {
     ver.append(`v${latest.version} available` + (latest.size ? ` · ${fmtMB(latest.size)}` : ''));
   } else if (a.checked && t.state !== 'error') {
     ver.append('No release published yet');
   }
   title.append(ver);
+  if (live) title.append(live);
   main.append(title, h('div', 'app-tagline', a.tagline));
   card.append(main);
 
@@ -385,8 +391,22 @@ function appCard(a) {
       up.disabled = busy;
       actions.append(up);
     }
-    const launch = textButton('Launch', 'primary', () => post({ cmd: 'appLaunch', id: a.id }));
-    launch.disabled = busy;
+    // While it runs, Launch becomes a red Stop, so the launcher never starts a second copy.
+    let launch;
+    if (t.state === 'stopping') {
+      launch = textButton('Stopping…', 'danger', () => {});
+      launch.disabled = true;
+    } else if (a.running) {
+      launch = textButton('Stop', 'danger', () => post({ cmd: 'appStop', id: a.id }));
+      launch.title = `Ask ${a.name} to quit`;
+      launch.disabled = busy;
+    } else if (a.starting) {
+      launch = textButton('Starting…', 'primary', () => {});
+      launch.disabled = true;
+    } else {
+      launch = textButton('Launch', 'primary', () => post({ cmd: 'appLaunch', id: a.id }));
+      launch.disabled = busy;
+    }
     actions.append(launch);
     actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
     const check = iconButton('verify', 'Verify files: check every file against its SHA-256 and re-download any that are damaged',

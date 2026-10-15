@@ -3,6 +3,7 @@
 
 mod apps;
 mod instance;
+mod procs;
 mod settings;
 mod updater;
 
@@ -54,6 +55,8 @@ pub(crate) enum UserEvent {
     Update { update: Update, auto: bool },
     /// From an app's check or install worker.
     App(&'static str, AppEvent),
+    /// Every couple of seconds: time to look at which apps are running.
+    Tick,
 }
 
 struct App {
@@ -128,6 +131,12 @@ fn main() {
     };
 
     let library = Library::new(proxy.clone());
+    let ticker = proxy.clone();
+    std::thread::spawn(move || {
+        while ticker.send_event(UserEvent::Tick).is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    });
     let mut app = App { settings, update: Update::Idle, auto_run: false, library, proxy };
 
     event_loop.run(move |event, _, flow| {
@@ -158,6 +167,11 @@ fn main() {
             Event::UserEvent(UserEvent::App(id, event)) => {
                 app.library.on_event(id, event);
                 send(&webview, app.library.snapshot());
+            }
+            Event::UserEvent(UserEvent::Tick) => {
+                if app.library.refresh_running() {
+                    send(&webview, app.library.snapshot());
+                }
             }
             _ => {}
         }
@@ -206,7 +220,7 @@ impl App {
                 self.library.check_all(self.settings.prereleases);
                 send(webview, self.library.snapshot());
             }
-            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" | "appVerify" | "appRepair" => {
+            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" | "appVerify" | "appRepair" | "appStop" => {
                 let id = msg["id"].as_str().unwrap_or_default();
                 match cmd {
                     "appCheck" => self.library.check_all(self.settings.prereleases),
@@ -214,6 +228,7 @@ impl App {
                     "appLaunch" => self.library.launch(id),
                     "appFolder" => self.library.open_folder(id),
                     "appVerify" => self.library.verify(id),
+                    "appStop" => self.library.stop(id),
                     "appRepair" => self.library.repair(id),
                     _ => self.library.uninstall(id),
                 }
