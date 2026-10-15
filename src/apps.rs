@@ -256,6 +256,8 @@ impl Library {
 
     pub fn on_event(&mut self, id: &str, event: AppEvent) {
         let Some(a) = self.get(id) else { return };
+        // A verify that finds damage goes straight on to repairing it.
+        let mut repair_next = false;
         match event {
             AppEvent::Checked(Ok(latest)) => {
                 a.latest = latest;
@@ -288,9 +290,14 @@ impl Library {
                 a.damaged = damaged;
                 a.log(if a.damaged.is_empty() { "ok" } else { "error" }, match a.damaged.len() {
                     0 => "Verify finished: nothing to repair".to_string(),
-                    n => format!("Verify finished: {n} file{} to repair. Press Repair to fetch just those.", if n == 1 { "" } else { "s" }),
+                    n => format!(
+                        "Verify finished: {n} file{} damaged; fetching just {} again",
+                        if n == 1 { "" } else { "s" },
+                        if n == 1 { "that one" } else { "those" }
+                    ),
                 });
                 a.task = Task::Idle;
+                repair_next = !a.damaged.is_empty();
             }
             AppEvent::Verified(Err(message)) => {
                 a.log("error", format!("Couldn't verify: {message}"));
@@ -306,6 +313,9 @@ impl Library {
                 a.log("error", format!("Repair stopped: {message}"));
                 a.task = Task::Error { message };
             }
+        }
+        if repair_next {
+            self.repair(id);
         }
     }
 

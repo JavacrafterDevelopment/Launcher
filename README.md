@@ -73,8 +73,10 @@ replaced and removed. The arrow folds it to one line.
 against the SHA-256 in the installed `launcher-manifest.json` and lists anything
 missing or changed. `data\` isn't checked; settings are meant to change.
 
-If something's damaged, **Repair** fetches only those files from the installed
-version's own release. A release zip ends with an index saying where each file
+If something's damaged, it's repaired straight away, no second click: only those
+files are fetched again, from the installed version's own release. (If the
+repair can't finish, say because the app is running, a **Repair** button stays on
+the card to try again.) A release zip ends with an index saying where each file
 sits, and GitHub serves byte ranges, so the launcher reads that index and then
 just the bytes of the damaged files. Replacing a DLL and a stylesheet in
 Lighthouse downloads about 0.5 MB, not the 46 MB package. The release's own

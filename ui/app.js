@@ -376,7 +376,7 @@ function appCard(a) {
   if (a.installed) {
     if (damaged) {
       const fix = textButton(`Repair ${damaged} file${damaged > 1 ? 's' : ''}`, 'gilt', () => post({ cmd: 'appRepair', id: a.id }));
-      fix.title = 'Download just the damaged files again';
+      fix.title = 'Try the repair again: download just the damaged files';
       fix.disabled = busy;
       actions.append(fix);
     }
@@ -389,7 +389,7 @@ function appCard(a) {
     launch.disabled = busy;
     actions.append(launch);
     actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
-    const check = iconButton('verify', 'Verify files: check every file against its SHA-256',
+    const check = iconButton('verify', 'Verify files: check every file against its SHA-256 and re-download any that are damaged',
       () => post({ cmd: 'appVerify', id: a.id }));
     check.disabled = busy;
     actions.append(check);
@@ -431,7 +431,7 @@ function appCard(a) {
       : (t.total ? `Repairing ${Math.floor(frac * 100)}% of ${fmtMB(t.total)}` : 'Reading the package index…'));
   } else if (damaged && t.state !== 'error') {
     status.classList.add('bad');
-    status.append(`${damaged} file${damaged > 1 ? 's are' : ' is'} damaged or missing. Repair downloads just ${damaged > 1 ? 'those' : 'that one'}.`);
+    status.append(`${damaged} file${damaged > 1 ? 's are' : ' is'} damaged or missing and ${damaged > 1 ? "weren't" : "wasn't"} repaired. Press Repair to try again.`);
   } else if (t.state === 'checking' && a.installed) {
     status.append('Checking for updates…');
   } else if (t.state === 'error') {
