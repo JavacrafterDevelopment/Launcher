@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="{{THEME}}">
+<html lang="en" data-theme="{{THEME}}" data-palette="{{PALETTE}}">
 <head>
   <meta charset="utf-8">
   <title>Launcher</title>
@@ -177,13 +177,30 @@
 
           <div class="card">
             <div class="card-head"><h3>Appearance</h3></div>
-            <div class="set-row last">
+            <div class="set-row">
               <label class="set-text" for="set-dark">
                 <span class="set-title">Dark mode</span>
-                <span class="set-desc">Near-black, with the gold kept as the accent.</span>
+                <span class="set-desc">Near-black, in the dark colours chosen below.</span>
               </label>
               <input type="checkbox" id="set-dark" class="switch">
             </div>
+
+            <!-- One scheme for each mode; the first of each is the original look. -->
+            <div class="set-row scheme-head">
+              <div class="set-text">
+                <span class="set-title">Light mode colours</span>
+                <span class="set-desc">Used while dark mode is off.</span>
+              </div>
+            </div>
+            <div class="schemes" id="schemes-light"></div>
+
+            <div class="set-row scheme-head">
+              <div class="set-text">
+                <span class="set-title">Dark mode colours</span>
+                <span class="set-desc">Used while dark mode is on.</span>
+              </div>
+            </div>
+            <div class="schemes last" id="schemes-dark"></div>
           </div>
 
           <div class="card">

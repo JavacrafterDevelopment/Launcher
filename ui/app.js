@@ -84,18 +84,83 @@ document.querySelectorAll('[data-goto]').forEach((b) =>
 
 /* ----------------------------------------------------------- settings */
 
+/* The colour schemes app.css defines, the original look first. The preview
+   colours mirror each scheme's paper, card, ink and accents. */
+const SCHEMES = {
+  light: [
+    { id: 'walnut', name: 'Walnut & Gilt', paper: '#F4EEE2', card: '#FCF8F0', ink: '#2E2620', accent: '#6B4F35', gilt: '#A8843F' },
+    { id: 'sage',   name: 'Sage',          paper: '#EEF1E8', card: '#F8FAF4', ink: '#232A22', accent: '#4F6B45', gilt: '#8C9A3E' },
+    { id: 'slate',  name: 'Slate',         paper: '#EEF1F5', card: '#F8FAFC', ink: '#1F2630', accent: '#3C5A80', gilt: '#4F86C6' },
+    { id: 'rose',   name: 'Rose',          paper: '#F6EEEE', card: '#FCF7F7', ink: '#2E2224', accent: '#8A4B57', gilt: '#B5707C' },
+  ],
+  dark: [
+    { id: 'gold',   name: 'Charcoal & Gold', paper: '#121212', card: '#1B1B1B', ink: '#ECECEC', accent: '#D2AA5E', gilt: '#E9CB8E' },
+    { id: 'ocean',  name: 'Ocean',           paper: '#121212', card: '#1B1B1B', ink: '#ECECEC', accent: '#5AA9F0', gilt: '#A9D3FF' },
+    { id: 'forest', name: 'Forest',          paper: '#121212', card: '#1B1B1B', ink: '#ECECEC', accent: '#6DBE7A', gilt: '#B6E3BC' },
+    { id: 'plum',   name: 'Plum',            paper: '#121212', card: '#1B1B1B', ink: '#ECECEC', accent: '#B48CE6', gilt: '#DCC6F7' },
+  ],
+};
+
+const schemeFor = (mode) => {
+  const saved = mode === 'dark' ? state.settings.darkScheme : state.settings.lightScheme;
+  return SCHEMES[mode].some((s) => s.id === saved) ? saved : SCHEMES[mode][0].id;
+};
+
+/* The page shows the scheme for whichever mode is on. */
+function applyLook(theme) {
+  el.root.dataset.theme = theme;
+  el.root.dataset.palette = schemeFor(theme);
+}
+
+function renderSchemes() {
+  for (const mode of ['light', 'dark']) {
+    const current = schemeFor(mode);
+    $(`schemes-${mode}`).replaceChildren(...SCHEMES[mode].map((s, i) => {
+      const b = document.createElement('button');
+      b.className = `scheme${s.id === current ? ' on' : ''}`;
+      b.title = `${s.name}${i === 0 ? ' (default)' : ''}`;
+      // A tiny window in the scheme's colours: paper, a card, a heading, a button.
+      b.innerHTML = `<span class="sw" style="background:${s.paper}">
+          <span class="sw-card" style="background:${s.card}">
+            <span class="sw-line" style="background:${s.ink}"></span>
+            <span class="sw-btn" style="background:${s.accent}"></span>
+            <span class="sw-dot" style="background:${s.gilt}"></span>
+          </span>
+        </span>`;
+      const label = document.createElement('span');
+      label.className = 'sw-name';
+      label.textContent = s.name;
+      if (i === 0) {
+        const tag = document.createElement('span');
+        tag.className = 'sw-default';
+        tag.textContent = 'Default';
+        label.append(tag);
+      }
+      b.append(label);
+      b.addEventListener('click', () => {
+        state.settings[mode === 'dark' ? 'darkScheme' : 'lightScheme'] = s.id;
+        applyLook(el.setDark.checked ? 'dark' : 'light');   // immediately, not after the round trip
+        renderSchemes();
+        post({ cmd: 'settings', [mode === 'dark' ? 'darkScheme' : 'lightScheme']: s.id });
+      });
+      return b;
+    }));
+  }
+}
+
 function renderSettings() {
   const s = state.settings;
   el.setAuto.checked = !!s.autoUpdate;
   el.setPre.checked = !!s.prereleases;
   el.setDark.checked = s.theme === 'dark';
-  el.root.dataset.theme = s.theme === 'dark' ? 'dark' : 'light';
+  applyLook(s.theme === 'dark' ? 'dark' : 'light');
+  renderSchemes();
   renderLastCheck();
 }
 
 function saveSettings() {
   const theme = el.setDark.checked ? 'dark' : 'light';
-  el.root.dataset.theme = theme;   // immediately, not after the round trip
+  applyLook(theme);   // immediately, not after the round trip
   post({
     cmd: 'settings',
     theme,

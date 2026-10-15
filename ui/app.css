@@ -99,6 +99,133 @@
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/><feColorMatrix type='matrix' values='-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.02'/></svg>");
 }
 
+/* ---------------------------------------------------------------------------
+   Colour schemes, picked in Settings → Appearance: one for light mode, one for
+   dark. The blocks above are the defaults, "Walnut & Gilt" by day and "Charcoal
+   & Gold" by night; each scheme below only swaps the colour tokens. The page
+   sets data-palette to the scheme for whichever mode is showing.
+   ------------------------------------------------------------------------- */
+
+/* Light: Sage — pale green paper, deep moss ink. */
+:root[data-theme="light"][data-palette="sage"] {
+  --paper:        #EEF1E8;
+  --paper-deep:   #E2E7D9;
+  --card:         #F8FAF4;
+  --card-hover:   #EDF1E6;
+  --rule:         #D8DFCC;
+  --rule-strong:  #C2CCB2;
+  --ink:          #232A22;
+  --ink-soft:     #4A5546;
+  --ink-faint:    #76826F;
+  --ink-ghost:    #97A18F;
+  --walnut:       #4F6B45;
+  --walnut-deep:  #34492D;
+  --walnut-wash:  #E2EAD9;
+  --gilt:         #8C9A3E;
+  --gilt-wash:    #E6EBC9;
+  --on-accent:    #F7FAF2;
+  --header-top:   #F4F6EF;
+  --status-btm:   #E6EADF;
+  --focus-ring:   rgba(79, 107, 69, .2);
+  --mk-structure: #34492D;
+  --mk-body:      #4F6B45;
+  --mk-band:      #EEF1E8;
+  --mk-lamp:      #B8A84C;
+}
+
+/* Light: Slate — cool blue-grey paper, navy ink. */
+:root[data-theme="light"][data-palette="slate"] {
+  --paper:        #EEF1F5;
+  --paper-deep:   #E1E6EE;
+  --card:         #F8FAFC;
+  --card-hover:   #EDF1F6;
+  --rule:         #D5DCE6;
+  --rule-strong:  #BCC6D4;
+  --ink:          #1F2630;
+  --ink-soft:     #465263;
+  --ink-faint:    #6F7C8E;
+  --ink-ghost:    #95A0AF;
+  --walnut:       #3C5A80;
+  --walnut-deep:  #263D5A;
+  --walnut-wash:  #DFE7F2;
+  --gilt:         #4F86C6;
+  --gilt-wash:    #DCE8F7;
+  --on-accent:    #F7FAFD;
+  --header-top:   #F4F6F9;
+  --status-btm:   #E5EAF1;
+  --focus-ring:   rgba(79, 134, 198, .22);
+  --mk-structure: #263D5A;
+  --mk-body:      #3C5A80;
+  --mk-band:      #EEF1F5;
+  --mk-lamp:      #5E95D3;
+}
+
+/* Light: Rose — blush paper, plum-brown ink. */
+:root[data-theme="light"][data-palette="rose"] {
+  --paper:        #F6EEEE;
+  --paper-deep:   #EDE0E0;
+  --card:         #FCF7F7;
+  --card-hover:   #F4EAEA;
+  --rule:         #E6D5D5;
+  --rule-strong:  #D5BDBD;
+  --ink:          #2E2224;
+  --ink-soft:     #5B4548;
+  --ink-faint:    #8C7174;
+  --ink-ghost:    #A99193;
+  --walnut:       #8A4B57;
+  --walnut-deep:  #62323C;
+  --walnut-wash:  #F1E1E3;
+  --gilt:         #B5707C;
+  --gilt-wash:    #F2DCE0;
+  --on-accent:    #FDF6F7;
+  /* The usual brick red is too close to this accent: Stop has to read as red. */
+  --danger:       #C42F2A;
+  --danger-wash:  #F8DCDA;
+  --header-top:   #F9F3F3;
+  --status-btm:   #EFE4E4;
+  --focus-ring:   rgba(181, 112, 124, .2);
+  --mk-structure: #62323C;
+  --mk-body:      #8A4B57;
+  --mk-band:      #F6EEEE;
+  --mk-lamp:      #C98A95;
+}
+
+/* Dark: Ocean — charcoal with a blue accent. */
+:root[data-theme="dark"][data-palette="ocean"] {
+  --walnut:       #5AA9F0;
+  --walnut-deep:  #A9D3FF;
+  --walnut-wash:  #14243A;
+  --gilt:         #6FB6F7;
+  --gilt-wash:    #16283E;
+  --on-accent:    #07121F;
+  --focus-ring:   rgba(90, 169, 240, .28);
+  --mk-lamp:      #8CC4FF;
+}
+
+/* Dark: Forest — charcoal with a green accent. */
+:root[data-theme="dark"][data-palette="forest"] {
+  --walnut:       #6DBE7A;
+  --walnut-deep:  #B6E3BC;
+  --walnut-wash:  #172A1B;
+  --gilt:         #7FCB8B;
+  --gilt-wash:    #1C3321;
+  --on-accent:    #0A160C;
+  --focus-ring:   rgba(109, 190, 122, .25);
+  --mk-lamp:      #9BDDA5;
+}
+
+/* Dark: Plum — charcoal with a violet accent. */
+:root[data-theme="dark"][data-palette="plum"] {
+  --walnut:       #B48CE6;
+  --walnut-deep:  #DCC6F7;
+  --walnut-wash:  #251B33;
+  --gilt:         #C29CF0;
+  --gilt-wash:    #2D2240;
+  --on-accent:    #150E1F;
+  --focus-ring:   rgba(180, 140, 230, .25);
+  --mk-lamp:      #CFB0F5;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body { height: 100%; overflow: hidden; }
@@ -153,6 +280,9 @@ code {
 #mark .band  { stroke: var(--mk-band); }
 #mark .lamp  { fill: var(--mk-lamp); }
 #mark .sparks circle { fill: var(--gilt); }
+/* The flame follows the colour scheme too (these override the SVG's own stops). */
+#exhaustGlow stop, #flameFade stop:first-child { stop-color: var(--mk-lamp); }
+#flameFade stop:not(:first-child) { stop-color: var(--gilt); }
 
 /* The exhaust breathes and a few sparks drift off it. Slow and low-contrast, so it
    reads as atmosphere from the corner of your eye. */
@@ -605,6 +735,66 @@ code {
 
 .set-row.last { border-bottom: 0; }
 
+/* Colour-scheme pickers under Appearance. */
+.set-row.scheme-head { border-bottom: 0; padding-bottom: 8px; }
+
+.schemes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.schemes.last { border-bottom: 0; }
+
+.scheme {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 7px;
+  border-radius: 11px;
+  border: 1px solid var(--rule-strong);
+  background: var(--card);
+  color: var(--ink-soft);
+  text-align: left;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+
+.scheme:hover { border-color: var(--ink-ghost); }
+.scheme.on { border-color: var(--walnut); box-shadow: 0 0 0 2px var(--walnut); }
+
+.sw {
+  display: block;
+  height: 58px;
+  padding: 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(128, 128, 128, .25);
+}
+
+.sw-card {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+}
+
+.sw-line { position: absolute; left: 7px; top: 8px; width: 46%; height: 4px; border-radius: 2px; opacity: .85; }
+.sw-btn  { position: absolute; left: 7px; bottom: 7px; width: 38%; height: 9px; border-radius: 3px; }
+.sw-dot  { position: absolute; right: 7px; bottom: 7px; width: 9px; height: 9px; border-radius: 50%; }
+
+.sw-name { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: 12px; padding: 0 2px; }
+.scheme.on .sw-name { color: var(--ink); font-weight: 600; }
+
+.sw-default {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-ghost);
+}
+
 .set-text { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .set-title { font-size: 13.5px; color: var(--ink); }
 .set-desc { font-size: 12px; line-height: 1.55; color: var(--ink-faint); }
@@ -852,7 +1042,7 @@ code {
 
 @keyframes pulse {
   0%, 100% { opacity: .35; }
-  50%      { opacity: 1; box-shadow: 0 0 0 3px rgba(168, 132, 63, .2); }
+  50%      { opacity: 1; box-shadow: 0 0 0 3px var(--focus-ring); }
 }
 
 /* ---------------------------------------------------------------- toast */

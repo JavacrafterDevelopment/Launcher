@@ -28,7 +28,16 @@ pub struct Settings {
     pub prereleases: bool,
     /// Unix seconds of the last successful check, shown in settings.
     pub last_check: Option<u64>,
+    /// Colour scheme used in light mode; one of [`LIGHT_SCHEMES`].
+    pub light_scheme: String,
+    /// Colour scheme used in dark mode; one of [`DARK_SCHEMES`].
+    pub dark_scheme: String,
 }
+
+/// The colour schemes ui/app.css defines, the default first. Kept in data\
+/// beside the exe like every other setting, so a choice survives updates.
+pub const LIGHT_SCHEMES: &[&str] = &["walnut", "sage", "slate", "rose"];
+pub const DARK_SCHEMES: &[&str] = &["gold", "ocean", "forest", "plum"];
 
 impl Default for Settings {
     fn default() -> Self {
@@ -37,6 +46,8 @@ impl Default for Settings {
             auto_update: true,
             prereleases: false,
             last_check: None,
+            light_scheme: LIGHT_SCHEMES[0].into(),
+            dark_scheme: DARK_SCHEMES[0].into(),
         }
     }
 }
@@ -67,5 +78,63 @@ impl Settings {
 
     pub fn is_dark(&self) -> bool {
         self.theme == "dark"
+    }
+
+    /// The scheme for whichever mode is on, falling back to the default if the
+    /// saved name isn't one this version knows.
+    pub fn palette(&self) -> &str {
+        let (saved, known) = if self.is_dark() {
+            (&self.dark_scheme, DARK_SCHEMES)
+        } else {
+            (&self.light_scheme, LIGHT_SCHEMES)
+        };
+        known.iter().find(|s| **s == saved.as_str()).copied().unwrap_or(known[0])
+    }
+
+    /// The page background for the scheme in use, so the window doesn't flash
+    /// a different colour before the page paints. Dark schemes share one.
+    pub fn paper(&self) -> (u8, u8, u8, u8) {
+        match self.palette() {
+            "sage" => (0xEE, 0xF1, 0xE8, 0xFF),
+            "slate" => (0xEE, 0xF1, 0xF5, 0xFF),
+            "rose" => (0xF6, 0xEE, 0xEE, 0xFF),
+            _ if self.is_dark() => (0x12, 0x12, 0x12, 0xFF),
+            _ => (0xF4, 0xEE, 0xE2, 0xFF),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A settings file written before colour schemes existed keeps its other
+    /// choices and opens in the original look.
+    #[test]
+    fn older_file_gets_default_schemes() {
+        let old = r#"{"theme":"dark","autoUpdate":false,"prereleases":true,"lastCheck":1700000000}"#;
+        let s: Settings = serde_json::from_str(old).unwrap();
+        assert_eq!((s.theme.as_str(), s.auto_update, s.prereleases), ("dark", false, true));
+        assert_eq!(s.light_scheme, "walnut");
+        assert_eq!(s.dark_scheme, "gold");
+        assert_eq!(s.palette(), "gold");
+    }
+
+    /// A name this version doesn't know (say, from a newer launcher) falls back
+    /// to the default instead of leaving the page unstyled.
+    #[test]
+    fn unknown_scheme_falls_back() {
+        let s = Settings { light_scheme: "neon".into(), ..Settings::default() };
+        assert_eq!(s.palette(), "walnut");
+        assert_eq!(s.paper(), (0xF4, 0xEE, 0xE2, 0xFF));
+    }
+
+    #[test]
+    fn schemes_round_trip() {
+        let s = Settings { theme: "dark".into(), light_scheme: "rose".into(), dark_scheme: "plum".into(), ..Settings::default() };
+        let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
+        assert_eq!((back.light_scheme.as_str(), back.dark_scheme.as_str()), ("rose", "plum"));
+        assert_eq!(back.palette(), "plum");
+        assert_eq!(back.paper(), (0x12, 0x12, 0x12, 0xFF));
     }
 }

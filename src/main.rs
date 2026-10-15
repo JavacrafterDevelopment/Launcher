@@ -26,8 +26,6 @@ const APP_CSS: &str = include_str!("../ui/app.css");
 const APP_JS: &str = include_str!("../ui/app.js");
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon-64.rgba");
 
-const PAPER_LIGHT: (u8, u8, u8, u8) = (0xF4, 0xEE, 0xE2, 0xFF);
-const PAPER_DARK: (u8, u8, u8, u8) = (0x12, 0x12, 0x12, 0xFF);
 
 /// Where the self-update stands. Sent to the page whole on every change.
 #[derive(Clone, Serialize)]
@@ -114,7 +112,7 @@ fn main() {
     let ipc_proxy = proxy.clone();
     let webview = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_html(page_html(&settings))
-        .with_background_color(if settings.is_dark() { PAPER_DARK } else { PAPER_LIGHT })
+        .with_background_color(settings.paper())
         .with_devtools(cfg!(debug_assertions))
         .with_browser_accelerator_keys(false)
         .with_ipc_handler(move |req| {
@@ -190,6 +188,7 @@ fn page_html(settings: &Settings) -> String {
     });
     INDEX_HTML
         .replace("{{THEME}}", if settings.is_dark() { "dark" } else { "light" })
+        .replace("{{PALETTE}}", settings.palette())
         .replace("/*{{CSS}}*/", APP_CSS)
         .replace("/*{{BOOT}}*/", &format!("window.BOOT = {boot};"))
         .replace("/*{{JS}}*/", APP_JS)
@@ -268,6 +267,13 @@ impl App {
                 }
                 if let Some(b) = msg["prereleases"].as_bool() {
                     self.settings.prereleases = b;
+                }
+                // Only scheme names this version defines are kept.
+                if let Some(s) = msg["lightScheme"].as_str().filter(|s| settings::LIGHT_SCHEMES.contains(s)) {
+                    self.settings.light_scheme = s.into();
+                }
+                if let Some(s) = msg["darkScheme"].as_str().filter(|s| settings::DARK_SCHEMES.contains(s)) {
+                    self.settings.dark_scheme = s.into();
                 }
                 let _ = self.settings.save();
                 send(webview, json!({ "type": "settings", "settings": self.settings }));
