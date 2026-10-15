@@ -337,18 +337,25 @@ impl Target {
 
     /// Downloads the release package, checks it against its published SHA-256,
     /// unpacks it and checks every file. Leaves it staged for [`Target::apply`].
-    /// `progress` gets (bytes so far, total).
-    pub fn download(&self, rel: &Release, progress: impl FnMut(u64, u64)) -> Result<(), String> {
+    /// `progress` gets (bytes so far, total); `log` gets a line for each step.
+    pub fn download(&self, rel: &Release, progress: impl FnMut(u64, u64), log: &dyn Fn(String)) -> Result<(), String> {
         let stage = self.stage_dir();
         let _ = fs::remove_dir_all(&stage);
-        let result = self.download_into(&stage, rel, progress);
+        let result = self.download_into(&stage, rel, progress, log);
         if result.is_err() {
             let _ = fs::remove_dir_all(&stage);
         }
         result
     }
 
-    fn download_into(&self, stage: &Path, rel: &Release, mut progress: impl FnMut(u64, u64)) -> Result<(), String> {
+    fn download_into(
+        &self,
+        stage: &Path,
+        rel: &Release,
+        mut progress: impl FnMut(u64, u64),
+        log: &dyn Fn(String),
+    ) -> Result<(), String> {
+        log(format!("Downloading v{} from {}", rel.version, rel.asset_url));
         fs::create_dir_all(stage).map_err(|e| write_err(stage, e))?;
         let zip_path = stage.join("package.zip");
 
@@ -369,11 +376,16 @@ impl Target {
                 .unwrap_or(0),
             n => n,
         };
+        log(match total {
+            0 => "Size not published; going by what the server sends".to_string(),
+            n => format!("Package is {}", mb(n)),
+        });
         let mut file = File::create(&zip_path).map_err(|e| write_err(&zip_path, e))?;
         let mut reader = resp.body_mut().as_reader();
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; 64 * 1024];
         let mut done = 0u64;
+        let mut logged_tenth = 0;
 
         loop {
             let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted ({e})"))?;
@@ -384,6 +396,10 @@ impl Target {
             hasher.update(&buf[..n]);
             done += n as u64;
             progress(done, total);
+            if total > 0 && done * 10 / total > logged_tenth {
+                logged_tenth = done * 10 / total;
+                log(format!("Downloaded {}% ({} of {})", logged_tenth * 10, mb(done), mb(total)));
+            }
         }
         file.sync_all().map_err(|e| write_err(&zip_path, e))?;
         drop(file);
@@ -396,11 +412,16 @@ impl Target {
             if !got.eq_ignore_ascii_case(expected) {
                 return Err("The download didn't match its published checksum.".into());
             }
+            log(format!("Package SHA-256 matches the published one ({}…)", &got[..12]));
+        } else {
+            log("No published SHA-256 for the package; relying on the per-file checks".into());
         }
 
         let files = stage.join("files");
+        log("Unpacking".into());
         extract(&zip_path, &files)?;
         let manifest = verify_files(&files)?;
+        log(format!("Checked all {} files against their SHA-256 in the manifest", manifest.files.len()));
         // The package's own manifest came out of the zip, so on its own it only shows
         // the zip is self-consistent. update.json's list comes separately; a package
         // whose list differs from it in any file, size or hash is refused.
@@ -413,6 +434,7 @@ impl Target {
             if manifest.exe != expected.exe || sorted(&manifest.files) != sorted(&expected.files) {
                 return Err("The update package doesn't match its published file list.".into());
             }
+            log("File list matches the one published in update.json".into());
         }
         let _ = fs::remove_file(&zip_path);
         fs::write(self.ready_marker(), &manifest.version).map_err(|e| write_err(stage, e))
@@ -421,7 +443,7 @@ impl Target {
     /// Swaps every file in the staged package into the install folder, moving the
     /// files it replaces aside, and retires files the new version no longer ships.
     /// Any failure puts back what was already moved.
-    pub fn apply(&self) -> Result<(), String> {
+    pub fn apply(&self, log: &dyn Fn(String)) -> Result<(), String> {
         let stage = self.stage_dir();
         let files = stage.join("files");
         // Checked again here: a staged update may have sat on disk since a previous run.
@@ -439,6 +461,8 @@ impl Target {
             .chain(std::iter::once(PathBuf::from(MANIFEST)))
             .collect();
         let previous = installed_files(&self.dir);
+        log(format!("Moving {} files into {}", incoming.len(), self.dir.display()));
+        let mut replaced = 0;
 
         let mut moved: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
         for rel in &incoming {
@@ -463,8 +487,12 @@ impl Target {
                 Ok(backup)
             };
             match step() {
-                Ok(backup) => moved.push((dst, backup)),
+                Ok(backup) => {
+                    replaced += backup.is_some() as usize;
+                    moved.push((dst, backup));
+                }
                 Err(e) => {
+                    log(format!("Couldn't place {}; putting the previous files back", rel.display()));
                     // Undo in reverse so the old version is whole again.
                     for (done, backup) in moved.into_iter().rev() {
                         let _ = fs::remove_file(&done);
@@ -481,16 +509,19 @@ impl Target {
         // deleted with the rest of the leftovers on the next start.
         let keep: std::collections::HashSet<String> =
             incoming.iter().map(|p| p.to_string_lossy().to_lowercase()).collect();
+        let mut retired = 0;
         for rel in previous {
             if !keep.contains(&rel.to_string_lossy().to_lowercase()) {
                 let p = self.dir.join(&rel);
                 if p.is_file() {
-                    let _ = fs::rename(&p, aside(&p));
+                    log(format!("Removing {} (no longer part of the app)", rel.display()));
+                    retired += fs::rename(&p, aside(&p)).is_ok() as usize;
                 }
             }
         }
 
         let _ = fs::remove_dir_all(&stage);
+        log(format!("{replaced} files replaced, {} added, {retired} removed", incoming.len() - replaced));
         Ok(())
     }
 
@@ -715,4 +746,8 @@ pub fn relaunch(exe: &Path) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("Couldn't start the new version ({e})"))
+}
+
+fn mb(bytes: u64) -> String {
+    format!("{:.1} MB", bytes as f64 / 1_048_576.0)
 }

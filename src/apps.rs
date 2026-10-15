@@ -54,8 +54,22 @@ pub enum AppEvent {
     Progress(u64, u64),
     /// The download is verified; the files are being swapped in.
     Installing,
+    Log(String),
     Finished(Result<(), String>),
 }
+
+/// One line of an app's activity log, shown in the drawer under its card.
+#[derive(Clone, Serialize)]
+struct LogLine {
+    /// Unix milliseconds; the page shows it as local time.
+    t: u128,
+    text: String,
+    /// "info", "ok" or "error".
+    kind: &'static str,
+}
+
+/// Enough to follow an install; older lines fall off the top.
+const LOG_LINES: usize = 300;
 
 struct AppState {
     info: &'static AppInfo,
@@ -65,6 +79,7 @@ struct AppState {
     /// from "not checked yet".
     checked: bool,
     task: Task,
+    log: Vec<LogLine>,
 }
 
 impl AppState {
@@ -85,6 +100,17 @@ impl AppState {
     fn busy(&self) -> bool {
         matches!(self.task, Task::Checking | Task::Downloading { .. } | Task::Installing)
     }
+
+    fn log(&mut self, kind: &'static str, text: impl Into<String>) {
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        self.log.push(LogLine { t, text: text.into(), kind });
+        if self.log.len() > LOG_LINES {
+            self.log.drain(..self.log.len() - LOG_LINES);
+        }
+    }
 }
 
 pub struct Library {
@@ -97,7 +123,14 @@ impl Library {
         let apps = CATALOG
             .iter()
             .map(|info| {
-                let mut a = AppState { info, installed: None, latest: None, checked: false, task: Task::Idle };
+                let mut a = AppState {
+                    info,
+                    installed: None,
+                    latest: None,
+                    checked: false,
+                    task: Task::Idle,
+                    log: Vec::new(),
+                };
                 a.refresh_installed();
                 a
             })
@@ -127,6 +160,7 @@ impl Library {
                     "checked": a.checked,
                     "updateAvailable": a.update_available(),
                     "task": a.task,
+                    "log": a.log,
                 })
             })
             .collect();
@@ -163,31 +197,42 @@ impl Library {
         };
         let target = a.target();
         if target.exe_in_use() {
-            a.task = Task::Error { message: format!("{} is running. Close it, then update.", a.info.name) };
+            let message = format!("{} is running. Close it, then update.", a.info.name);
+            a.log("error", message.clone());
+            a.task = Task::Error { message };
             return;
+        }
+        // Each install or update starts a fresh log.
+        a.log.clear();
+        match &a.installed {
+            Some(from) => a.log("info", format!("Updating {} from v{from} to v{}", a.info.name, release.version)),
+            None => a.log("info", format!("Installing {} v{}", a.info.name, release.version)),
         }
         a.task = Task::Downloading { done: 0, total: release.size };
         let id = a.info.id;
         std::thread::spawn(move || {
+            let send = |e: AppEvent| {
+                let _ = proxy.send_event(UserEvent::App(id, e));
+            };
+            let log = |line: String| send(AppEvent::Log(line));
             let mut last_pct = u64::MAX;
-            let result = target
-                .download(&release, |done, total| {
-                    // One message per percent is plenty for a progress bar.
-                    let pct = if total > 0 { done * 100 / total } else { done / 1_000_000 };
-                    if total > 0 && done >= total {
-                        // Downloaded; the unpacking and checking that follow are part
-                        // of installing as far as anyone watching is concerned.
-                        let _ = proxy.send_event(UserEvent::App(id, AppEvent::Installing));
-                    } else if pct != last_pct {
-                        last_pct = pct;
-                        let _ = proxy.send_event(UserEvent::App(id, AppEvent::Progress(done, total)));
-                    }
-                })
-                .and_then(|_| {
-                    let _ = proxy.send_event(UserEvent::App(id, AppEvent::Installing));
-                    target.apply()
-                });
-            let _ = proxy.send_event(UserEvent::App(id, AppEvent::Finished(result)));
+            let progress = |done, total| {
+                // One message per percent is plenty for a progress bar.
+                let pct = if total > 0 { done * 100 / total } else { done / 1_000_000 };
+                if total > 0 && done >= total {
+                    // Downloaded; the unpacking and checking that follow are part
+                    // of installing as far as anyone watching is concerned.
+                    send(AppEvent::Installing);
+                } else if pct != last_pct {
+                    last_pct = pct;
+                    send(AppEvent::Progress(done, total));
+                }
+            };
+            let result = target.download(&release, progress, &log).and_then(|_| {
+                send(AppEvent::Installing);
+                target.apply(&log)
+            });
+            send(AppEvent::Finished(result));
         });
     }
 
@@ -201,16 +246,22 @@ impl Library {
             }
             AppEvent::Checked(Err(message)) => {
                 a.checked = true;
-                a.task = Task::Error { message: format!("Couldn't check for updates: {message}") };
+                let message = format!("Couldn't check for updates: {message}");
+                a.log("error", message.clone());
+                a.task = Task::Error { message };
             }
             AppEvent::Installing => a.task = Task::Installing,
             AppEvent::Progress(done, total) => a.task = Task::Downloading { done, total },
+            AppEvent::Log(line) => a.log("info", line),
             AppEvent::Finished(Ok(())) => {
                 a.refresh_installed();
+                let done = format!("Done: {} v{} is installed", a.info.name, a.installed.as_deref().unwrap_or("?"));
+                a.log("ok", done);
                 a.task = Task::Idle;
             }
             AppEvent::Finished(Err(message)) => {
                 a.refresh_installed();
+                a.log("error", format!("Stopped: {message}"));
                 a.task = Task::Error { message };
             }
         }
@@ -221,8 +272,13 @@ impl Library {
         let target = a.target();
         let Some(installed) = target.installed() else { return };
         let exe = target.dir().join(&installed.exe);
-        if let Err(message) = shell_open(&exe, target.dir()) {
-            a.task = Task::Error { message: format!("Couldn't start {}: {message}", a.info.name) };
+        match shell_open(&exe, target.dir()) {
+            Ok(()) => a.log("info", format!("Started {}", exe.display())),
+            Err(message) => {
+                let message = format!("Couldn't start {}: {message}", a.info.name);
+                a.log("error", message.clone());
+                a.task = Task::Error { message };
+            }
         }
     }
 
@@ -243,14 +299,24 @@ impl Library {
         }
         let target = a.target();
         if target.exe_in_use() {
-            a.task = Task::Error { message: format!("{} is running. Close it, then uninstall.", a.info.name) };
+            let message = format!("{} is running. Close it, then uninstall.", a.info.name);
+            a.log("error", message.clone());
+            a.task = Task::Error { message };
             return;
         }
+        a.log("info", format!("Deleting {}", target.dir().display()));
         let result = std::fs::remove_dir_all(target.dir());
         a.refresh_installed();
         a.task = match result {
-            Ok(()) => Task::Idle,
-            Err(e) => Task::Error { message: format!("Couldn't remove every file ({e}).") },
+            Ok(()) => {
+                a.log("ok", format!("{} is uninstalled", a.info.name));
+                Task::Idle
+            }
+            Err(e) => {
+                let message = format!("Couldn't remove every file ({e}).");
+                a.log("error", message.clone());
+                Task::Error { message }
+            }
         };
     }
 }

@@ -26,7 +26,7 @@ const APP_JS: &str = include_str!("../ui/app.js");
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon-64.rgba");
 
 const PAPER_LIGHT: (u8, u8, u8, u8) = (0xF4, 0xEE, 0xE2, 0xFF);
-const PAPER_DARK: (u8, u8, u8, u8) = (0x19, 0x15, 0x12, 0xFF);
+const PAPER_DARK: (u8, u8, u8, u8) = (0x12, 0x12, 0x12, 0xFF);
 
 /// Where the self-update stands. Sent to the page whole on every change.
 #[derive(Clone, Serialize)]
@@ -75,7 +75,7 @@ fn main() {
     // An update the user deferred with "Later" and never got applied on exit
     // (a crash, a power cut) goes in now, before anything else opens.
     let me = Target::launcher();
-    if me.has_staged() && me.apply().is_ok() {
+    if me.has_staged() && me.apply(&|_| {}).is_ok() {
         if let Ok(exe) = std::env::current_exe() {
             if updater::relaunch(&exe).is_ok() {
                 return;
@@ -336,7 +336,7 @@ impl App {
         self.update = Update::Downloading { release: release.clone(), done: 0, total };
         std::thread::spawn(move || {
             let mut last_pct = u64::MAX;
-            let result = Target::launcher().download(&release, |done, total| {
+            let progress = |done, total| {
                 // One message per percent is plenty for a progress bar.
                 let pct = if total > 0 { done * 100 / total } else { done / 1_000_000 };
                 if pct != last_pct {
@@ -346,7 +346,8 @@ impl App {
                         auto,
                     });
                 }
-            });
+            };
+            let result = Target::launcher().download(&release, progress, &|_| {});
             let update = match result {
                 Ok(_) => Update::Ready { release },
                 Err(message) => Update::Error { message },
@@ -359,7 +360,7 @@ impl App {
     fn install_and_restart(&mut self, webview: &WebView) -> bool {
         let me = Target::launcher();
         let result = if me.has_staged() {
-            me.apply().and_then(|_| {
+            me.apply(&|_| {}).and_then(|_| {
                 let exe = std::env::current_exe().map_err(|e| e.to_string())?;
                 updater::relaunch(&exe)
             })
@@ -382,7 +383,7 @@ impl App {
         if let Update::Ready { .. } = self.update {
             let me = Target::launcher();
             if me.has_staged() {
-                let _ = me.apply();
+                let _ = me.apply(&|_| {});
             }
         }
     }

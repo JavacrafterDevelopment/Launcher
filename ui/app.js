@@ -236,6 +236,8 @@ const library = {
   apps: [],
   armed: null,        // id of the app whose uninstall button is waiting for a second click
   armedTimer: null,
+  logOpen: {},        // id -> whether its log drawer is expanded
+  logStart: {},       // id -> time of its log's first line, to spot a fresh install
 };
 
 const ICONS = {
@@ -277,7 +279,63 @@ function renderLibrary() {
     `${apps.length} apps · ${installed} installed` + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
   $('lib-check').disabled = apps.some((a) => a.task.state === 'checking');
 
-  $('apps').replaceChildren(...apps.map(appCard));
+  // Rebuilding replaces the log bodies, so keep where each was scrolled to: a log
+  // scrolled to the bottom follows new lines; one scrolled up stays put.
+  const scroll = {};
+  document.querySelectorAll('.log-body').forEach((b) => {
+    scroll[b.dataset.id] = { top: b.scrollTop, end: b.scrollTop + b.clientHeight >= b.scrollHeight - 4 };
+  });
+
+  $('apps').replaceChildren(...apps.map((a) => {
+    const wrap = h('div', 'app-wrap');
+    wrap.append(appCard(a));
+    if (a.log.length) wrap.append(appLog(a));
+    return wrap;
+  }));
+
+  document.querySelectorAll('.log-body').forEach((b) => {
+    const s = scroll[b.dataset.id];
+    b.scrollTop = !s || s.end ? b.scrollHeight : s.top;
+  });
+}
+
+const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+/* The drawer under a card: everything the launcher has done to that app this
+   session. A new install or update opens it; the arrow folds it away. */
+function appLog(a) {
+  const first = a.log[0].t;
+  if (library.logStart[a.id] !== first) {
+    library.logStart[a.id] = first;
+    library.logOpen[a.id] = true;
+  }
+  const open = !!library.logOpen[a.id];
+  const last = a.log[a.log.length - 1];
+
+  const drawer = h('div', `app-log${open ? ' open' : ''}`);
+  const toggle = h('button', 'log-toggle');
+  toggle.title = open ? 'Hide the log' : 'Show the log';
+  toggle.innerHTML = '<svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">'
+    + '<path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  toggle.append(h('span', 'log-label', 'Log'));
+  toggle.append(h('span', `log-last ${last.kind}`, open ? `${a.log.length} lines` : last.text));
+  toggle.addEventListener('click', () => {
+    library.logOpen[a.id] = !open;
+    renderLibrary();
+  });
+  drawer.append(toggle);
+
+  if (open) {
+    const body = h('div', 'log-body');
+    body.dataset.id = a.id;
+    for (const line of a.log) {
+      const row = h('div', `log-line ${line.kind}`);
+      row.append(h('span', 'log-t', timeOf(line.t)), h('span', 'log-text', line.text));
+      body.append(row);
+    }
+    drawer.append(body);
+  }
+  return drawer;
 }
 
 function appCard(a) {
