@@ -71,7 +71,9 @@ jobs:
         run: |
           $tag  = '${{ github.ref_name }}'
           $repo = '${{ github.repository }}'
-          $info = gh release view $tag --json body,publishedAt,isPrerelease | ConvertFrom-Json
+          $info = gh release view $tag --json body,isPrerelease | ConvertFrom-Json
+          # Read raw: ConvertFrom-Json would turn the timestamp into a local-format date.
+          $published = gh release view $tag --json publishedAt --jq .publishedAt
 
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -87,7 +89,7 @@ jobs:
 
           ./tools/publish-update.ps1 -Entry dist/release-entry.json -Repo $repo -Tag $tag `
             -UpdateJson updates-branch/update.json -Prerelease:$info.isPrerelease `
-            -Notes "$($info.body)" -Published "$($info.publishedAt)"
+            -Notes "$($info.body)" -Published $published
 
           git -C updates-branch add update.json
           git -C updates-branch commit -m "update.json for $tag"
