@@ -252,3 +252,25 @@ tools/package.ps1  builds the release folder, manifest and update zip
 tools/publish-update.ps1  writes a release into update.json
 package/           (optional) extra files to ship beside the exe
 ```
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or https://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or https://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
+
+### Third-party components
+
+`Launcher.exe` is built from the Rust crates listed in `Cargo.lock`, each under its
+own permissive license (mostly MIT OR Apache-2.0, plus Unicode-3.0, Zlib and
+similar). Builds made with the GNU toolchain also ship Microsoft's
+`WebView2Loader.dll`, under Microsoft's license for the WebView2 SDK.
