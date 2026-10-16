@@ -327,9 +327,9 @@ impl Target {
     }
 
     /// Fallback without the API: `/releases/latest` redirects to the newest stable
-    /// release's tag page, and its assets download from a fixed URL. No notes or
-    /// published SHA-256 this way, and no pre-releases, but it answers when the API
-    /// won't. The manifest inside the package still checks every file.
+    /// release's tag page, and its assets download from a fixed URL. No notes and
+    /// no pre-releases this way, but it answers when the API won't, and still pulls
+    /// the published SHA-256 from the release's asset list page.
     fn latest_via_website(&self) -> Result<Option<Release>, String> {
         use ureq::ResponseExt;
 
@@ -345,6 +345,7 @@ impl Target {
         let Some(v) = parse_version(&tag) else { return Ok(None) };
         let version = v.to_string();
         let package = self.asset_name(&version);
+        let digest = website_asset_digest(&self.repo, &tag, &package);
         Ok(Some(Release {
             version,
             name: format!("v{v}"),
@@ -354,7 +355,7 @@ impl Target {
             prerelease: false,
             asset_url: format!("https://github.com/{}/releases/download/{tag}/{package}", self.repo),
             size: 0,
-            digest: None,
+            digest,
             expected: None,
         }))
     }
@@ -789,8 +790,9 @@ impl Target {
                         let path = e.path();
                         if path.is_dir() {
                             let skip = dir == root
-                                && ["data", "photocraftdata", STAGE_DIR, &APPS_DIR.to_ascii_lowercase()]
-                                    .contains(&name.as_str());
+                                && (is_data_dir(&name)
+                                    || name == STAGE_DIR
+                                    || name == APPS_DIR.to_ascii_lowercase());
                             if !skip {
                                 pending.push(path);
                             }
@@ -996,6 +998,28 @@ fn release_from_api(r: &GhRelease, a: &GhAsset) -> Release {
     }
 }
 
+/// Pulls the `sha256:<hex>` digest for `package` from GitHub's HTML asset list
+/// fragment when the REST API is rate-limited.
+fn website_asset_digest(repo: &str, tag: &str, package: &str) -> Option<String> {
+    let url = format!("https://github.com/{repo}/releases/expanded_assets/{tag}");
+    let mut resp = agent().get(&url).call().ok()?;
+    if resp.status() != 200 {
+        return None;
+    }
+    let html = resp.body_mut().read_to_string().ok()?;
+    let marker = format!("digest for {package}\"");
+    let after = &html[html.find(&marker)? + marker.len()..];
+    let val = &after[after.find("value=\"sha256:")? + 7..];
+    let digest = val.split('"').next()?;
+    (digest.len() == 71 && digest.starts_with("sha256:")).then(|| digest.to_string())
+}
+
+/// Portable user-data folders (`data\` and `<App>CraftData\`), which updates,
+/// verifies and leftover sweeps never touch.
+fn is_data_dir(lower: &str) -> bool {
+    lower == "data" || lower == "portable-data" || lower.ends_with("craftdata")
+}
+
 /// A package path made safe to join onto the install folder: relative, no `..`,
 /// no drive letters, and never into `data\` or the staging folder.
 fn safe_relative(p: &str) -> Option<PathBuf> {
@@ -1007,7 +1031,7 @@ fn safe_relative(p: &str) -> Option<PathBuf> {
         out.push(part);
     }
     let first = out.components().next()?.as_os_str().to_string_lossy().to_ascii_lowercase();
-    (first != "data" && first != "photocraftdata" && first != STAGE_DIR).then_some(out)
+    (!is_data_dir(&first) && first != STAGE_DIR).then_some(out)
 }
 
 fn sha256_file(path: &Path) -> std::io::Result<(u64, String)> {
@@ -1123,7 +1147,7 @@ fn adopt_unpacked(dir: &Path, exe: &str) -> Option<String> {
             let path = e.path();
             if path.is_dir() {
                 let name = e.file_name().to_string_lossy().to_ascii_lowercase();
-                if !["data", "photocraftdata", STAGE_DIR].contains(&name.as_str()) {
+                if !is_data_dir(&name) && name != STAGE_DIR {
                     subdirs.push(path);
                 }
             }

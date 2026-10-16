@@ -53,6 +53,14 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) | Library |
 | RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
 | PhotoCraft | [storytold/photocraft](https://github.com/storytold/photocraft) | Third-party apps |
+| VectorCraft | [storytold/vectorcraft](https://github.com/storytold/vectorcraft) | Third-party apps |
+| FilmCraft | [storytold/filmcraft](https://github.com/storytold/filmcraft) | Third-party apps |
+| EffectCraft | [storytold/effectcraft](https://github.com/storytold/effectcraft) | Third-party apps |
+| LightCraft | [storytold/lightcraft](https://github.com/storytold/lightcraft) | Third-party apps |
+| DesignCraft | [storytold/designcraft](https://github.com/storytold/designcraft) | Third-party apps |
+| PdfCraft | [storytold/pdfcraft](https://github.com/storytold/pdfcraft) | Third-party apps |
+| FigCraft | [storytold/figcraft](https://github.com/storytold/figcraft) | Third-party apps |
+| SoundCraft | [storytold/soundcraft](https://github.com/storytold/soundcraft) | Third-party apps |
 
 **Install** puts an app in `portableApplications\<Name>\`. Each card then offers
 **Launch** (started the way Explorer would, so an app that wants administrator
