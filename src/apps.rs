@@ -82,7 +82,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "photocraft",
         name: "PhotoCraft",
         repo: "storytold/photocraft",
-        tagline: "Open-source raster photo editor (Adobe Photoshop alternative) in pure Rust.",
+        tagline: "Open-source raster photo editor and image manipulation tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/photocraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -94,7 +94,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "vectorcraft",
         name: "VectorCraft",
         repo: "storytold/vectorcraft",
-        tagline: "Open-source vector art and illustration tool (Adobe Illustrator alternative) in pure Rust.",
+        tagline: "Open-source vector art and illustration tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/vectorcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -106,7 +106,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "filmcraft",
         name: "FilmCraft",
         repo: "storytold/filmcraft",
-        tagline: "Open-source non-linear video editor (Adobe Premiere Pro alternative) in pure Rust.",
+        tagline: "Open-source non-linear video editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/filmcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -118,7 +118,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "effectcraft",
         name: "EffectCraft",
         repo: "storytold/effectcraft",
-        tagline: "Open-source motion graphics and compositing tool (Adobe After Effects alternative) in pure Rust.",
+        tagline: "Open-source motion graphics and compositing tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/effectcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -130,7 +130,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "lightcraft",
         name: "LightCraft",
         repo: "storytold/lightcraft",
-        tagline: "Open-source non-destructive RAW and photo workflow editor (Adobe Lightroom alternative) in pure Rust.",
+        tagline: "Open-source non-destructive RAW and photo workflow editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/lightcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -142,7 +142,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "designcraft",
         name: "DesignCraft",
         repo: "storytold/designcraft",
-        tagline: "Open-source page and layout publishing design editor (Adobe InDesign alternative) in pure Rust.",
+        tagline: "Open-source page and layout publishing design editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/designcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -154,7 +154,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "pdfcraft",
         name: "PdfCraft",
         repo: "storytold/pdfcraft",
-        tagline: "Open-source PDF reader and editor (Adobe Acrobat Pro alternative) in pure Rust.",
+        tagline: "Open-source PDF reader and editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/pdfcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -166,7 +166,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "figcraft",
         name: "FigCraft",
         repo: "storytold/figcraft",
-        tagline: "Open-source interface design and interactive prototyping tool (Figma / Adobe XD alternative) in pure Rust.",
+        tagline: "Open-source interface design and interactive prototyping tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/figcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
@@ -178,7 +178,7 @@ pub const CATALOG: &[AppInfo] = &[
         id: "soundcraft",
         name: "SoundCraft",
         repo: "storytold/soundcraft",
-        tagline: "Open-source digital audio workstation (Avid Pro Tools / Audition alternative) in pure Rust.",
+        tagline: "Open-source digital audio workstation written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/soundcraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {

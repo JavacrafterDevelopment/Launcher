@@ -436,7 +436,7 @@ code {
 
 /* --------------------------------------------------------------- library */
 
-.column.wide { width: min(860px, 100%); }
+.column.wide { width: min(960px, 100%); }
 
 .lib-head { display: flex; align-items: baseline; gap: 12px; }
 .lib-head .btn { align-self: center; }
@@ -469,49 +469,56 @@ code {
 
 .lib-note b { font-weight: 600; color: var(--ink-soft); }
 
-.apps { display: flex; flex-direction: column; gap: 12px; }
+.apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
 
 .app {
-  display: grid;
-  grid-template-columns: 58px 1fr auto;
-  gap: 4px 18px;
-  align-items: center;
-  padding: 16px 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 255px;
+  padding: 20px;
   background: var(--card);
   border: 1px solid var(--rule-strong);
-  border-radius: 13px;
+  border-radius: 15px;
   box-shadow: var(--shadow-soft);
-  transition: border-color .15s ease;
+  transition: border-color .15s ease, transform .15s ease;
 }
 
 .app.has-update { border-color: var(--gilt); }
 
-/* A bound-book spine of a tile: the app's initial in the wordmark's serif. */
+/* Large square icon tile at the top of each card. */
 .app-tile {
-  grid-row: span 2;
-  width: 58px;
-  height: 58px;
-  border-radius: 12px;
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  border-radius: 18px;
   display: grid;
   place-items: center;
   font-family: var(--serif);
-  font-size: 27px;
+  font-size: 38px;
   color: var(--gilt-wash);
   background: linear-gradient(160deg, var(--walnut) 0%, var(--walnut-deep) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 6px var(--shadow-drop);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 3px 8px var(--shadow-drop);
 }
 
 :root[data-theme="dark"] .app-tile {
   color: var(--gilt);
   background: linear-gradient(160deg, #2C2C2C 0%, #1F1F1F 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 2px 6px var(--shadow-drop);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 3px 8px var(--shadow-drop);
 }
 
 .app-tile.has-icon,
 :root[data-theme="dark"] .app-tile.has-icon {
   background: transparent;
   overflow: hidden;
-  box-shadow: 0 2px 6px var(--shadow-drop);
+  box-shadow: 0 3px 8px var(--shadow-drop);
 }
 
 .app-icon {
@@ -523,13 +530,13 @@ code {
 
 .app-tile.dim { opacity: .55; filter: saturate(.6); }
 
-.app-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.app-main { min-width: 0; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 6px; }
 
-.app-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.app-title { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 
 .app-name {
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 19px;
   color: var(--walnut-deep);
 }
 
@@ -538,22 +545,32 @@ code {
 
 .app-tagline { font-size: 12.5px; line-height: 1.5; color: var(--ink-faint); }
 
-.app-actions { grid-row: span 2; display: flex; align-items: center; gap: 6px; }
+.app-actions {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
 
 .app-status {
-  grid-column: 2 / 4;
+  width: 100%;
   font-size: 12px;
   color: var(--ink-faint);
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   min-height: 0;
 }
 
 .app-status:empty { display: none; }
 .app-status.bad { color: var(--danger); }
 
-.app-status .progress { flex: 1; margin: 0; display: block; max-width: 340px; }
+.app-status .progress { width: 100%; margin: 0; display: block; }
 
 .iconbtn {
   width: 32px;
@@ -581,14 +598,14 @@ code {
 
 .btn.gilt:hover:not(:disabled) { background: var(--walnut); border-color: var(--walnut); }
 
-/* The card and its log drawer move as one, so an open log pushes the next card
+/* The card and its log drawer move as one, so an open log pushes the next row
    down rather than covering it. */
 .app-wrap { position: relative; display: flex; flex-direction: column; }
 .app-wrap .app { position: relative; z-index: 1; }
 
 /* Tucked under the card: a little narrower, joined to its bottom edge. */
 .app-log {
-  margin: -1px 22px 0;
+  margin: -1px 12px 0;
   background: var(--paper-deep);
   border: 1px solid var(--rule-strong);
   border-top: 0;
