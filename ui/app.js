@@ -424,7 +424,16 @@ function appCard(a) {
   const latest = a.latest;
   const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
 
-  const tile = h('div', `app-tile${a.installed ? '' : ' dim'}`, a.name[0]);
+  const tile = h('div', `app-tile${a.installed ? '' : ' dim'}${a.icon ? ' has-icon' : ''}`);
+  if (a.icon) {
+    const img = h('img', 'app-icon');
+    img.src = a.icon;
+    img.alt = '';
+    img.draggable = false;
+    tile.append(img);
+  } else {
+    tile.textContent = a.name[0];
+  }
   card.append(tile);
 
   // Name, version line, tagline.

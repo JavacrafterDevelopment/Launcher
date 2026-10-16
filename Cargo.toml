@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Portable launcher for Javacrafter apps and games, updated from GitHub releases."
 license = "MIT OR Apache-2.0"

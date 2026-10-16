@@ -22,6 +22,7 @@ pub struct AppInfo {
     pub name: &'static str,
     pub repo: &'static str,
     pub tagline: &'static str,
+    pub icon: Option<&'static [u8]>,
     pub stop: Stop,
     pub source: Source,
 }
@@ -53,6 +54,7 @@ pub const CATALOG: &[AppInfo] = &[
         name: "Lighthouse",
         repo: "JavacrafterDevelopment/Lighthouse",
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
+        icon: None,
         // Runs as administrator, and its close button only hides it to the tray.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
         source: Source::Own,
@@ -62,6 +64,7 @@ pub const CATALOG: &[AppInfo] = &[
         name: "ScreenshotApp",
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
+        icon: None,
         stop: Stop::CloseWindows,
         source: Source::Own,
     },
@@ -70,6 +73,7 @@ pub const CATALOG: &[AppInfo] = &[
         name: "RustWinUtil",
         repo: "JavacrafterDevelopment/RustWinUtil",
         tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
+        icon: None,
         // Runs as administrator, so the launcher can't close it itself.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
         source: Source::Own,
@@ -79,6 +83,7 @@ pub const CATALOG: &[AppInfo] = &[
         name: "PhotoCraft",
         repo: "storytold/photocraft",
         tagline: "Open-source photo editor written from scratch in pure Rust.",
+        icon: Some(include_bytes!("../assets/photocraft.png")),
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "photocraft-{version}-windows-x64-portable.zip",
@@ -144,6 +149,7 @@ const LOG_LINES: usize = 300;
 
 struct AppState {
     info: &'static AppInfo,
+    icon: Option<String>,
     installed: Option<String>,
     latest: Option<Release>,
     /// True once a check has answered, so "no release yet" can be told apart
@@ -215,6 +221,7 @@ impl Library {
             .map(|info| {
                 let mut a = AppState {
                     info,
+                    icon: info.icon.map(png_data_url),
                     installed: None,
                     latest: None,
                     checked: false,
@@ -248,6 +255,7 @@ impl Library {
                     "name": a.info.name,
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
+                    "icon": a.icon,
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
                     "installed": a.installed,
                     "latest": a.latest,
@@ -272,6 +280,7 @@ impl Library {
     /// button; nothing is downloaded until it's pressed.
     pub fn check_all(&mut self, prereleases: bool) {
         for a in self.apps.iter_mut().filter(|a| !a.busy()) {
+            a.refresh_installed();
             a.task = Task::Checking;
             let (id, target, proxy) = (a.info.id, a.target(), self.proxy.clone());
             std::thread::spawn(move || {
@@ -669,3 +678,20 @@ fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String
         Err(std::io::Error::last_os_error().to_string())
     }
 }
+
+fn png_data_url(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(22 + bytes.len().div_ceil(3) * 4);
+    out.push_str("data:image/png;base64,");
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = *chunk.get(1).unwrap_or(&0) as usize;
+        let b2 = *chunk.get(2).unwrap_or(&0) as usize;
+        out.push(TABLE[b0 >> 2] as char);
+        out.push(TABLE[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
+        out.push(if chunk.len() > 1 { TABLE[((b1 & 0x0f) << 2) | (b2 >> 6)] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[b2 & 0x3f] as char } else { '=' });
+    }
+    out
+}
+

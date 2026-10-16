@@ -204,12 +204,18 @@ impl Target {
         &self.dir
     }
 
-    /// The installed copy's version and exe, from its manifest. None if it isn't
-    /// installed (or wasn't installed by the launcher).
+    /// The installed copy's version and exe, from its manifest. For a third-party
+    /// app unpacked into `portableApplications\<name>` by hand (with no manifest
+    /// yet), reads the version from the exe and writes `launcher-manifest.json`.
     pub fn installed(&self) -> Option<Installed> {
-        let raw = fs::read(self.dir.join(MANIFEST)).ok()?;
-        let m: Manifest = serde_json::from_slice(&raw).ok()?;
-        Some(Installed { version: m.version, exe: m.exe })
+        if let Ok(raw) = fs::read(self.dir.join(MANIFEST)) {
+            if let Ok(m) = serde_json::from_slice::<Manifest>(&raw) {
+                return Some(Installed { version: m.version, exe: m.exe });
+            }
+        }
+        let exe = self.default_exe.as_deref()?;
+        let version = adopt_unpacked(&self.dir, exe)?;
+        Some(Installed { version, exe: exe.to_string() })
     }
 
     /// True while the installed program is running: Windows won't let a running
@@ -1081,15 +1087,18 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
         for e in entries {
             let e = e.map_err(|err| write_err(&dir, err))?;
             let path = e.path();
-            if path.is_dir() {
-                pending.push(path);
-                continue;
-            }
             let rel = path
                 .strip_prefix(files_dir)
                 .map_err(|_| "Unexpected path while building the manifest.".to_string())?;
             let rel_str = rel.to_string_lossy().replace('\\', "/");
-            if rel_str == MANIFEST {
+            if safe_relative(&rel_str).is_none() {
+                continue;
+            }
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if rel_str == MANIFEST || rel_str.ends_with(OLD_SUFFIX) {
                 continue;
             }
             let (size, sha256) = sha256_file(&path).map_err(|err| write_err(&path, err))?;
@@ -1101,6 +1110,94 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
     let json = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let out = files_dir.join(MANIFEST);
     fs::write(&out, json).map_err(|e| write_err(&out, e))
+}
+
+/// Adopts a third-party folder that was unpacked by hand into `dir` without a
+/// `launcher-manifest.json`. If the zip's wrapper folder (e.g.
+/// `photocraft-0.8.2-windows-x64-portable\`) was kept, flattens it first.
+fn adopt_unpacked(dir: &Path, exe: &str) -> Option<String> {
+    let mut folder_ver: Option<String> = None;
+    if !dir.join(exe).is_file() {
+        let mut subdirs = Vec::new();
+        for e in fs::read_dir(dir).ok()?.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                let name = e.file_name().to_string_lossy().to_ascii_lowercase();
+                if !["data", "photocraftdata", STAGE_DIR].contains(&name.as_str()) {
+                    subdirs.push(path);
+                }
+            }
+        }
+        if subdirs.len() == 1 && subdirs[0].join(exe).is_file() {
+            let wrapper = &subdirs[0];
+            folder_ver = wrapper
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(version_in_name);
+            for e in fs::read_dir(wrapper).ok()?.flatten() {
+                let dst = dir.join(e.file_name());
+                let _ = fs::rename(e.path(), dst);
+            }
+            let _ = fs::remove_dir(wrapper);
+        }
+    }
+    let exe_path = dir.join(exe);
+    if !exe_path.is_file() {
+        return None;
+    }
+    let version = pe_version(&exe_path).or(folder_ver)?;
+    write_manifest(dir, &version, exe).ok()?;
+    Some(version)
+}
+
+fn version_in_name(name: &str) -> Option<String> {
+    name.split(['-', '_'])
+        .find_map(parse_version)
+        .map(|v| v.to_string())
+}
+
+/// Reads the `major.minor.patch` file version from a Windows PE executable's
+/// `.rsrc` section (`VS_FIXEDFILEINFO`).
+fn pe_version(path: &Path) -> Option<String> {
+    use std::io::Seek;
+    let mut file = File::open(path).ok()?;
+    let mut head = [0u8; 4096];
+    let n = file.read(&mut head).ok()?;
+    let buf = &head[..n];
+    if buf.get(0..2) != Some(b"MZ") {
+        return None;
+    }
+    let pe = u32::from_le_bytes(buf.get(0x3c..0x40)?.try_into().ok()?) as usize;
+    if buf.get(pe..pe + 4) != Some(b"PE\0\0") {
+        return None;
+    }
+    let sections = u16::from_le_bytes(buf.get(pe + 6..pe + 8)?.try_into().ok()?) as usize;
+    let opt_size = u16::from_le_bytes(buf.get(pe + 20..pe + 22)?.try_into().ok()?) as usize;
+    let table = pe + 24 + opt_size;
+    let mut rsrc_span = None;
+    for i in 0..sections {
+        let s = table + i * 40;
+        let name = buf.get(s..s + 8)?;
+        if name.starts_with(b".rsrc") {
+            let size = u32::from_le_bytes(buf.get(s + 16..s + 20)?.try_into().ok()?) as usize;
+            let ptr = u32::from_le_bytes(buf.get(s + 20..s + 24)?.try_into().ok()?) as u64;
+            rsrc_span = Some((ptr, size.min(8 * 1024 * 1024)));
+            break;
+        }
+    }
+    let (ptr, size) = rsrc_span?;
+    file.seek(std::io::SeekFrom::Start(ptr)).ok()?;
+    let mut rsrc = vec![0u8; size];
+    file.read_exact(&mut rsrc).ok()?;
+
+    // VS_FIXEDFILEINFO magic (0xFEEF04BD) followed by struc version 1.0 (0x00010000).
+    const SIG: [u8; 8] = [0xbd, 0x04, 0xef, 0xfe, 0x00, 0x00, 0x01, 0x00];
+    let pos = (0..rsrc.len().saturating_sub(24))
+        .step_by(4)
+        .find(|&i| rsrc[i..i + 8] == SIG)?;
+    let ms = u32::from_le_bytes(rsrc[pos + 8..pos + 12].try_into().ok()?);
+    let ls = u32::from_le_bytes(rsrc[pos + 12..pos + 16].try_into().ok()?);
+    Some(format!("{}.{}.{}", ms >> 16, ms & 0xffff, ls >> 16))
 }
 
 /// Every file the manifest lists must be present with exactly its size and SHA-256.
@@ -1268,6 +1365,39 @@ mod tests {
         fs::write(install_dir.join("portable.txt"), b"tampered").unwrap();
         let bad = target.verify(|_, _| {}, &|_| {}).unwrap();
         assert_eq!(bad, vec!["portable.txt".to_string()]);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn adopt_unpacked_old_version() {
+        let tmp = std::env::temp_dir().join(format!("launcher-adopt-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let wrapper = tmp.join("photocraft-0.8.2-windows-x64-portable");
+        fs::create_dir_all(&wrapper).unwrap();
+        fs::write(wrapper.join("photocraft.exe"), b"MZfake").unwrap();
+        fs::write(wrapper.join("portable.txt"), b"portable").unwrap();
+
+        let target = Target {
+            repo: "storytold/photocraft".into(),
+            package: "photocraft-{version}-windows-x64-portable.zip".into(),
+            dir: tmp.clone(),
+            self_exe: None,
+            update_json: false,
+            default_exe: Some("photocraft.exe".into()),
+        };
+
+        let inst = target.installed().expect("adopted unpacked folder");
+        assert_eq!(inst.version, "0.8.2");
+        assert_eq!(inst.exe, "photocraft.exe");
+        assert!(tmp.join(MANIFEST).is_file());
+        assert!(tmp.join("photocraft.exe").is_file());
+
+        // Also check that pe_version reads a real Windows system binary's .rsrc.
+        let cmd = Path::new(r"C:\Windows\System32\cmd.exe");
+        if cmd.is_file() {
+            assert!(pe_version(cmd).is_some());
+        }
 
         let _ = fs::remove_dir_all(&tmp);
     }
