@@ -333,16 +333,33 @@ function textButton(label, cls, onClick) {
   return b;
 }
 
+function summarizeApps(list) {
+  const updates = list.filter((a) => a.updateAvailable).length;
+  const installed = list.filter((a) => a.installed).length;
+  return `${list.length} app${list.length === 1 ? '' : 's'} · ${installed} installed`
+    + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
+}
+
+function renderAppList(container, list) {
+  container.replaceChildren(...list.map((a) => {
+    const wrap = h('div', 'app-wrap');
+    wrap.append(appCard(a));
+    if (a.log.length) wrap.append(appLog(a));
+    return wrap;
+  }));
+}
+
 function renderLibrary() {
   const apps = library.apps;
+  const ownApps = apps.filter((a) => !a.thirdParty);
+  const thirdPartyApps = apps.filter((a) => a.thirdParty);
   const updates = apps.filter((a) => a.updateAvailable).length;
-  const installed = apps.filter((a) => a.installed).length;
 
   const badge = $('lib-badge');
   badge.textContent = updates;
   badge.classList.toggle('on', updates > 0);
-  $('lib-summary').textContent =
-    `${apps.length} apps · ${installed} installed` + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
+  $('lib-summary').textContent = summarizeApps(ownApps);
+  $('third-party-summary').textContent = summarizeApps(thirdPartyApps);
   $('lib-check').disabled = apps.some((a) => a.task.state === 'checking');
 
   // Rebuilding replaces the log bodies, so keep where each was scrolled to: a log
@@ -352,12 +369,8 @@ function renderLibrary() {
     scroll[b.dataset.id] = { top: b.scrollTop, end: b.scrollTop + b.clientHeight >= b.scrollHeight - 4 };
   });
 
-  $('apps').replaceChildren(...apps.map((a) => {
-    const wrap = h('div', 'app-wrap');
-    wrap.append(appCard(a));
-    if (a.log.length) wrap.append(appLog(a));
-    return wrap;
-  }));
+  renderAppList($('apps'), ownApps);
+  renderAppList($('third-party-apps'), thirdPartyApps);
 
   document.querySelectorAll('.log-body').forEach((b) => {
     const s = scroll[b.dataset.id];

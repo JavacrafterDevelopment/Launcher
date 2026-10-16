@@ -47,11 +47,12 @@ forward.
 
 The Library page lists the apps in [src/apps.rs](src/apps.rs):
 
-| App | Repository |
-|---|---|
-| Lighthouse | [JavacrafterDevelopment/Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse) |
-| ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) |
-| RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) |
+| App | Repository | Section |
+|---|---|---|
+| Lighthouse | [JavacrafterDevelopment/Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse) | Library |
+| ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) | Library |
+| RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
+| PhotoCraft | [storytold/photocraft](https://github.com/storytold/photocraft) | Third-party apps |
 
 **Install** puts an app in `portableApplications\<Name>\`. Each card then offers
 **Launch** (started the way Explorer would, so an app that wants administrator

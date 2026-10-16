@@ -18,12 +18,22 @@ use crate::UserEvent;
 
 pub struct AppInfo {
     pub id: &'static str,
-    /// Also the folder name under portableApplications and the package name
-    /// (`<name>-windows-x64.zip`).
+    /// Also the folder name under portableApplications.
     pub name: &'static str,
     pub repo: &'static str,
     pub tagline: &'static str,
     pub stop: Stop,
+    pub source: Source,
+}
+
+#[derive(Clone, Copy)]
+pub enum Source {
+    /// Built and packaged with `tools/package.ps1` (`<name>-windows-x64.zip` + `update.json`).
+    Own,
+    /// An open-source app from another author's GitHub releases. `package` is the
+    /// release zip name (`{version}` is replaced with the release's version) and
+    /// `exe` is the program inside it.
+    ThirdParty { package: &'static str, exe: &'static str },
 }
 
 /// How the Stop button asks an app to quit.
@@ -45,6 +55,7 @@ pub const CATALOG: &[AppInfo] = &[
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
         // Runs as administrator, and its close button only hides it to the tray.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
+        source: Source::Own,
     },
     AppInfo {
         id: "screenshotapp",
@@ -52,6 +63,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
         stop: Stop::CloseWindows,
+        source: Source::Own,
     },
     AppInfo {
         id: "rustwinutil",
@@ -60,6 +72,18 @@ pub const CATALOG: &[AppInfo] = &[
         tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
         // Runs as administrator, so the launcher can't close it itself.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
+        source: Source::Own,
+    },
+    AppInfo {
+        id: "photocraft",
+        name: "PhotoCraft",
+        repo: "storytold/photocraft",
+        tagline: "Open-source photo editor written from scratch in pure Rust.",
+        stop: Stop::CloseWindows,
+        source: Source::ThirdParty {
+            package: "photocraft-{version}-windows-x64-portable.zip",
+            exe: "photocraft.exe",
+        },
     },
 ];
 
@@ -137,7 +161,12 @@ struct AppState {
 
 impl AppState {
     fn target(&self) -> Target {
-        Target::app(self.info.repo, self.info.name)
+        match self.info.source {
+            Source::Own => Target::app(self.info.repo, self.info.name),
+            Source::ThirdParty { package, exe } => {
+                Target::third_party(self.info.repo, self.info.name, package, exe)
+            }
+        }
     }
 
     fn refresh_installed(&mut self) {
@@ -219,6 +248,7 @@ impl Library {
                     "name": a.info.name,
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
+                    "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
                     "installed": a.installed,
                     "latest": a.latest,
                     "checked": a.checked,

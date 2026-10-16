@@ -441,6 +441,24 @@ code {
 .lib-head { display: flex; align-items: baseline; gap: 12px; }
 .lib-head .btn { align-self: center; }
 
+.lib-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+  padding-top: 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-weight: normal;
+  font-size: 20px;
+  letter-spacing: .03em;
+  color: var(--walnut-deep);
+  padding: 0 2px 2px;
+}
+
 .lib-note {
   font-size: 12.5px;
   line-height: 1.6;

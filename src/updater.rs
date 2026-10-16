@@ -88,7 +88,7 @@ struct GhAsset {
     digest: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Manifest {
     version: String,
     /// Which entry is the program itself.
@@ -96,7 +96,7 @@ struct Manifest {
     files: Vec<ManifestFile>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManifestFile {
     path: String,
     size: u64,
@@ -143,13 +143,19 @@ pub struct Installed {
 /// One thing that can be installed and updated: the launcher, or an app.
 pub struct Target {
     repo: String,
-    /// The release asset holding the program folder.
+    /// The release asset holding the program folder. `{version}` is replaced with
+    /// the release's version for repos that put the version in the file name.
     package: String,
     /// The install folder.
     dir: PathBuf,
     /// Set for the launcher: the running exe, which the package's exe replaces
     /// even if someone renamed their copy.
     self_exe: Option<PathBuf>,
+    /// True when the repo publishes update.json on an `updates` branch.
+    update_json: bool,
+    /// For third-party packages that don't ship a launcher-manifest.json: the
+    /// program exe inside the archive, used to write a manifest on unpack.
+    default_exe: Option<String>,
 }
 
 impl Target {
@@ -159,6 +165,8 @@ impl Target {
             package: "Launcher-windows-x64.zip".into(),
             dir: app_dir(),
             self_exe: std::env::current_exe().ok(),
+            update_json: true,
+            default_exe: None,
         }
     }
 
@@ -170,7 +178,26 @@ impl Target {
             package: format!("{name}-windows-x64.zip"),
             dir: app_dir().join(APPS_DIR).join(name),
             self_exe: None,
+            update_json: true,
+            default_exe: None,
         }
+    }
+
+    /// A third-party app published on GitHub releases, installed at
+    /// `portableApplications\<name>`. `package` may contain `{version}`.
+    pub fn third_party(repo: &str, name: &str, package: &str, exe: &str) -> Self {
+        Self {
+            repo: repo.into(),
+            package: package.into(),
+            dir: app_dir().join(APPS_DIR).join(name),
+            self_exe: None,
+            update_json: false,
+            default_exe: Some(exe.into()),
+        }
+    }
+
+    fn asset_name(&self, version: &str) -> String {
+        self.package.replace("{version}", version)
     }
 
     pub fn dir(&self) -> &Path {
@@ -208,12 +235,16 @@ impl Target {
         format!("https://raw.githubusercontent.com/{}/updates/update.json", self.repo)
     }
 
-    /// The newest published release, whatever is installed. update.json first;
-    /// if it can't be read, the GitHub API; if that's rate-limited, the website.
-    /// Ok(None) means nothing has been published yet.
+    /// The newest published release, whatever is installed. update.json first (for
+    /// repos that publish one); if it can't be read, the GitHub API; if that's
+    /// rate-limited, the website. Ok(None) means nothing has been published yet.
     pub fn latest(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        self.latest_via_update_json(prereleases)
-            .or_else(|_| self.latest_via_api(prereleases))
+        if self.update_json {
+            self.latest_via_update_json(prereleases)
+                .or_else(|_| self.latest_via_api(prereleases))
+        } else {
+            self.latest_via_api(prereleases)
+        }
     }
 
     fn latest_via_update_json(&self, prereleases: bool) -> Result<Option<Release>, String> {
@@ -278,7 +309,8 @@ impl Target {
             .filter(|r| !r.draft && (prereleases || !r.prerelease))
             .filter_map(|r| {
                 let v = parse_version(&r.tag_name)?;
-                let a = r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&self.package))?;
+                let want = self.asset_name(&v.to_string());
+                let a = r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&want))?;
                 Some((v, release_from_api(&r, a)))
             })
             .max_by(|a, b| a.0.cmp(&b.0))
@@ -305,14 +337,16 @@ impl Target {
             return Ok(None);
         };
         let Some(v) = parse_version(&tag) else { return Ok(None) };
+        let version = v.to_string();
+        let package = self.asset_name(&version);
         Ok(Some(Release {
-            version: v.to_string(),
+            version,
             name: format!("v{v}"),
             notes: String::new(),
             published: String::new(),
             page: format!("https://github.com/{}/releases/tag/{tag}", self.repo),
             prerelease: false,
-            asset_url: format!("https://github.com/{}/releases/download/{tag}/{}", self.repo, self.package),
+            asset_url: format!("https://github.com/{}/releases/download/{tag}/{package}", self.repo),
             size: 0,
             digest: None,
             expected: None,
@@ -420,6 +454,11 @@ impl Target {
         let files = stage.join("files");
         log("Unpacking".into());
         extract(&zip_path, &files)?;
+        if !files.join(MANIFEST).exists() {
+            if let Some(exe) = &self.default_exe {
+                write_manifest(&files, &rel.version, exe)?;
+            }
+        }
         let manifest = verify_files(&files)?;
         log(format!("Checked all {} files against their SHA-256 in the manifest", manifest.files.len()));
         // The package's own manifest came out of the zip, so on its own it only shows
@@ -542,13 +581,14 @@ impl Target {
 
     /// The package of one particular version, which is where repairs come from.
     fn package_url(&self, version: &str) -> String {
+        let package = self.asset_name(version);
         if cfg!(debug_assertions) {
             if let Ok(base) = std::env::var("LAUNCHER_UPDATE_BASE") {
                 let name = self.repo.rsplit('/').next().unwrap_or_default();
-                return format!("{}/{name}/v{version}/{}", base.trim_end_matches('/'), self.package);
+                return format!("{}/{name}/v{version}/{package}", base.trim_end_matches('/'));
             }
         }
-        format!("https://github.com/{}/releases/download/v{version}/{}", self.repo, self.package)
+        format!("https://github.com/{}/releases/download/v{version}/{package}", self.repo)
     }
 
     /// Hashes every installed program file against the installed manifest. Returns
@@ -614,33 +654,59 @@ impl Target {
         let fetched = std::rc::Rc::new(std::cell::Cell::new((0u64, 0u32)));
         let source = open_package(url, stage, fetched.clone(), log)?;
         let mut archive = zip::ZipArchive::new(source).map_err(|e| format!("Couldn't read the package's index ({e})"))?;
-
-        // The repair must come from exactly the release that's installed: its own
-        // file list has to agree with the installed one for every file replaced.
-        let remote: Manifest = {
-            let mut entry = archive
-                .by_name(MANIFEST)
-                .map_err(|_| "The release package has no file list.".to_string())?;
-            let mut raw = Vec::new();
-            entry.read_to_end(&mut raw).map_err(|e| format!("Couldn't read the release's file list ({e})"))?;
-            serde_json::from_slice(&raw).map_err(|e| format!("The release's file list is unreadable ({e})"))?
+        let root = zip_root_prefix(&archive);
+        let entry_name = |path: &str| match &root {
+            Some(r) => format!("{r}/{path}"),
+            None => path.to_string(),
         };
-        if remote.version != m.version || wanted.iter().any(|f| !remote.files.contains(f)) {
-            return Err(format!(
-                "The installed file list doesn't match the published v{}. Reinstall it instead.",
-                m.version
-            ));
+
+        // The repair must come from the release that's installed. Our own packages
+        // carry launcher-manifest.json inside the zip; third-party ones don't, so
+        // their zip index is checked for each wanted file and its size, then the
+        // fetched bytes are checked against the SHA-256 recorded at install time.
+        if self.default_exe.is_none() {
+            let remote: Manifest = {
+                let mut entry = archive
+                    .by_name(MANIFEST)
+                    .map_err(|_| "The release package has no file list.".to_string())?;
+                let mut raw = Vec::new();
+                entry.read_to_end(&mut raw).map_err(|e| format!("Couldn't read the release's file list ({e})"))?;
+                serde_json::from_slice(&raw).map_err(|e| format!("The release's file list is unreadable ({e})"))?
+            };
+            if remote.version != m.version || wanted.iter().any(|f| !remote.files.contains(f)) {
+                return Err(format!(
+                    "The installed file list doesn't match the published v{}. Reinstall it instead.",
+                    m.version
+                ));
+            }
+            log("The release's file list agrees with the installed one".into());
+        } else {
+            let names: std::collections::HashSet<String> =
+                archive.file_names().filter_map(|n| n.ok().map(|s| s.into_owned())).collect();
+            if wanted.iter().any(|f| !names.contains(&entry_name(&f.path))) {
+                return Err(format!(
+                    "The installed file list doesn't match the published v{}. Reinstall it instead.",
+                    m.version
+                ));
+            }
+            log("The release package's index agrees with the installed file list".into());
         }
-        log("The release's file list agrees with the installed one".into());
 
         let total: u64 = wanted.iter().map(|f| f.size).sum();
         let mut done = 0u64;
         let mut ready = Vec::new();
         for f in wanted {
             let rel = safe_relative(&f.path).ok_or_else(|| format!("Unsafe path in the file list: {}", f.path))?;
+            let name = entry_name(&f.path);
             let mut entry = archive
-                .by_name(&f.path)
+                .by_name(&name)
                 .map_err(|_| format!("{} isn't in the release package.", f.path))?;
+            if entry.size() != f.size {
+                return Err(format!(
+                    "The installed file list doesn't match the published v{}. Reinstall it instead.",
+                    m.version
+                ));
+            }
             let tmp = stage.join(&rel);
             if let Some(parent) = tmp.parent() {
                 fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
@@ -717,7 +783,8 @@ impl Target {
                         let path = e.path();
                         if path.is_dir() {
                             let skip = dir == root
-                                && ["data", STAGE_DIR, &APPS_DIR.to_ascii_lowercase()].contains(&name.as_str());
+                                && ["data", "photocraftdata", STAGE_DIR, &APPS_DIR.to_ascii_lowercase()]
+                                    .contains(&name.as_str());
                             if !skip {
                                 pending.push(path);
                             }
@@ -934,7 +1001,7 @@ fn safe_relative(p: &str) -> Option<PathBuf> {
         out.push(part);
     }
     let first = out.components().next()?.as_os_str().to_string_lossy().to_ascii_lowercase();
-    (first != "data" && first != STAGE_DIR).then_some(out)
+    (first != "data" && first != "photocraftdata" && first != STAGE_DIR).then_some(out)
 }
 
 fn sha256_file(path: &Path) -> std::io::Result<(u64, String)> {
@@ -944,20 +1011,55 @@ fn sha256_file(path: &Path) -> std::io::Result<(u64, String)> {
     Ok((size, format!("{:x}", hasher.finalize())))
 }
 
+/// When every file in a zip sits inside one top-level folder (as third-party
+/// portable archives often do: `app-1.0.0-windows-x64/app.exe`), returns that
+/// folder name so unpacking strips it instead of nesting another folder.
+fn zip_root_prefix<R: Read + std::io::Seek>(archive: &zip::ZipArchive<R>) -> Option<String> {
+    let mut root: Option<String> = None;
+    for name in archive.file_names() {
+        let name = name.ok()?;
+        if name.ends_with(['/', '\\']) {
+            continue;
+        }
+        let mut parts = name.split(['/', '\\']).filter(|p| !p.is_empty());
+        let first = parts.next()?;
+        // A file at the archive root means there is no single wrapper folder.
+        parts.next()?;
+        match &root {
+            None => root = Some(first.to_string()),
+            Some(r) if r == first => {}
+            Some(_) => return None,
+        }
+    }
+    root
+}
+
+fn strip_root<'a>(name: &'a str, root: Option<&str>) -> &'a str {
+    match root {
+        Some(r) => name
+            .strip_prefix(r)
+            .map(|rest| rest.trim_start_matches(['/', '\\']))
+            .unwrap_or(name),
+        None => name,
+    }
+}
+
 fn extract(zip_path: &Path, dest: &Path) -> Result<(), String> {
     fn damaged(e: impl std::fmt::Display) -> String {
         format!("The update package is damaged ({e})")
     }
     let file = File::open(zip_path).map_err(damaged)?;
     let mut archive = zip::ZipArchive::new(file).map_err(damaged)?;
+    let root = zip_root_prefix(&archive);
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(damaged)?;
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().map_err(damaged)?.into_owned();
-        let rel = safe_relative(&name)
-            .ok_or_else(|| format!("The update package contains an unsafe path: {name}"))?;
+        let raw_name = entry.name().map_err(damaged)?.into_owned();
+        let name = strip_root(&raw_name, root.as_deref());
+        let rel = safe_relative(name)
+            .ok_or_else(|| format!("The update package contains an unsafe path: {raw_name}"))?;
         let out = dest.join(rel);
         if let Some(parent) = out.parent() {
             fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
@@ -966,6 +1068,39 @@ fn extract(zip_path: &Path, dest: &Path) -> Result<(), String> {
         std::io::copy(&mut entry, &mut f).map_err(damaged)?;
     }
     Ok(())
+}
+
+/// Writes `launcher-manifest.json` for a third-party package after it has been
+/// checked against its release checksum and unpacked, so verify, repair and
+/// updates work identically to first-party packages.
+fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), String> {
+    let mut files = Vec::new();
+    let mut pending = vec![files_dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let entries = fs::read_dir(&dir).map_err(|e| write_err(&dir, e))?;
+        for e in entries {
+            let e = e.map_err(|err| write_err(&dir, err))?;
+            let path = e.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            let rel = path
+                .strip_prefix(files_dir)
+                .map_err(|_| "Unexpected path while building the manifest.".to_string())?;
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            if rel_str == MANIFEST {
+                continue;
+            }
+            let (size, sha256) = sha256_file(&path).map_err(|err| write_err(&path, err))?;
+            files.push(ManifestFile { path: rel_str, size, sha256 });
+        }
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let manifest = Manifest { version: version.to_string(), exe: exe.to_string(), files };
+    let json = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
+    let out = files_dir.join(MANIFEST);
+    fs::write(&out, json).map_err(|e| write_err(&out, e))
 }
 
 /// Every file the manifest lists must be present with exactly its size and SHA-256.
@@ -1068,6 +1203,8 @@ mod tests {
             package: "Lighthouse-windows-x64.zip".into(),
             dir: dir.clone(),
             self_exe: None,
+            update_json: true,
+            default_exe: None,
         };
         let log = |line: String| println!("  {line}");
 
@@ -1084,5 +1221,96 @@ mod tests {
 
         println!("verify again:");
         assert!(target.verify(|_, _| {}, &log).unwrap().is_empty());
+    }
+
+    #[test]
+    fn third_party_unpack_and_verify() {
+        let tmp = std::env::temp_dir().join(format!("launcher-tp-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        let zip_path = tmp.join("pkg.zip");
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("photocraft-0.9.0-windows-x64-portable/photocraft.exe", opts).unwrap();
+            zip.write_all(b"MZfake-exe-bytes").unwrap();
+            zip.start_file("photocraft-0.9.0-windows-x64-portable/portable.txt", opts).unwrap();
+            zip.write_all(b"portable mode").unwrap();
+            zip.finish().unwrap();
+        }
+
+        let files = tmp.join("files");
+        extract(&zip_path, &files).unwrap();
+        write_manifest(&files, "0.9.0", "photocraft.exe").unwrap();
+        let m = verify_files(&files).unwrap();
+        assert_eq!(m.version, "0.9.0");
+        assert_eq!(m.exe, "photocraft.exe");
+        assert_eq!(m.files.len(), 2);
+
+        let install_dir = tmp.join("installed");
+        let target = Target {
+            repo: "storytold/photocraft".into(),
+            package: "photocraft-{version}-windows-x64-portable.zip".into(),
+            dir: install_dir.clone(),
+            self_exe: None,
+            update_json: false,
+            default_exe: Some("photocraft.exe".into()),
+        };
+        let stage_files = target.stage_dir().join("files");
+        fs::create_dir_all(target.stage_dir()).unwrap();
+        fs::rename(&files, &stage_files).unwrap();
+        fs::write(target.ready_marker(), "0.9.0").unwrap();
+        target.apply(&|_| {}).unwrap();
+
+        assert!(target.verify(|_, _| {}, &|_| {}).unwrap().is_empty());
+        fs::write(install_dir.join("portable.txt"), b"tampered").unwrap();
+        let bad = target.verify(|_, _| {}, &|_| {}).unwrap();
+        assert_eq!(bad, vec!["portable.txt".to_string()]);
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    #[ignore]
+    fn photocraft_live_check_and_repair() {
+        let tmp = std::env::temp_dir().join(format!("launcher-photocraft-live-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+
+        let target = Target {
+            repo: "storytold/photocraft".into(),
+            package: "photocraft-{version}-windows-x64-portable.zip".into(),
+            dir: tmp.clone(),
+            self_exe: None,
+            update_json: false,
+            default_exe: Some("photocraft.exe".into()),
+        };
+        let log = |line: String| println!("  {line}");
+
+        let rel = target.latest(false).unwrap().expect("photocraft release found");
+        println!("latest photocraft: v{} ({})", rel.version, rel.asset_url);
+        assert!(rel.digest.as_deref().unwrap_or_default().starts_with("sha256:"));
+
+        // Seed a minimal manifest for v0.9.0 with portable.txt so we can exercise
+        // HTTP Range repair against the live 80 MB GitHub asset in ~512 KB.
+        let m = Manifest {
+            version: "0.9.0".into(),
+            exe: "photocraft.exe".into(),
+            files: vec![ManifestFile {
+                path: "portable.txt".into(),
+                size: 527,
+                sha256: "765cf8f8ffc8ee57f83f31e5eb2d453183e2e96ba97417ab9238717ccb27183b".into(),
+            }],
+        };
+        fs::write(tmp.join(MANIFEST), serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let bad = target.verify(|_, _| {}, &log).unwrap();
+        assert_eq!(bad, vec!["portable.txt".to_string()]);
+
+        target.repair(&bad, |_, _| {}, &log).unwrap();
+        assert!(target.verify(|_, _| {}, &log).unwrap().is_empty());
+
+        let _ = fs::remove_dir_all(&tmp);
     }
 }
