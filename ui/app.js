@@ -341,7 +341,13 @@ function summarizeApps(list) {
 }
 
 function renderAppList(container, list) {
-  container.replaceChildren(...list.map((a) => {
+  const sorted = [...list].sort((a, b) => {
+    const instA = a.installed ? 1 : 0;
+    const instB = b.installed ? 1 : 0;
+    if (instA !== instB) return instB - instA;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+  container.replaceChildren(...sorted.map((a) => {
     const wrap = h('div', 'app-wrap');
     wrap.append(appCard(a));
     if (a.log.length) wrap.append(appLog(a));
