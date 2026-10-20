@@ -1313,34 +1313,44 @@ fn extract_dmg(_dmg_path: &Path, _dest: &Path) -> Result<(), String> {
 
 /// Finds the main executable inside a `.app` bundle in `dir` if the expected
 /// `exe` path doesn't match the bundle's exact binary capitalization.
+///
+/// Always reads the `.app/Contents/MacOS` directory entries rather than relying
+/// on `dir.join(exe).is_file()`, because macOS's default APFS volume is
+/// case-insensitive (`is_file()` returns true for `.../MacOS/photocraft` even
+/// when the on-disk entry returned by `read_dir` is `.../MacOS/PhotoCraft`).
 fn resolve_bundle_exe(dir: &Path, exe: &str) -> String {
-    if dir.join(exe).is_file() {
-        return exe.to_string();
-    }
     let Ok(entries) = fs::read_dir(dir) else { return exe.to_string() };
+    let mut fallback = None;
     for e in entries.flatten() {
         let path = e.path();
         let name = e.file_name().to_string_lossy().into_owned();
         if path.is_dir() && name.ends_with(".app") {
+            let stem = name.trim_end_matches(".app");
             let macos_dir = path.join("Contents").join("MacOS");
             if let Ok(bins) = fs::read_dir(&macos_dir) {
                 for bin in bins.flatten() {
                     if bin.path().is_file() {
                         let bin_name = bin.file_name().to_string_lossy().into_owned();
-                        return format!("{name}/Contents/MacOS/{bin_name}");
+                        let candidate = format!("{name}/Contents/MacOS/{bin_name}");
+                        if candidate.eq_ignore_ascii_case(exe) || bin_name.eq_ignore_ascii_case(stem) {
+                            return candidate;
+                        }
+                        if fallback.is_none() {
+                            fallback = Some(candidate);
+                        }
                     }
                 }
             }
         }
     }
-    exe.to_string()
+    fallback.unwrap_or_else(|| exe.to_string())
 }
 
 /// Writes `launcher-manifest.json` for a third-party package after it has been
 /// checked against its release checksum and unpacked, so verify, repair and
 /// updates work identically to first-party packages.
 fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), String> {
-    let resolved_exe = resolve_bundle_exe(files_dir, exe);
+    let mut resolved_exe = resolve_bundle_exe(files_dir, exe);
     let mut files = Vec::new();
     let mut pending = vec![files_dir.to_path_buf()];
     while let Some(dir) = pending.pop() {
@@ -1367,6 +1377,11 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
+    if !files.iter().any(|f| f.path == resolved_exe) {
+        if let Some(found) = files.iter().find(|f| f.path.eq_ignore_ascii_case(&resolved_exe)) {
+            resolved_exe = found.path.clone();
+        }
+    }
     let manifest = Manifest { version: version.to_string(), exe: resolved_exe, files };
     let json = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let out = files_dir.join(MANIFEST);
@@ -1486,7 +1501,7 @@ fn verify_files(files: &Path) -> Result<Manifest, String> {
     let manifest: Manifest =
         serde_json::from_slice(&raw).map_err(|e| format!("The update manifest is unreadable ({e})"))?;
 
-    if !manifest.files.iter().any(|f| f.path == manifest.exe) {
+    if !manifest.files.iter().any(|f| f.path.eq_ignore_ascii_case(&manifest.exe)) {
         return Err("The update package doesn't contain its program.".into());
     }
     for f in &manifest.files {
@@ -1740,6 +1755,31 @@ mod tests {
 
         target.repair(&bad, |_, _| {}, &log).unwrap();
         assert!(target.verify(|_, _| {}, &log).unwrap().is_empty());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn macos_bundle_case_insensitive_manifest_and_verify() {
+        let tmp = std::env::temp_dir().join(format!("launcher-macos-bundle-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let macos_dir = tmp.join("PhotoCraft.app/Contents/MacOS");
+        fs::create_dir_all(&macos_dir).unwrap();
+        // Universal Mach-O fat header (0xCAFEBABE) on macOS/Unix, or MZ on Windows so verify_files accepts it.
+        let magic: &[u8] = if cfg!(windows) { b"MZfake-exe" } else { &[0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 1] };
+        fs::write(macos_dir.join("PhotoCraft"), magic).unwrap();
+        fs::write(
+            tmp.join("PhotoCraft.app/Contents/Info.plist"),
+            b"<plist><dict><key>CFBundleShortVersionString</key><string>0.11.1</string></dict></plist>",
+        )
+        .unwrap();
+
+        // Even when passed lowercase `photocraft`, resolve_bundle_exe + write_manifest must record
+        // the exact on-disk casing `PhotoCraft.app/Contents/MacOS/PhotoCraft`.
+        write_manifest(&tmp, "0.11.1", "PhotoCraft.app/Contents/MacOS/photocraft").unwrap();
+        let m = verify_files(&tmp).unwrap();
+        assert_eq!(m.exe, "PhotoCraft.app/Contents/MacOS/PhotoCraft");
+        assert!(m.files.iter().any(|f| f.path == m.exe));
 
         let _ = fs::remove_dir_all(&tmp);
     }

@@ -110,7 +110,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "photocraft-{version}-windows-x64-portable.zip",
             win_exe: "photocraft.exe",
             mac_package: "photocraft-{version}-macos-universal.dmg",
-            mac_exe: "PhotoCraft.app/Contents/MacOS/photocraft",
+            mac_exe: "PhotoCraft.app/Contents/MacOS/PhotoCraft",
         },
     },
     AppInfo {
@@ -125,7 +125,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "vectorcraft-{version}-windows-x64-portable.zip",
             win_exe: "vectorcraft.exe",
             mac_package: "vectorcraft-{version}-macos-universal.dmg",
-            mac_exe: "VectorCraft.app/Contents/MacOS/vectorcraft",
+            mac_exe: "VectorCraft.app/Contents/MacOS/VectorCraft",
         },
     },
     AppInfo {
@@ -140,7 +140,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "filmcraft-{version}-windows-x64-portable.zip",
             win_exe: "filmcraft.exe",
             mac_package: "filmcraft-{version}-macos-universal.dmg",
-            mac_exe: "FilmCraft.app/Contents/MacOS/filmcraft",
+            mac_exe: "FilmCraft.app/Contents/MacOS/FilmCraft",
         },
     },
     AppInfo {
@@ -155,7 +155,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "effectcraft-{version}-windows-x64-portable.zip",
             win_exe: "effectcraft.exe",
             mac_package: "effectcraft-{version}-macos-universal.dmg",
-            mac_exe: "EffectCraft.app/Contents/MacOS/effectcraft",
+            mac_exe: "EffectCraft.app/Contents/MacOS/EffectCraft",
         },
     },
     AppInfo {
@@ -170,7 +170,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "lightcraft-{version}-windows-x64-portable.zip",
             win_exe: "lightcraft.exe",
             mac_package: "lightcraft-{version}-macos-universal.dmg",
-            mac_exe: "LightCraft.app/Contents/MacOS/lightcraft",
+            mac_exe: "LightCraft.app/Contents/MacOS/LightCraft",
         },
     },
     AppInfo {
@@ -185,7 +185,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "designcraft-{version}-windows-x64-portable.zip",
             win_exe: "designcraft.exe",
             mac_package: "designcraft-{version}-macos-universal.dmg",
-            mac_exe: "DesignCraft.app/Contents/MacOS/designcraft",
+            mac_exe: "DesignCraft.app/Contents/MacOS/DesignCraft",
         },
     },
     AppInfo {
@@ -200,7 +200,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "pdfcraft-{version}-windows-x64-portable.zip",
             win_exe: "pdfcraft.exe",
             mac_package: "pdfcraft-{version}-macos-universal.dmg",
-            mac_exe: "PdfCraft.app/Contents/MacOS/pdfcraft",
+            mac_exe: "PdfCraft.app/Contents/MacOS/PdfCraft",
         },
     },
     AppInfo {
@@ -215,7 +215,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "figcraft-{version}-windows-x64-portable.zip",
             win_exe: "figcraft.exe",
             mac_package: "figcraft-{version}-macos-universal.dmg",
-            mac_exe: "FigCraft.app/Contents/MacOS/figcraft",
+            mac_exe: "FigCraft.app/Contents/MacOS/FigCraft",
         },
     },
     AppInfo {
@@ -230,7 +230,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_package: "soundcraft-{version}-windows-x64-portable.zip",
             win_exe: "soundcraft.exe",
             mac_package: "soundcraft-{version}-macos-universal.dmg",
-            mac_exe: "SoundCraft.app/Contents/MacOS/soundcraft",
+            mac_exe: "SoundCraft.app/Contents/MacOS/SoundCraft",
         },
     },
 ];
