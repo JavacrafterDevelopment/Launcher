@@ -6,7 +6,17 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 
 /// The folder the running executable (or `.app` bundle on macOS) sits in.
+///
+/// On macOS, opening a quarantined `.app` extracted from a `.zip` runs it from a
+/// read-only Gatekeeper translocation mount (`/private/var/folders/.../AppTranslocation/<UUID>/d/Launcher.app`).
+/// We resolve that mount back to the real `.app` on disk and strip `com.apple.quarantine`
+/// so portable folders can self-update and store `data/` beside `Launcher.app`.
 pub fn install_dir() -> PathBuf {
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(resolve_install_dir).clone()
+}
+
+fn resolve_install_dir() -> PathBuf {
     let Some(exe) = std::env::current_exe().ok() else {
         return PathBuf::from(".");
     };
@@ -14,13 +24,57 @@ pub fn install_dir() -> PathBuf {
     {
         for ancestor in exe.ancestors() {
             if ancestor.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app")) {
-                if let Some(parent) = ancestor.parent() {
+                let bundle = untranslocate_bundle(ancestor);
+                if let Some(parent) = bundle.parent() {
                     return parent.to_path_buf();
                 }
             }
         }
     }
     exe.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+}
+
+#[cfg(target_os = "macos")]
+fn untranslocate_bundle(bundle: &Path) -> PathBuf {
+    let s = bundle.to_string_lossy();
+    if !s.contains("/AppTranslocation/") {
+        return bundle.to_path_buf();
+    }
+    // Mountpoint is the parent of `d/<App>.app`: `.../AppTranslocation/<UUID>`.
+    let Some(mnt) = bundle.parent().and_then(Path::parent) else {
+        return bundle.to_path_buf();
+    };
+    let needle = format!(" on {} (", mnt.to_string_lossy());
+    let Ok(out) = std::process::Command::new("mount").output() else {
+        return bundle.to_path_buf();
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        if let Some((from, _)) = line.split_once(&needle) {
+            let orig = PathBuf::from(from);
+            if orig.exists() {
+                let target = orig.parent().unwrap_or(&orig);
+                let _ = std::process::Command::new("xattr")
+                    .args(["-dr", "com.apple.quarantine"])
+                    .arg(target)
+                    .status();
+                return orig;
+            }
+        }
+    }
+    bundle.to_path_buf()
+}
+
+/// True when `dir` is on a writable filesystem (not a read-only DMG or translocation mount).
+pub fn is_dir_writable(dir: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let s = dir.to_string_lossy();
+        if s.starts_with("/private/var/folders/") || s.starts_with("/Volumes/") {
+            return false;
+        }
+    }
+    fs::metadata(dir).map(|m| !m.permissions().readonly()).unwrap_or(false)
 }
 
 /// Where `data/` and `portableApplications/` live. On Windows and in a portable
@@ -33,9 +87,7 @@ pub fn app_dir() -> PathBuf {
     {
         let s = dir.to_string_lossy();
         let in_apps = s == "/Applications" || s.ends_with("/Applications");
-        let translocated = s.starts_with("/private/var/folders/");
-        let writable = fs::metadata(&dir).map(|m| !m.permissions().readonly()).unwrap_or(false);
-        if in_apps || translocated || !writable {
+        if in_apps || !is_dir_writable(&dir) {
             if let Ok(home) = std::env::var("HOME") {
                 return PathBuf::from(home).join("Library/Application Support/Launcher");
             }

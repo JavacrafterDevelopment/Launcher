@@ -160,6 +160,12 @@ pub struct Target {
 
 impl Target {
     pub fn launcher() -> Self {
+        let install = install_dir();
+        let dir = if crate::settings::is_dir_writable(&install) {
+            install
+        } else {
+            app_dir()
+        };
         Self {
             repo: REPO.into(),
             package: if cfg!(windows) {
@@ -167,7 +173,7 @@ impl Target {
             } else {
                 "Launcher-macos.zip".into()
             },
-            dir: install_dir(),
+            dir,
             self_exe: if cfg!(windows) { std::env::current_exe().ok() } else { None },
             update_json: true,
             default_exe: None,
@@ -1576,12 +1582,35 @@ fn installed_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 pub fn relaunch(exe: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let exe_buf = {
+        let target = Target::launcher();
+        let rel = target
+            .installed()
+            .map(|i| i.exe)
+            .unwrap_or_else(|| "Launcher.app/Contents/MacOS/Launcher".into());
+        let candidate = target.dir().join(rel);
+        if candidate.is_file() {
+            if let Some(bundle) = candidate
+                .ancestors()
+                .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")))
+            {
+                let _ = std::process::Command::new("xattr").arg("-cr").arg(bundle).status();
+            }
+            candidate
+        } else {
+            exe.to_path_buf()
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let exe_buf = exe.to_path_buf();
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(exe, fs::Permissions::from_mode(0o755));
+        let _ = fs::set_permissions(&exe_buf, fs::Permissions::from_mode(0o755));
     }
-    std::process::Command::new(exe)
+    std::process::Command::new(&exe_buf)
         .arg("--updated")
         .current_dir(app_dir())
         .spawn()
