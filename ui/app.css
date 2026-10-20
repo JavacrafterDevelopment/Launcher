@@ -257,7 +257,42 @@ code {
 
 .grow { flex: 1; }
 
-#app { display: flex; flex-direction: column; height: 100%; }
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--paper);
+  background-image: var(--grain);
+}
+
+:root[data-os="MacOS"]:not(.maximized),
+:root[data-os="MacOS"]:not(.maximized) body {
+  background: transparent;
+  background-image: none;
+}
+
+:root[data-os="MacOS"]:not(.maximized) #app {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+}
+
+:root[data-os="MacOS"]:not(.maximized) #top {
+  border-radius: 12px 12px 0 0;
+}
+
+:root[data-os="MacOS"]:not(.maximized) .winbtn.close {
+  border-top-right-radius: 12px;
+}
+
+:root[data-os="MacOS"]:not(.maximized) #status {
+  border-radius: 0 0 12px 12px;
+}
+
+:root[data-os="MacOS"]:not(.maximized) .grip.se::after {
+  right: 6px;
+  bottom: 6px;
+}
 
 /* -------------------------------------------------------------- masthead */
 

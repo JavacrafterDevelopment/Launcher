@@ -118,17 +118,28 @@ fn main() {
             .with_window_classname(instance::WINDOW_CLASS)
             .with_undecorated_shadow(true);
     }
+    #[cfg(target_os = "macos")]
+    {
+        window_builder = window_builder.with_transparent(true);
+    }
     let window = window_builder.build(&event_loop).expect("create window");
 
     let mut web_context = WebContext::new(Some(data_dir().join("webview")));
     let ipc_proxy = proxy.clone();
     let mut webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_html(page_html(&settings))
-        .with_background_color(settings.paper())
         .with_devtools(cfg!(debug_assertions))
         .with_ipc_handler(move |req| {
             let _ = ipc_proxy.send_event(UserEvent::Ipc(req.into_body()));
         });
+    #[cfg(target_os = "macos")]
+    {
+        webview_builder = webview_builder.with_transparent(true);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        webview_builder = webview_builder.with_background_color(settings.paper());
+    }
     #[cfg(windows)]
     {
         webview_builder = webview_builder.with_browser_accelerator_keys(false);
@@ -217,6 +228,7 @@ fn page_html(settings: &Settings) -> String {
     INDEX_HTML
         .replace("{{THEME}}", if settings.is_dark() { "dark" } else { "light" })
         .replace("{{PALETTE}}", settings.palette())
+        .replace("{{OS}}", apps::CURRENT_OS)
         .replace("/*{{CSS}}*/", APP_CSS)
         .replace("/*{{BOOT}}*/", &format!("window.BOOT = {boot};"))
         .replace("/*{{JS}}*/", APP_JS)

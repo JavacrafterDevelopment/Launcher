@@ -117,6 +117,7 @@ const schemeFor = (mode) => {
 
 /* The page shows the scheme for whichever mode is on. */
 function applyLook(theme) {
+  el.root.dataset.os = CURRENT_OS;
   el.root.dataset.theme = theme;
   el.root.dataset.palette = schemeFor(theme);
 }
