@@ -5,12 +5,43 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-/// The folder the running executable sits in.
+/// The folder the running executable (or `.app` bundle on macOS) sits in.
+pub fn install_dir() -> PathBuf {
+    let Some(exe) = std::env::current_exe().ok() else {
+        return PathBuf::from(".");
+    };
+    #[cfg(target_os = "macos")]
+    {
+        for ancestor in exe.ancestors() {
+            if ancestor.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app")) {
+                if let Some(parent) = ancestor.parent() {
+                    return parent.to_path_buf();
+                }
+            }
+        }
+    }
+    exe.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Where `data/` and `portableApplications/` live. On Windows and in a portable
+/// macOS folder this is right beside `Launcher.exe` / `Launcher.app`; if someone
+/// dragged `Launcher.app` into `/Applications` or opened it from a read-only DMG,
+/// falls back to `~/Library/Application Support/Launcher`.
 pub fn app_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from("."))
+    let dir = install_dir();
+    #[cfg(target_os = "macos")]
+    {
+        let s = dir.to_string_lossy();
+        let in_apps = s == "/Applications" || s.ends_with("/Applications");
+        let translocated = s.starts_with("/private/var/folders/");
+        let writable = fs::metadata(&dir).map(|m| !m.permissions().readonly()).unwrap_or(false);
+        if in_apps || translocated || !writable {
+            if let Ok(home) = std::env::var("HOME") {
+                return PathBuf::from(home).join("Library/Application Support/Launcher");
+            }
+        }
+    }
+    dir
 }
 
 pub fn data_dir() -> PathBuf {

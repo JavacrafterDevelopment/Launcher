@@ -13,12 +13,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+#[cfg(windows)]
 use tao::platform::windows::WindowBuilderExtWindows;
 use tao::window::{Icon, ResizeDirection, Window, WindowBuilder};
-use wry::{WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
+use wry::{WebContext, WebView, WebViewBuilder};
+#[cfg(windows)]
+use wry::WebViewBuilderExtWindows;
 
 use apps::{AppEvent, Library};
-use settings::{app_dir, data_dir, Settings};
+use settings::{data_dir, Settings};
 use updater::{Release, Target};
 
 const INDEX_HTML: &str = include_str!("../ui/index.html");
@@ -87,38 +90,47 @@ fn main() {
 
     // A fixed-version WebView2 runtime dropped in a `WebView2` folder beside the exe
     // is used in preference to the system one, for machines without Edge.
-    let fixed = app_dir().join("WebView2");
-    if fixed.join("msedgewebview2.exe").exists() {
-        std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &fixed);
+    #[cfg(windows)]
+    {
+        let fixed = settings::app_dir().join("WebView2");
+        if fixed.join("msedgewebview2.exe").exists() {
+            std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &fixed);
+        }
     }
 
     let settings = Settings::load();
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
-    let window = WindowBuilder::new()
+    let mut window_builder = WindowBuilder::new()
         .with_title("Launcher")
-        .with_window_classname(instance::WINDOW_CLASS)
         .with_inner_size(LogicalSize::new(1040.0, 680.0))
         .with_min_inner_size(LogicalSize::new(720.0, 480.0))
         .with_decorations(false)
-        .with_undecorated_shadow(true)
         .with_visible(false)
-        .with_window_icon(Icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok())
-        .build(&event_loop)
-        .expect("create window");
+        .with_window_icon(Icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok());
+    #[cfg(windows)]
+    {
+        window_builder = window_builder
+            .with_window_classname(instance::WINDOW_CLASS)
+            .with_undecorated_shadow(true);
+    }
+    let window = window_builder.build(&event_loop).expect("create window");
 
     let mut web_context = WebContext::new(Some(data_dir().join("webview")));
     let ipc_proxy = proxy.clone();
-    let webview = WebViewBuilder::new_with_web_context(&mut web_context)
+    let mut webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_html(page_html(&settings))
         .with_background_color(settings.paper())
         .with_devtools(cfg!(debug_assertions))
-        .with_browser_accelerator_keys(false)
         .with_ipc_handler(move |req| {
             let _ = ipc_proxy.send_event(UserEvent::Ipc(req.into_body()));
-        })
-        .build(&window);
+        });
+    #[cfg(windows)]
+    {
+        webview_builder = webview_builder.with_browser_accelerator_keys(false);
+    }
+    let webview = webview_builder.build(&window);
 
     let webview = match webview {
         Ok(w) => w,
@@ -182,6 +194,7 @@ fn page_html(settings: &Settings) -> String {
     let boot = json!({
         "version": updater::VERSION,
         "repo": updater::REPO,
+        "os": apps::CURRENT_OS,
         "settings": settings,
         "dataDir": data_dir().display().to_string(),
         "justUpdated": std::env::args().any(|a| a == "--updated"),
@@ -294,13 +307,13 @@ impl App {
                 // Only ever hand GitHub links to the shell, never arbitrary strings.
                 if let Some(url) = msg["url"].as_str() {
                     if url.starts_with("https://github.com/") {
-                        let _ = std::process::Command::new("explorer").arg(url).spawn();
+                        open_in_shell(url);
                     }
                 }
             }
             "openDataDir" => {
                 let _ = std::fs::create_dir_all(data_dir());
-                let _ = std::process::Command::new("explorer").arg(data_dir()).spawn();
+                open_in_shell(data_dir());
             }
             _ => {}
         }
@@ -413,6 +426,16 @@ impl App {
     }
 }
 
+pub(crate) fn open_in_shell(target: impl AsRef<std::ffi::OsStr>) {
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(not(target_os = "macos"))]
+    let program = "explorer";
+
+    let _ = std::process::Command::new(program).arg(target).spawn();
+}
+
+#[cfg(windows)]
 fn missing_webview2(detail: &str) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDOK, MB_ICONWARNING, MB_OKCANCEL};
     let text = format!(
@@ -426,8 +449,11 @@ fn missing_webview2(detail: &str) {
         MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OKCANCEL | MB_ICONWARNING)
     };
     if choice == IDOK {
-        let _ = std::process::Command::new("explorer")
-            .arg("https://developer.microsoft.com/microsoft-edge/webview2/")
-            .spawn();
+        open_in_shell("https://developer.microsoft.com/microsoft-edge/webview2/");
     }
+}
+
+#[cfg(not(windows))]
+fn missing_webview2(detail: &str) {
+    eprintln!("Launcher couldn't start the system WebView ({detail})");
 }

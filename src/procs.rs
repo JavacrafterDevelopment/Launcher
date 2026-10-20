@@ -6,20 +6,25 @@
 //! own `--quit` instead; see [`crate::apps`].
 
 use std::path::Path;
+#[cfg(windows)]
 use windows_sys::Win32::Foundation::{CloseHandle, HWND, INVALID_HANDLE_VALUE, LPARAM};
+#[cfg(windows)]
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+#[cfg(windows)]
 use windows_sys::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, TerminateProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_TERMINATE,
 };
+#[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE,
 };
 
 /// Ids of the processes whose exe is inside `dir`, among those this launcher is
 /// allowed to look at.
+#[cfg(windows)]
 pub fn running_in(dir: &Path) -> Vec<u32> {
     let prefix = format!("{}\\", dir.to_string_lossy().trim_end_matches('\\').to_lowercase());
     let mut found = Vec::new();
@@ -44,6 +49,7 @@ pub fn running_in(dir: &Path) -> Vec<u32> {
     found
 }
 
+#[cfg(windows)]
 fn image_path(pid: u32) -> Option<String> {
     unsafe {
         let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
@@ -60,6 +66,7 @@ fn image_path(pid: u32) -> Option<String> {
 
 /// Asks every visible window of these processes to close, as clicking ✕ would.
 /// Returns how many windows were asked.
+#[cfg(windows)]
 pub fn close_windows(pids: &[u32]) -> usize {
     struct Search<'a> {
         pids: &'a [u32],
@@ -84,6 +91,7 @@ pub fn close_windows(pids: &[u32]) -> usize {
 
 /// Ends these processes outright. Only for when asking nicely didn't work.
 /// Returns how many were ended.
+#[cfg(windows)]
 pub fn terminate(pids: &[u32]) -> usize {
     let mut ended = 0;
     for &pid in pids {
@@ -93,6 +101,86 @@ pub fn terminate(pids: &[u32]) -> usize {
                 ended += (TerminateProcess(process, 1) != 0) as usize;
                 CloseHandle(process);
             }
+        }
+    }
+    ended
+}
+
+#[cfg(not(windows))]
+extern "C" {
+    fn proc_listallpids(buffer: *mut std::ffi::c_void, buffersize: std::ffi::c_int) -> std::ffi::c_int;
+    fn proc_pidpath(pid: std::ffi::c_int, buffer: *mut std::ffi::c_void, buffersize: u32) -> std::ffi::c_int;
+    fn kill(pid: i32, sig: i32) -> i32;
+}
+
+#[cfg(not(windows))]
+const SIGTERM: i32 = 15;
+#[cfg(not(windows))]
+const SIGKILL: i32 = 9;
+
+#[cfg(not(windows))]
+pub fn running_in(dir: &Path) -> Vec<u32> {
+    let mut prefixes = Vec::new();
+    let add = |p: &Path, list: &mut Vec<String>| {
+        let s = p.to_string_lossy();
+        let trimmed = s.trim_end_matches('/');
+        if !trimmed.is_empty() {
+            list.push(format!("{}/", trimmed.to_lowercase()));
+        }
+    };
+    add(dir, &mut prefixes);
+    if let Ok(canon) = dir.canonicalize() {
+        add(&canon, &mut prefixes);
+    }
+
+    let mut pids = vec![0i32; 4096];
+    let bytes = (pids.len() * std::mem::size_of::<i32>()) as std::ffi::c_int;
+    let count = unsafe { proc_listallpids(pids.as_mut_ptr() as *mut _, bytes) };
+    if count <= 0 {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    for &pid in &pids[..(count as usize).min(pids.len())] {
+        if pid <= 0 {
+            continue;
+        }
+        if let Some(path) = image_path(pid) {
+            let lower = path.to_lowercase();
+            if prefixes.iter().any(|pre| lower.starts_with(pre)) {
+                found.push(pid as u32);
+            }
+        }
+    }
+    found
+}
+
+#[cfg(not(windows))]
+fn image_path(pid: i32) -> Option<String> {
+    let mut buf = [0u8; 4096];
+    let len = unsafe { proc_pidpath(pid, buf.as_mut_ptr() as *mut _, buf.len() as u32) };
+    if len <= 0 {
+        return None;
+    }
+    std::str::from_utf8(&buf[..len as usize]).ok().map(String::from)
+}
+
+#[cfg(not(windows))]
+pub fn close_windows(pids: &[u32]) -> usize {
+    let mut asked = 0;
+    for &pid in pids {
+        if unsafe { kill(pid as i32, SIGTERM) } == 0 {
+            asked += 1;
+        }
+    }
+    asked
+}
+
+#[cfg(not(windows))]
+pub fn terminate(pids: &[u32]) -> usize {
+    let mut ended = 0;
+    for &pid in pids {
+        if unsafe { kill(pid as i32, SIGKILL) } == 0 {
+            ended += 1;
         }
     }
     ended

@@ -10,11 +10,20 @@ const BOOT = window.BOOT || {
   // Opened as a plain file (design work in a browser): stand in for the host.
   version: '0.1.0',
   repo: 'JavacrafterDevelopment/Launcher',
+  os: /Mac/i.test(navigator.platform || '') ? 'MacOS' : 'Windows',
   settings: { theme: 'light', autoUpdate: true, prereleases: false, lastCheck: null },
   dataDir: 'data',
   justUpdated: false,
   preview: true,
 };
+
+const CURRENT_OS = BOOT.os || (/Mac/i.test(navigator.platform || '') ? 'MacOS' : 'Windows');
+
+function isSupported(a) {
+  if (typeof a.supported === 'boolean') return a.supported;
+  if (Array.isArray(a.platforms) && a.platforms.length) return a.platforms.includes(CURRENT_OS);
+  return true;
+}
 
 const post = (msg) => {
   if (window.ipc) window.ipc.postMessage(JSON.stringify(msg));
@@ -353,6 +362,7 @@ function appCardSig(a) {
     latest,
     a.checked ? 1 : 0,
     a.updateAvailable ? 1 : 0,
+    isSupported(a) ? 1 : 0,
     a.task.state,
     a.task.message || '',
     a.damaged.length,
@@ -492,8 +502,10 @@ function appCard(a) {
   const busy = ['checking', 'downloading', 'installing', 'verifying', 'repairing', 'stopping'].includes(t.state);
   const damaged = a.damaged.length;
   const latest = a.latest;
+  const supported = isSupported(a);
+  const platformsLabel = Array.isArray(a.platforms) && a.platforms.length ? a.platforms.join(' / ') : '';
   const icon = a.icon || APP_ICONS[a.id];
-  const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
+  const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}${supported ? '' : ' unsupported'}`);
 
   const tile = h('div', `app-tile${a.installed ? '' : ' dim'}${icon ? ' has-icon' : ''}`);
   if (icon) {
@@ -513,7 +525,9 @@ function appCard(a) {
   let live = null;
   title.append(h('span', 'app-name', a.name));
   const ver = h('span', 'app-ver');
-  if (a.installed) {
+  if (!supported && !a.installed) {
+    ver.append(platformsLabel ? `${platformsLabel} only` : `Not available on ${CURRENT_OS}`);
+  } else if (a.installed) {
     ver.append(`v${a.installed}`);
     if (a.updateAvailable) {
       ver.append(' → ');
@@ -544,7 +558,7 @@ function appCard(a) {
       fix.disabled = busy;
       actions.append(fix);
     }
-    if (a.updateAvailable) {
+    if (a.updateAvailable && supported) {
       const up = textButton(`Update to v${latest.version}`, 'gilt', () => post({ cmd: 'appInstall', id: a.id }));
       up.disabled = busy;
       actions.append(up);
@@ -563,7 +577,7 @@ function appCard(a) {
       launch.disabled = true;
     } else {
       launch = textButton('Launch', 'primary', () => post({ cmd: 'appLaunch', id: a.id }));
-      launch.disabled = busy;
+      launch.disabled = busy || !supported;
     }
     actions.append(launch);
     actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
@@ -579,6 +593,12 @@ function appCard(a) {
       () => uninstallClick(a.id), armed ? 'danger armed' : 'danger');
     del.disabled = busy;
     actions.append(del);
+  } else if (!supported) {
+    const label = platformsLabel ? `${platformsLabel} only` : `Not on ${CURRENT_OS}`;
+    const install = textButton(label, 'primary', () => {});
+    install.disabled = true;
+    install.title = `${a.name} does not have a ${CURRENT_OS} tag and cannot be downloaded on ${CURRENT_OS}.`;
+    actions.append(install);
   } else {
     const label = !latest && t.state === 'checking' ? 'Checking…' : 'Install';
     const install = textButton(label, 'primary', () => post({ cmd: 'appInstall', id: a.id }));
@@ -590,7 +610,7 @@ function appCard(a) {
   if (a.platforms && a.platforms.length) {
     const osRow = h('div', 'app-platforms');
     for (const os of a.platforms) {
-      osRow.append(h('span', 'os-tag', os));
+      osRow.append(h('span', `os-tag${os === CURRENT_OS ? ' match' : ''}`, os));
     }
     card.append(osRow);
   }
@@ -774,7 +794,7 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === ',') { e.preventDefault(); showPage('settings'); }
+  if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); showPage('settings'); }
   else if (e.key === 'Escape' && state.page !== 'library') showPage('library');
 });
 

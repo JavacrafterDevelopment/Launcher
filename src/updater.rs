@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-use crate::settings::app_dir;
+use crate::settings::{app_dir, install_dir};
 
 /// The repository this launcher publishes its own releases to.
 pub const REPO: &str = "JavacrafterDevelopment/Launcher";
@@ -162,20 +162,28 @@ impl Target {
     pub fn launcher() -> Self {
         Self {
             repo: REPO.into(),
-            package: "Launcher-windows-x64.zip".into(),
-            dir: app_dir(),
-            self_exe: std::env::current_exe().ok(),
+            package: if cfg!(windows) {
+                "Launcher-windows-x64.zip".into()
+            } else {
+                "Launcher-macos.zip".into()
+            },
+            dir: install_dir(),
+            self_exe: if cfg!(windows) { std::env::current_exe().ok() } else { None },
             update_json: true,
             default_exe: None,
         }
     }
 
-    /// An app published as `<name>-windows-x64.zip` in `repo`, installed at
-    /// `portableApplications\<name>` beside the launcher.
+    /// An app published in `repo`, installed at `portableApplications/<name>`
+    /// beside the launcher.
     pub fn app(repo: &str, name: &str) -> Self {
         Self {
             repo: repo.into(),
-            package: format!("{name}-windows-x64.zip"),
+            package: if cfg!(windows) {
+                format!("{name}-windows-x64.zip")
+            } else {
+                format!("{name}-macos.zip")
+            },
             dir: app_dir().join(APPS_DIR).join(name),
             self_exe: None,
             update_json: true,
@@ -214,12 +222,13 @@ impl Target {
             }
         }
         let exe = self.default_exe.as_deref()?;
-        let version = adopt_unpacked(&self.dir, exe)?;
-        Some(Installed { version, exe: exe.to_string() })
+        let (version, resolved_exe) = adopt_unpacked(&self.dir, exe)?;
+        Some(Installed { version, exe: resolved_exe })
     }
 
     /// True while the installed program is running: Windows won't let a running
-    /// exe be opened for writing.
+    /// exe be opened for writing; on macOS we check running processes under `dir`.
+    #[cfg(windows)]
     pub fn exe_in_use(&self) -> bool {
         use std::os::windows::fs::OpenOptionsExt;
         let Some(installed) = self.installed() else { return false };
@@ -231,14 +240,20 @@ impl Target {
             .is_err_and(|e| e.raw_os_error() == Some(32)) // ERROR_SHARING_VIOLATION
     }
 
+    #[cfg(not(windows))]
+    pub fn exe_in_use(&self) -> bool {
+        !crate::procs::running_in(&self.dir).is_empty()
+    }
+
     fn update_json_url(&self) -> String {
+        let file = if cfg!(windows) { "update.json" } else { "update-macos.json" };
         if cfg!(debug_assertions) {
             if let Ok(base) = std::env::var("LAUNCHER_UPDATE_BASE") {
                 let name = self.repo.rsplit('/').next().unwrap_or_default();
-                return format!("{}/{name}/update.json", base.trim_end_matches('/'));
+                return format!("{}/{name}/{file}", base.trim_end_matches('/'));
             }
         }
-        format!("https://raw.githubusercontent.com/{}/updates/update.json", self.repo)
+        format!("https://raw.githubusercontent.com/{}/updates/{file}", self.repo)
     }
 
     /// The newest published release, whatever is installed. update.json first (for
@@ -398,7 +413,8 @@ impl Target {
     ) -> Result<(), String> {
         log(format!("Downloading v{} from {}", rel.version, rel.asset_url));
         fs::create_dir_all(stage).map_err(|e| write_err(stage, e))?;
-        let zip_path = stage.join("package.zip");
+        let is_dmg = self.package.ends_with(".dmg") || rel.asset_url.ends_with(".dmg");
+        let pkg_path = stage.join(if is_dmg { "package.dmg" } else { "package.zip" });
 
         let mut resp = agent()
             .get(&rel.asset_url)
@@ -421,7 +437,7 @@ impl Target {
             0 => "Size not published; going by what the server sends".to_string(),
             n => format!("Package is {}", mb(n)),
         });
-        let mut file = File::create(&zip_path).map_err(|e| write_err(&zip_path, e))?;
+        let mut file = File::create(&pkg_path).map_err(|e| write_err(&pkg_path, e))?;
         let mut reader = resp.body_mut().as_reader();
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; 64 * 1024];
@@ -433,7 +449,7 @@ impl Target {
             if n == 0 {
                 break;
             }
-            file.write_all(&buf[..n]).map_err(|e| write_err(&zip_path, e))?;
+            file.write_all(&buf[..n]).map_err(|e| write_err(&pkg_path, e))?;
             hasher.update(&buf[..n]);
             done += n as u64;
             progress(done, total);
@@ -442,7 +458,7 @@ impl Target {
                 log(format!("Downloaded {}% ({} of {})", logged_tenth * 10, mb(done), mb(total)));
             }
         }
-        file.sync_all().map_err(|e| write_err(&zip_path, e))?;
+        file.sync_all().map_err(|e| write_err(&pkg_path, e))?;
         drop(file);
 
         if total > 0 && done != total {
@@ -460,7 +476,11 @@ impl Target {
 
         let files = stage.join("files");
         log("Unpacking".into());
-        extract(&zip_path, &files)?;
+        if is_dmg {
+            extract_dmg(&pkg_path, &files)?;
+        } else {
+            extract(&pkg_path, &files)?;
+        }
         if !files.join(MANIFEST).exists() {
             if let Some(exe) = &self.default_exe {
                 write_manifest(&files, &rel.version, exe)?;
@@ -482,7 +502,7 @@ impl Target {
             }
             log("File list matches the one published in update.json".into());
         }
-        let _ = fs::remove_file(&zip_path);
+        let _ = fs::remove_file(&pkg_path);
         fs::write(self.ready_marker(), &manifest.version).map_err(|e| write_err(stage, e))
     }
 
@@ -658,6 +678,9 @@ impl Target {
         progress: &mut dyn FnMut(u64, u64),
         log: &dyn Fn(String),
     ) -> Result<(), String> {
+        if self.package.ends_with(".dmg") || url.ends_with(".dmg") {
+            return self.repair_from_dmg(m, wanted, url, stage, progress, log);
+        }
         let fetched = std::rc::Rc::new(std::cell::Cell::new((0u64, 0u32)));
         let source = open_package(url, stage, fetched.clone(), log)?;
         let mut archive = zip::ZipArchive::new(source).map_err(|e| format!("Couldn't read the package's index ({e})"))?;
@@ -714,6 +737,10 @@ impl Target {
                     m.version
                 ));
             }
+            #[cfg(unix)]
+            let is_exec = entry.unix_mode().is_some_and(|mode| mode & 0o111 != 0)
+                || f.path == m.exe
+                || f.path.contains(".app/Contents/MacOS/");
             let tmp = stage.join(&rel);
             if let Some(parent) = tmp.parent() {
                 fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
@@ -732,6 +759,11 @@ impl Target {
                 progress(done, total);
             }
             out.sync_all().map_err(|e| write_err(&tmp, e))?;
+            #[cfg(unix)]
+            if is_exec {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755));
+            }
             let hash = format!("{:x}", hasher.finalize());
             if !hash.eq_ignore_ascii_case(&f.sha256) {
                 return Err(format!("The downloaded {} didn't match its SHA-256.", f.path));
@@ -759,6 +791,73 @@ impl Target {
         } else {
             log(format!("Repaired {} files", ready.len()));
         }
+        Ok(())
+    }
+
+    fn repair_from_dmg(
+        &self,
+        m: &Manifest,
+        wanted: &[&ManifestFile],
+        url: &str,
+        stage: &Path,
+        progress: &mut dyn FnMut(u64, u64),
+        log: &dyn Fn(String),
+    ) -> Result<(), String> {
+        log("Downloading the release disk image to repair damaged files".into());
+        let dmg_path = stage.join("package.dmg");
+        let mut resp = agent()
+            .get(url)
+            .call()
+            .map_err(|e| format!("Couldn't reach the release ({e})"))?;
+        if resp.status() != 200 {
+            return Err(format!("The release download answered HTTP {}.", resp.status().as_u16()));
+        }
+        let total = resp
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok()?.parse().ok())
+            .unwrap_or(0);
+        let mut file = File::create(&dmg_path).map_err(|e| write_err(&dmg_path, e))?;
+        let mut reader = resp.body_mut().as_reader();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut done = 0u64;
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted ({e})"))?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n]).map_err(|e| write_err(&dmg_path, e))?;
+            done += n as u64;
+            progress(done, total);
+        }
+        file.sync_all().map_err(|e| write_err(&dmg_path, e))?;
+        drop(file);
+
+        let unpacked = stage.join("unpacked");
+        extract_dmg(&dmg_path, &unpacked)?;
+        let mut ready = Vec::new();
+        for f in wanted {
+            let rel = safe_relative(&f.path).ok_or_else(|| format!("Unsafe path in the file list: {}", f.path))?;
+            let src = unpacked.join(&rel);
+            let (size, hash) = sha256_file(&src).map_err(|_| format!("{} isn't in the release package.", f.path))?;
+            if size != f.size || !hash.eq_ignore_ascii_case(&f.sha256) {
+                return Err(format!(
+                    "The installed file list doesn't match the published v{}. Reinstall it instead.",
+                    m.version
+                ));
+            }
+            ready.push((src, self.installed_path(m, &rel)));
+        }
+        for (src, dst) in &ready {
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
+            }
+            if dst.exists() {
+                fs::rename(dst, aside(dst)).map_err(|e| write_err(dst, e))?;
+            }
+            fs::rename(src, dst).map_err(|e| write_err(dst, e))?;
+        }
+        log(format!("Repaired {} files", ready.len()));
         Ok(())
     }
 
@@ -1086,24 +1185,162 @@ fn extract(zip_path: &Path, dest: &Path) -> Result<(), String> {
         if entry.is_dir() {
             continue;
         }
+        #[cfg(unix)]
+        let unix_mode = entry.unix_mode();
         let raw_name = entry.name().map_err(damaged)?.into_owned();
         let name = strip_root(&raw_name, root.as_deref());
         let rel = safe_relative(name)
             .ok_or_else(|| format!("The update package contains an unsafe path: {raw_name}"))?;
-        let out = dest.join(rel);
+        let out = dest.join(&rel);
         if let Some(parent) = out.parent() {
             fs::create_dir_all(parent).map_err(|e| write_err(parent, e))?;
         }
         let mut f = File::create(&out).map_err(|e| write_err(&out, e))?;
         std::io::copy(&mut entry, &mut f).map_err(damaged)?;
+        drop(f);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let rel_str = rel.to_string_lossy();
+            let is_exec = unix_mode.is_some_and(|m| m & 0o111 != 0) || rel_str.contains(".app/Contents/MacOS/");
+            if is_exec {
+                let _ = fs::set_permissions(&out, fs::Permissions::from_mode(0o755));
+            }
+        }
     }
     Ok(())
+}
+
+/// Mounts a macOS `.dmg` read-only without showing it in Finder, copies the `.app`
+/// bundle (and any regular files) into `dest`, writes `portable.txt`, and unmounts.
+#[cfg(target_os = "macos")]
+fn extract_dmg(dmg_path: &Path, dest: &Path) -> Result<(), String> {
+    let mnt = dmg_path.with_extension("mnt");
+    let _ = fs::remove_dir_all(&mnt);
+    fs::create_dir_all(&mnt).map_err(|e| write_err(&mnt, e))?;
+    let status = std::process::Command::new("hdiutil")
+        .args(["attach", "-nobrowse", "-readonly", "-noverify", "-noautoopen", "-mountpoint"])
+        .arg(&mnt)
+        .arg(dmg_path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|e| format!("Couldn't mount the disk image ({e})"))?;
+    if !status.success() {
+        let _ = fs::remove_dir_all(&mnt);
+        return Err("The downloaded disk image couldn't be mounted.".into());
+    }
+
+    let copy_res = copy_dmg_contents(&mnt, dest);
+    let _ = std::process::Command::new("hdiutil")
+        .args(["detach"])
+        .arg(&mnt)
+        .arg("-force")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    let _ = fs::remove_dir_all(&mnt);
+    copy_res?;
+
+    // Drop portable.txt next to the .app bundle so Tauri/storytold apps know they
+    // can operate in portable mode when supported.
+    let _ = fs::write(dest.join("portable.txt"), b"portable mode\n");
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn copy_dmg_contents(mnt: &Path, dest: &Path) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| write_err(dest, e))?;
+    let entries = fs::read_dir(mnt).map_err(|e| format!("Couldn't read the mounted disk image ({e})"))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        // Skip hidden metadata (.DS_Store, .VolumeIcon.icns, .Trashes, .fseventsd) and the Applications symlink.
+        if name_str.starts_with('.') || name_str.eq_ignore_ascii_case("Applications") {
+            continue;
+        }
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
+        copy_tree(&entry.path(), &dest.join(&name))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let meta = fs::symlink_metadata(src).map_err(|e| format!("Couldn't read {} ({e})", src.display()))?;
+    if meta.file_type().is_symlink() {
+        // Resolve symlinks inside .app bundles to regular files/dirs so verify_files can hash every file.
+        let target = fs::metadata(src).map_err(|e| format!("Couldn't resolve symlink {} ({e})", src.display()))?;
+        if target.is_dir() {
+            fs::create_dir_all(dst).map_err(|e| write_err(dst, e))?;
+            for entry in fs::read_dir(src).map_err(|e| format!("Couldn't read {} ({e})", src.display()))?.flatten() {
+                copy_tree(&entry.path(), &dst.join(entry.file_name()))?;
+            }
+        } else if target.is_file() {
+            if let Some(p) = dst.parent() {
+                fs::create_dir_all(p).map_err(|e| write_err(p, e))?;
+            }
+            fs::copy(src, dst).map_err(|e| write_err(dst, e))?;
+        }
+        return Ok(());
+    }
+    if meta.is_dir() {
+        fs::create_dir_all(dst).map_err(|e| write_err(dst, e))?;
+        for entry in fs::read_dir(src).map_err(|e| format!("Couldn't read {} ({e})", src.display()))?.flatten() {
+            copy_tree(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+    } else if meta.is_file() {
+        if let Some(p) = dst.parent() {
+            fs::create_dir_all(p).map_err(|e| write_err(p, e))?;
+        }
+        fs::copy(src, dst).map_err(|e| write_err(dst, e))?;
+        let mode = meta.permissions().mode();
+        if mode & 0o111 != 0 || dst.to_string_lossy().contains(".app/Contents/MacOS/") {
+            let _ = fs::set_permissions(dst, fs::Permissions::from_mode(0o755));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn extract_dmg(_dmg_path: &Path, _dest: &Path) -> Result<(), String> {
+    Err("macOS disk images (.dmg) can only be unpacked on macOS.".into())
+}
+
+/// Finds the main executable inside a `.app` bundle in `dir` if the expected
+/// `exe` path doesn't match the bundle's exact binary capitalization.
+fn resolve_bundle_exe(dir: &Path, exe: &str) -> String {
+    if dir.join(exe).is_file() {
+        return exe.to_string();
+    }
+    let Ok(entries) = fs::read_dir(dir) else { return exe.to_string() };
+    for e in entries.flatten() {
+        let path = e.path();
+        let name = e.file_name().to_string_lossy().into_owned();
+        if path.is_dir() && name.ends_with(".app") {
+            let macos_dir = path.join("Contents").join("MacOS");
+            if let Ok(bins) = fs::read_dir(&macos_dir) {
+                for bin in bins.flatten() {
+                    if bin.path().is_file() {
+                        let bin_name = bin.file_name().to_string_lossy().into_owned();
+                        return format!("{name}/Contents/MacOS/{bin_name}");
+                    }
+                }
+            }
+        }
+    }
+    exe.to_string()
 }
 
 /// Writes `launcher-manifest.json` for a third-party package after it has been
 /// checked against its release checksum and unpacked, so verify, repair and
 /// updates work identically to first-party packages.
 fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), String> {
+    let resolved_exe = resolve_bundle_exe(files_dir, exe);
     let mut files = Vec::new();
     let mut pending = vec![files_dir.to_path_buf()];
     while let Some(dir) = pending.pop() {
@@ -1130,7 +1367,7 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    let manifest = Manifest { version: version.to_string(), exe: exe.to_string(), files };
+    let manifest = Manifest { version: version.to_string(), exe: resolved_exe, files };
     let json = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let out = files_dir.join(MANIFEST);
     fs::write(&out, json).map_err(|e| write_err(&out, e))
@@ -1139,45 +1376,64 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
 /// Adopts a third-party folder that was unpacked by hand into `dir` without a
 /// `launcher-manifest.json`. If the zip's wrapper folder (e.g.
 /// `photocraft-0.8.2-windows-x64-portable\`) was kept, flattens it first.
-fn adopt_unpacked(dir: &Path, exe: &str) -> Option<String> {
+fn adopt_unpacked(dir: &Path, exe: &str) -> Option<(String, String)> {
     let mut folder_ver: Option<String> = None;
-    if !dir.join(exe).is_file() {
+    let resolved = resolve_bundle_exe(dir, exe);
+    if !dir.join(&resolved).is_file() {
         let mut subdirs = Vec::new();
         for e in fs::read_dir(dir).ok()?.flatten() {
             let path = e.path();
             if path.is_dir() {
                 let name = e.file_name().to_string_lossy().to_ascii_lowercase();
-                if !is_data_dir(&name) && name != STAGE_DIR {
+                if !is_data_dir(&name) && name != STAGE_DIR && !name.ends_with(".app") {
                     subdirs.push(path);
                 }
             }
         }
-        if subdirs.len() == 1 && subdirs[0].join(exe).is_file() {
-            let wrapper = &subdirs[0];
-            folder_ver = wrapper
-                .file_name()
-                .and_then(|n| n.to_str())
-                .and_then(version_in_name);
-            for e in fs::read_dir(wrapper).ok()?.flatten() {
-                let dst = dir.join(e.file_name());
-                let _ = fs::rename(e.path(), dst);
+        if subdirs.len() == 1 {
+            let sub_exe = resolve_bundle_exe(&subdirs[0], exe);
+            if subdirs[0].join(&sub_exe).is_file() {
+                let wrapper = &subdirs[0];
+                folder_ver = wrapper
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(version_in_name);
+                for e in fs::read_dir(wrapper).ok()?.flatten() {
+                    let dst = dir.join(e.file_name());
+                    let _ = fs::rename(e.path(), dst);
+                }
+                let _ = fs::remove_dir(wrapper);
             }
-            let _ = fs::remove_dir(wrapper);
         }
     }
-    let exe_path = dir.join(exe);
+    let resolved_exe = resolve_bundle_exe(dir, exe);
+    let exe_path = dir.join(&resolved_exe);
     if !exe_path.is_file() {
         return None;
     }
-    let version = pe_version(&exe_path).or(folder_ver)?;
-    write_manifest(dir, &version, exe).ok()?;
-    Some(version)
+    let version = pe_version(&exe_path)
+        .or_else(|| plist_version(&exe_path))
+        .or(folder_ver)?;
+    write_manifest(dir, &version, &resolved_exe).ok()?;
+    Some((version, resolved_exe))
 }
 
 fn version_in_name(name: &str) -> Option<String> {
     name.split(['-', '_'])
         .find_map(parse_version)
         .map(|v| v.to_string())
+}
+
+/// Reads `CFBundleShortVersionString` from `<App>.app/Contents/Info.plist` when
+/// `exe_path` is `<App>.app/Contents/MacOS/<bin>`.
+fn plist_version(exe_path: &Path) -> Option<String> {
+    let contents = exe_path.parent()?.parent()?;
+    let plist = fs::read_to_string(contents.join("Info.plist")).ok()?;
+    let idx = plist.find("CFBundleShortVersionString")?;
+    let after = &plist[idx..];
+    let start = after.find("<string>")? + 8;
+    let end = after[start..].find("</string>")?;
+    parse_version(&after[start..start + end]).map(|v| v.to_string())
 }
 
 /// Reads the `major.minor.patch` file version from a Windows PE executable's
@@ -1243,12 +1499,27 @@ fn verify_files(files: &Path) -> Result<Manifest, String> {
         }
     }
 
-    let mut head = [0u8; 2];
-    File::open(files.join(&manifest.exe))
-        .and_then(|mut f| f.read_exact(&mut head))
+    let exe_path = files.join(&manifest.exe);
+    let mut head = [0u8; 4];
+    let n = File::open(&exe_path)
+        .and_then(|mut f| f.read(&mut head))
         .map_err(|e| format!("Couldn't read the new program ({e})"))?;
-    if &head != b"MZ" {
+    let is_pe = n >= 2 && &head[..2] == b"MZ";
+    let is_macho = n == 4
+        && matches!(
+            u32::from_be_bytes(head),
+            0xFEEDFACF | 0xCFFAEDFE | 0xFEEDFACE | 0xCEFAEDFE | 0xCAFEBABE | 0xBEBAFECA | 0xCAFEBABF | 0xBFBAFECA
+        );
+    if cfg!(windows) && !is_pe {
         return Err("The new program isn't a Windows program.".into());
+    }
+    if !cfg!(windows) && !is_macho && !is_pe {
+        return Err("The new program isn't a valid macOS application binary.".into());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&exe_path, fs::Permissions::from_mode(0o755));
     }
     Ok(manifest)
 }
@@ -1290,6 +1561,11 @@ fn installed_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 pub fn relaunch(exe: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(exe, fs::Permissions::from_mode(0o755));
+    }
     std::process::Command::new(exe)
         .arg("--updated")
         .current_dir(app_dir())

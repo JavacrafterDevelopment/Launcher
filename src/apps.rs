@@ -16,6 +16,11 @@ use crate::procs;
 use crate::updater::{Release, Target};
 use crate::UserEvent;
 
+#[cfg(target_os = "macos")]
+pub const CURRENT_OS: &str = "MacOS";
+#[cfg(not(target_os = "macos"))]
+pub const CURRENT_OS: &str = "Windows";
+
 pub struct AppInfo {
     pub id: &'static str,
     /// Also the folder name under portableApplications.
@@ -28,14 +33,25 @@ pub struct AppInfo {
     pub source: Source,
 }
 
+impl AppInfo {
+    pub fn supported_on_current_os(&self) -> bool {
+        self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum Source {
-    /// Built and packaged with `tools/package.ps1` (`<name>-windows-x64.zip` + `update.json`).
+    /// Built and packaged with `tools/package.ps1` or `tools/package-macos.sh`.
     Own,
     /// An open-source app from another author's GitHub releases. `package` is the
-    /// release zip name (`{version}` is replaced with the release's version) and
+    /// release archive name (`{version}` is replaced with the release's version) and
     /// `exe` is the program inside it.
-    ThirdParty { package: &'static str, exe: &'static str },
+    ThirdParty {
+        win_package: &'static str,
+        win_exe: &'static str,
+        mac_package: &'static str,
+        mac_exe: &'static str,
+    },
 }
 
 /// How the Stop button asks an app to quit.
@@ -91,8 +107,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "photocraft-{version}-windows-x64-portable.zip",
-            exe: "photocraft.exe",
+            win_package: "photocraft-{version}-windows-x64-portable.zip",
+            win_exe: "photocraft.exe",
+            mac_package: "photocraft-{version}-macos-universal.dmg",
+            mac_exe: "PhotoCraft.app/Contents/MacOS/photocraft",
         },
     },
     AppInfo {
@@ -104,8 +122,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "vectorcraft-{version}-windows-x64-portable.zip",
-            exe: "vectorcraft.exe",
+            win_package: "vectorcraft-{version}-windows-x64-portable.zip",
+            win_exe: "vectorcraft.exe",
+            mac_package: "vectorcraft-{version}-macos-universal.dmg",
+            mac_exe: "VectorCraft.app/Contents/MacOS/vectorcraft",
         },
     },
     AppInfo {
@@ -117,8 +137,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "filmcraft-{version}-windows-x64-portable.zip",
-            exe: "filmcraft.exe",
+            win_package: "filmcraft-{version}-windows-x64-portable.zip",
+            win_exe: "filmcraft.exe",
+            mac_package: "filmcraft-{version}-macos-universal.dmg",
+            mac_exe: "FilmCraft.app/Contents/MacOS/filmcraft",
         },
     },
     AppInfo {
@@ -130,8 +152,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "effectcraft-{version}-windows-x64-portable.zip",
-            exe: "effectcraft.exe",
+            win_package: "effectcraft-{version}-windows-x64-portable.zip",
+            win_exe: "effectcraft.exe",
+            mac_package: "effectcraft-{version}-macos-universal.dmg",
+            mac_exe: "EffectCraft.app/Contents/MacOS/effectcraft",
         },
     },
     AppInfo {
@@ -143,8 +167,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "lightcraft-{version}-windows-x64-portable.zip",
-            exe: "lightcraft.exe",
+            win_package: "lightcraft-{version}-windows-x64-portable.zip",
+            win_exe: "lightcraft.exe",
+            mac_package: "lightcraft-{version}-macos-universal.dmg",
+            mac_exe: "LightCraft.app/Contents/MacOS/lightcraft",
         },
     },
     AppInfo {
@@ -156,8 +182,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "designcraft-{version}-windows-x64-portable.zip",
-            exe: "designcraft.exe",
+            win_package: "designcraft-{version}-windows-x64-portable.zip",
+            win_exe: "designcraft.exe",
+            mac_package: "designcraft-{version}-macos-universal.dmg",
+            mac_exe: "DesignCraft.app/Contents/MacOS/designcraft",
         },
     },
     AppInfo {
@@ -169,8 +197,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "pdfcraft-{version}-windows-x64-portable.zip",
-            exe: "pdfcraft.exe",
+            win_package: "pdfcraft-{version}-windows-x64-portable.zip",
+            win_exe: "pdfcraft.exe",
+            mac_package: "pdfcraft-{version}-macos-universal.dmg",
+            mac_exe: "PdfCraft.app/Contents/MacOS/pdfcraft",
         },
     },
     AppInfo {
@@ -182,8 +212,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "figcraft-{version}-windows-x64-portable.zip",
-            exe: "figcraft.exe",
+            win_package: "figcraft-{version}-windows-x64-portable.zip",
+            win_exe: "figcraft.exe",
+            mac_package: "figcraft-{version}-macos-universal.dmg",
+            mac_exe: "FigCraft.app/Contents/MacOS/figcraft",
         },
     },
     AppInfo {
@@ -195,8 +227,10 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
-            package: "soundcraft-{version}-windows-x64-portable.zip",
-            exe: "soundcraft.exe",
+            win_package: "soundcraft-{version}-windows-x64-portable.zip",
+            win_exe: "soundcraft.exe",
+            mac_package: "soundcraft-{version}-macos-universal.dmg",
+            mac_exe: "SoundCraft.app/Contents/MacOS/soundcraft",
         },
     },
 ];
@@ -289,7 +323,12 @@ impl AppState {
     fn target(&self) -> Target {
         match self.info.source {
             Source::Own => Target::app(self.info.repo, self.info.name),
-            Source::ThirdParty { package, exe } => {
+            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe } => {
+                let (package, exe) = if cfg!(target_os = "macos") {
+                    (mac_package, mac_exe)
+                } else {
+                    (win_package, win_exe)
+                };
                 Target::third_party(self.info.repo, self.info.name, package, exe)
             }
         }
@@ -375,6 +414,7 @@ impl Library {
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
                     "platforms": a.info.platforms,
+                    "supported": a.info.supported_on_current_os(),
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
                     "installed": a.installed,
                     "latest": a.latest,
@@ -395,11 +435,16 @@ impl Library {
         self.apps.iter_mut().find(|a| a.info.id == id)
     }
 
-    /// Looks for new releases of every app. Finding one only shows the Update
-    /// button; nothing is downloaded until it's pressed.
+    /// Looks for new releases of every app supported on the current OS. Finding one
+    /// only shows the Update button; nothing is downloaded until it's pressed.
     pub fn check_all(&mut self, prereleases: bool) {
         for a in self.apps.iter_mut().filter(|a| !a.busy()) {
             a.refresh_installed();
+            if !a.info.supported_on_current_os() {
+                a.checked = true;
+                a.task = Task::Idle;
+                continue;
+            }
             a.task = Task::Checking;
             let (id, target, proxy) = (a.info.id, a.target(), self.proxy.clone());
             std::thread::spawn(move || {
@@ -414,6 +459,16 @@ impl Library {
         let proxy = self.proxy.clone();
         let Some(a) = self.get(id) else { return };
         if a.busy() {
+            return;
+        }
+        if !a.info.supported_on_current_os() {
+            let message = format!(
+                "{} is only available for {}.",
+                a.info.name,
+                a.info.platforms.join(", ")
+            );
+            a.log("error", message.clone());
+            a.task = Task::Error { message };
             return;
         }
         let Some(release) = a.latest.clone() else {
@@ -734,7 +789,7 @@ impl Library {
         if let Some(a) = self.apps.iter().find(|a| a.info.id == id) {
             let target = a.target();
             if target.dir().exists() {
-                let _ = std::process::Command::new("explorer").arg(target.dir()).spawn();
+                crate::open_in_shell(target.dir());
             }
         }
     }
@@ -771,6 +826,7 @@ impl Library {
 
 /// Starts a program the way Explorer would. Unlike spawning it directly, this
 /// lets an app that asks for administrator rights show the UAC prompt.
+#[cfg(windows)]
 fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
@@ -796,6 +852,33 @@ fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String
     } else {
         Err(std::io::Error::last_os_error().to_string())
     }
+}
+
+#[cfg(not(windows))]
+fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755));
+
+    if let Some(bundle) = exe
+        .ancestors()
+        .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")))
+    {
+        let _ = std::process::Command::new("xattr").arg("-cr").arg(bundle).status();
+        let status = std::process::Command::new("open")
+            .arg(bundle)
+            .current_dir(dir)
+            .status()
+            .map_err(|e| e.to_string())?;
+        if status.success() {
+            return Ok(());
+        }
+    }
+
+    std::process::Command::new(exe)
+        .current_dir(dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 fn png_data_url(bytes: &[u8]) -> String {

@@ -7,14 +7,17 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/launcher.ico");
     println!("cargo:rerun-if-changed=build.rs");
 
-    let windows = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
-    let msvc = std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
-    if windows && msvc {
-        let mut res = winresource::WindowsResource::new();
-        res.set_icon("assets/launcher.ico")
-            .set("ProductName", "Launcher")
-            .set("FileDescription", "Launcher")
-            .set("CompanyName", "Javacrafter Development");
-        res.compile().expect("embed Windows resources");
+    #[cfg(windows)]
+    {
+        let windows = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
+        let msvc = std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
+        if windows && msvc {
+            let mut res = winresource::WindowsResource::new();
+            res.set_icon("assets/launcher.ico")
+                .set("ProductName", "Launcher")
+                .set("FileDescription", "Launcher")
+                .set("CompanyName", "Javacrafter Development");
+            res.compile().expect("embed Windows resources");
+        }
     }
 }

@@ -1,13 +1,13 @@
 # Publishes a release whenever a version tag is pushed:
 #
-#   1. bump `version` in Cargo.toml (e.g. 0.2.0) and commit
-#   2. git tag v0.2.0 && git push origin main v0.2.0
+#   1. bump `version` in Cargo.toml (e.g. 0.2.8) and commit
+#   2. git tag v0.2.8 && git push origin main v0.2.8
 #
-# The MSVC build links the C runtime and the WebView2 loader statically, so the
-# exe needs nothing installed. tools/package.ps1 then packs the program folder
-# (the exe plus anything in package/) with a manifest of SHA-256 hashes.
-# Launchers already out there see the new release on their next start (or from
-# Settings > Check for updates) and replace themselves with it.
+# Builds both Windows (x86_64-pc-windows-msvc) and macOS universal
+# (aarch64-apple-darwin + x86_64-apple-darwin), packages each with a manifest of
+# SHA-256 hashes, attaches the Windows and macOS packages to the GitHub release,
+# and updates update.json (Windows) and update-macos.json (macOS) on the
+# `updates` branch.
 
 name: Release
 
@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,17 +40,80 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build
+      - name: Build Windows
         run: cargo build --release --locked --target x86_64-pc-windows-msvc
 
-      - name: Package
+      - name: Package Windows
         shell: pwsh
         run: ./tools/package.ps1 -Exe target/x86_64-pc-windows-msvc/release/Launcher.exe -Out dist
 
-      # Launcher-windows-x64.zip is what launchers update from: every file in the
-      # folder, listed with its SHA-256 in launcher-manifest.json. Launcher.exe is
-      # also attached, for people who just want the exe and for 0.1.0, whose
-      # updater only knew how to fetch the exe.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: |
+            dist/Launcher-windows-x64.zip
+            dist/Launcher/Launcher.exe
+            dist/release-entry.json
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches Cargo.toml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ "$tag" != "$ver" ]; then
+            echo "Tag v$tag doesn't match Cargo.toml version $ver" >&2
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build macOS (Apple Silicon & Intel Universal)
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          mkdir -p target/release-universal
+          lipo -create -output target/release-universal/Launcher \
+            target/aarch64-apple-darwin/release/Launcher \
+            target/x86_64-apple-darwin/release/Launcher
+
+      - name: Package macOS
+        run: ./tools/package-macos.sh target/release-universal/Launcher dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: |
+            dist/Launcher-macos.zip
+            dist/Launcher-macos.dmg
+            dist/release-entry-macos.json
+
+  publish:
+    needs: [build-windows, build-macos]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-windows
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-macos
+          path: dist
+
+      # Launcher-windows-x64.zip and Launcher-macos.zip are what launchers update from:
+      # every file in the folder/bundle, listed with its SHA-256 in launcher-manifest.json.
+      # Launcher.exe and Launcher-macos.dmg are also attached for direct installation.
       - name: Publish release
         shell: pwsh
         env:
@@ -58,13 +121,22 @@ jobs:
         run: |
           $tag = '${{ github.ref_name }}'
           $pre = if ($tag -match '-') { '--prerelease' } else { $null }
-          gh release create $tag dist/Launcher-windows-x64.zip dist/Launcher/Launcher.exe `
+          $assets = @(
+            'dist/Launcher-windows-x64.zip',
+            'dist/Launcher/Launcher.exe',
+            'dist/Launcher-macos.zip'
+          )
+          if (Test-Path 'dist/Launcher-macos.dmg') {
+            $assets += 'dist/Launcher-macos.dmg'
+          }
+          gh release create $tag @assets `
             --title "Launcher $($tag.TrimStart('v'))" --generate-notes $pre
 
-      # update.json is what launchers check first: served from raw.githubusercontent.com,
-      # so it isn't subject to the GitHub API's 60-an-hour limit. It lives on its own
-      # `updates` branch so releases never add commits to main.
-      - name: Publish update.json
+      # update.json (Windows) and update-macos.json (macOS) are what launchers check first:
+      # served from raw.githubusercontent.com, so they aren't subject to the GitHub API's
+      # 60-an-hour limit. They live on their own `updates` branch so releases never add
+      # commits to main.
+      - name: Publish update.json and update-macos.json
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,6 +163,10 @@ jobs:
             -UpdateJson updates-branch/update.json -Prerelease:$info.isPrerelease `
             -Notes "$($info.body)" -Published $published
 
-          git -C updates-branch add update.json
-          git -C updates-branch commit -m "update.json for $tag"
+          ./tools/publish-update.ps1 -Entry dist/release-entry-macos.json -Repo $repo -Tag $tag `
+            -UpdateJson updates-branch/update-macos.json -Prerelease:$info.isPrerelease `
+            -Notes "$($info.body)" -Published $published
+
+          git -C updates-branch add update.json update-macos.json
+          git -C updates-branch commit -m "update.json and update-macos.json for $tag"
           git -C updates-branch push origin HEAD:refs/heads/updates

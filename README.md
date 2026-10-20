@@ -14,12 +14,15 @@ exe is a few MB and has no runtime to install.
 
 ## Running it
 
-Put `Launcher.exe` in any folder — a USB stick, another PC — and run it. Nothing
-is installed and nothing is written outside that folder:
+On Windows, put `Launcher.exe` in any folder — a USB stick, another PC — and run
+it. On macOS, put `Launcher.app` in any writable folder for portable use (keeping
+`data/` and `portableApplications/` beside `Launcher.app`), or drag `Launcher.app`
+into `/Applications` like a standard Mac app (storing data in
+`~/Library/Application Support/Launcher`):
 
 ```
 Launcher\
-  Launcher.exe
+  Launcher.exe              (or Launcher.app on macOS)
   launcher-manifest.json   every program file with its SHA-256
   data\
     settings.json     your settings
@@ -30,17 +33,22 @@ Launcher\
     RustWinUtil\
 ```
 
-It needs the Microsoft Edge WebView2 Runtime, which ships with Windows 11 and
-current Windows 10. For a machine without it, drop a
+The launcher checks the current operating system (`Windows` or `MacOS`) against
+each app's platform tags: all apps remain visible in the Library, and only apps
+tagged for your operating system can be downloaded and installed.
+
+On Windows, it needs the Microsoft Edge WebView2 Runtime, which ships with
+Windows 11 and current Windows 10. For a machine without it, drop a
 [fixed-version runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
-into a `WebView2\` folder beside the exe and the launcher uses that instead.
+into a `WebView2\` folder beside the exe and the launcher uses that instead. On
+macOS, it uses the built-in system `WKWebView`.
 
 Only one launcher runs per folder; opening it again brings the existing window
 forward.
 
 | | |
 |---|---|
-| **Ctrl+,** | Settings |
+| **Ctrl+, / Cmd+,** | Settings |
 | **Esc** | Back to the library |
 
 ## Library

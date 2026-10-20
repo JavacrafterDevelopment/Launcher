@@ -492,6 +492,7 @@ code {
 }
 
 .app.has-update { border-color: var(--gilt); }
+.app.unsupported { border-style: dashed; }
 
 .app-platforms {
   width: 100%;
@@ -514,6 +515,12 @@ code {
   letter-spacing: .02em;
   line-height: 1.3;
   white-space: nowrap;
+}
+
+.os-tag.match {
+  border-color: var(--walnut);
+  background: var(--walnut-wash);
+  color: var(--walnut-deep);
 }
 
 /* Large square icon tile at the top of each card. */
