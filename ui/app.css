@@ -281,10 +281,6 @@ code {
   border-radius: 12px 12px 0 0;
 }
 
-:root[data-os="MacOS"]:not(.maximized) .winbtn.close {
-  border-top-right-radius: 12px;
-}
-
 :root[data-os="MacOS"]:not(.maximized) #status {
   border-radius: 0 0 12px 12px;
 }
@@ -412,6 +408,52 @@ code {
 .winbtn .restore { display: none; }
 :root.maximized .winbtn .max { display: none; }
 :root.maximized .winbtn .restore { display: block; }
+
+/* macOS traffic lights: red (close), yellow (minimise), green (zoom) on top-left. */
+:root[data-os="MacOS"] #top {
+  padding-left: 84px;
+}
+
+:root[data-os="MacOS"] #brandrow {
+  padding-right: 0;
+}
+
+:root[data-os="MacOS"] #winbtns {
+  top: 14px;
+  left: 16px;
+  right: auto;
+  height: auto;
+  gap: 8px;
+  align-items: center;
+}
+
+:root[data-os="MacOS"] .winbtn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  padding: 0;
+  color: rgba(0, 0, 0, .65);
+  box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .2);
+}
+
+:root[data-os="MacOS"] .winbtn.close  { order: 1; background: #FF5F57; }
+:root[data-os="MacOS"] .winbtn.min    { order: 2; background: #FEBC2E; }
+:root[data-os="MacOS"] .winbtn.maxbtn { order: 3; background: #28C840; }
+
+:root[data-os="MacOS"] .winbtn svg {
+  width: 7px;
+  height: 7px;
+  opacity: 0;
+  transition: opacity .1s ease;
+}
+
+:root[data-os="MacOS"] #winbtns:hover .winbtn svg {
+  opacity: 1;
+}
+
+:root[data-os="MacOS"] .winbtn.close:hover  { background: #FF5F57; color: rgba(0, 0, 0, .75); filter: brightness(.94); }
+:root[data-os="MacOS"] .winbtn.min:hover    { background: #FEBC2E; color: rgba(0, 0, 0, .75); filter: brightness(.94); }
+:root[data-os="MacOS"] .winbtn.maxbtn:hover { background: #28C840; color: rgba(0, 0, 0, .75); filter: brightness(.94); }
 
 /* ------------------------------------------------------------ tabs / chips */
 
