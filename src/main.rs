@@ -185,6 +185,7 @@ fn page_html(settings: &Settings) -> String {
         "settings": settings,
         "dataDir": data_dir().display().to_string(),
         "justUpdated": std::env::args().any(|a| a == "--updated"),
+        "icons": apps::icons(),
     });
     INDEX_HTML
         .replace("{{THEME}}", if settings.is_dark() { "dark" } else { "light" })

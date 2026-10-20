@@ -303,7 +303,10 @@ const library = {
   armedTimer: null,
   logOpen: {},        // id -> whether its log drawer is expanded
   logStart: {},       // id -> time of its log's first line, to spot a fresh install
+  wraps: {},          // id -> { wrap, cardSig, fullSig } so progress ticks never destroy other cards' buttons
 };
+
+const APP_ICONS = BOOT.icons || {};
 
 const ICONS = {
   folder: '<path d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.5 1.6h5.1c.8 0 1.4.6 1.4 1.4v6.1c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
@@ -340,6 +343,32 @@ function summarizeApps(list) {
     + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
 }
 
+/* Signature of everything that affects a card's header and buttons (excluding
+   progress numbers and log lines), so progress ticks on one app never rebuild
+   another card's DOM or interrupt a click in progress. */
+function appCardSig(a) {
+  const latest = a.latest ? `${a.latest.version}:${a.latest.size}:${a.latest.page}` : '';
+  return [
+    a.installed || '',
+    latest,
+    a.checked ? 1 : 0,
+    a.updateAvailable ? 1 : 0,
+    a.task.state,
+    a.task.message || '',
+    a.damaged.length,
+    a.running ? 1 : 0,
+    a.starting ? 1 : 0,
+    library.armed === a.id ? 1 : 0,
+  ].join('|');
+}
+
+function appFullSig(a, cardSig) {
+  const first = a.log.length ? a.log[0].t : 0;
+  const last = a.log.length ? `${a.log[a.log.length - 1].t}:${a.log[a.log.length - 1].text}` : '';
+  const open = first && library.logStart[a.id] !== first ? true : !!library.logOpen[a.id];
+  return `${cardSig}|${a.task.done || 0}:${a.task.total || 0}|${a.log.length}:${first}:${last}:${open ? 1 : 0}`;
+}
+
 function renderAppList(container, list) {
   const sorted = [...list].sort((a, b) => {
     const instA = a.installed ? 1 : 0;
@@ -347,12 +376,47 @@ function renderAppList(container, list) {
     if (instA !== instB) return instB - instA;
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
-  container.replaceChildren(...sorted.map((a) => {
-    const wrap = h('div', 'app-wrap');
-    wrap.append(appCard(a));
+
+  for (const a of sorted) {
+    const cardSig = appCardSig(a);
+    const fullSig = appFullSig(a, cardSig);
+    const prev = library.wraps[a.id];
+
+    if (prev && prev.fullSig === fullSig) {
+      continue;
+    }
+    if (prev && prev.cardSig === cardSig) {
+      // Only progress or log lines changed: update the status bar and log drawer
+      // in place, keeping the card and its buttons untouched.
+      const statusEl = prev.wrap.querySelector('.app-status');
+      if (statusEl) fillAppStatus(statusEl, a);
+      const oldLog = prev.wrap.querySelector('.app-log');
+      if (a.log.length) {
+        const nextLog = appLog(a);
+        if (oldLog) oldLog.replaceWith(nextLog);
+        else prev.wrap.append(nextLog);
+      } else if (oldLog) {
+        oldLog.remove();
+      }
+      prev.fullSig = fullSig;
+      continue;
+    }
+
+    const wrap = prev ? prev.wrap : h('div', 'app-wrap');
+    wrap.replaceChildren(appCard(a));
     if (a.log.length) wrap.append(appLog(a));
-    return wrap;
-  }));
+    library.wraps[a.id] = { wrap, cardSig, fullSig };
+  }
+
+  sorted.forEach((a, i) => {
+    const wrap = library.wraps[a.id].wrap;
+    if (container.children[i] !== wrap) {
+      container.insertBefore(wrap, container.children[i] || null);
+    }
+  });
+  while (container.children.length > sorted.length) {
+    container.lastElementChild.remove();
+  }
 }
 
 function renderLibrary() {
@@ -428,12 +492,13 @@ function appCard(a) {
   const busy = ['checking', 'downloading', 'installing', 'verifying', 'repairing', 'stopping'].includes(t.state);
   const damaged = a.damaged.length;
   const latest = a.latest;
+  const icon = a.icon || APP_ICONS[a.id];
   const card = h('div', `app${a.updateAvailable ? ' has-update' : ''}`);
 
-  const tile = h('div', `app-tile${a.installed ? '' : ' dim'}${a.icon ? ' has-icon' : ''}`);
-  if (a.icon) {
+  const tile = h('div', `app-tile${a.installed ? '' : ' dim'}${icon ? ' has-icon' : ''}`);
+  if (icon) {
     const img = h('img', 'app-icon');
-    img.src = a.icon;
+    img.src = icon;
     img.alt = '';
     img.draggable = false;
     tile.append(img);
@@ -524,6 +589,16 @@ function appCard(a) {
 
   // What it's doing right now, if anything.
   const status = h('div', 'app-status');
+  fillAppStatus(status, a);
+  card.append(status);
+  return card;
+}
+
+function fillAppStatus(status, a) {
+  const t = a.task;
+  const damaged = a.damaged.length;
+  status.className = 'app-status';
+  status.replaceChildren();
   if (t.state === 'downloading') {
     const pctDone = t.total ? Math.floor((t.done / t.total) * 100) : 0;
     const bar = h('div', 'progress');
@@ -554,8 +629,6 @@ function appCard(a) {
     status.classList.add('bad');
     status.append(`Click the bin again to delete ${a.name} and its settings.`);
   }
-  card.append(status);
-  return card;
 }
 
 /* Uninstalling deletes the app's settings too, so it takes a second click. */

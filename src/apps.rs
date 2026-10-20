@@ -245,7 +245,6 @@ const LOG_LINES: usize = 300;
 
 struct AppState {
     info: &'static AppInfo,
-    icon: Option<String>,
     installed: Option<String>,
     latest: Option<Release>,
     /// True once a check has answered, so "no release yet" can be told apart
@@ -259,6 +258,18 @@ struct AppState {
     running: bool,
     /// Set when Launch is pressed, until the app is seen running.
     starting: Option<Instant>,
+}
+
+/// Embedded app icons encoded once for `window.BOOT.icons`, so snapshots sent on
+/// every download progress tick stay small.
+pub fn icons() -> Value {
+    let mut map = serde_json::Map::new();
+    for info in CATALOG {
+        if let Some(bytes) = info.icon {
+            map.insert(info.id.into(), Value::String(png_data_url(bytes)));
+        }
+    }
+    Value::Object(map)
 }
 
 impl AppState {
@@ -317,7 +328,6 @@ impl Library {
             .map(|info| {
                 let mut a = AppState {
                     info,
-                    icon: info.icon.map(png_data_url),
                     installed: None,
                     latest: None,
                     checked: false,
@@ -351,7 +361,6 @@ impl Library {
                     "name": a.info.name,
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
-                    "icon": a.icon,
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
                     "installed": a.installed,
                     "latest": a.latest,
