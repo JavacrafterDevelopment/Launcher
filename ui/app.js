@@ -505,17 +505,7 @@ function appCard(a) {
   } else {
     tile.textContent = a.name[0];
   }
-
-  const top = h('div', 'app-top');
-  top.append(tile);
-  if (a.platforms && a.platforms.length) {
-    const osRow = h('div', 'app-platforms');
-    for (const os of a.platforms) {
-      osRow.append(h('span', 'os-tag', os));
-    }
-    top.append(osRow);
-  }
-  card.append(top);
+  card.append(tile);
 
   // Name, version line, tagline.
   const main = h('div', 'app-main');
@@ -596,6 +586,14 @@ function appCard(a) {
     actions.append(install);
   }
   card.append(actions);
+
+  if (a.platforms && a.platforms.length) {
+    const osRow = h('div', 'app-platforms');
+    for (const os of a.platforms) {
+      osRow.append(h('span', 'os-tag', os));
+    }
+    card.append(osRow);
+  }
 
   // What it's doing right now, if anything.
   const status = h('div', 'app-status');

@@ -493,19 +493,12 @@ code {
 
 .app.has-update { border-color: var(--gilt); }
 
-.app-top {
+.app-platforms {
   width: 100%;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.app-platforms {
-  display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
 }
 
 .os-tag {
