@@ -23,6 +23,7 @@ pub struct AppInfo {
     pub repo: &'static str,
     pub tagline: &'static str,
     pub icon: Option<&'static [u8]>,
+    pub platforms: &'static [&'static str],
     pub stop: Stop,
     pub source: Source,
 }
@@ -55,6 +56,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/Lighthouse",
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
         icon: None,
+        platforms: &["Windows"],
         // Runs as administrator, and its close button only hides it to the tray.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
         source: Source::Own,
@@ -65,6 +67,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
         icon: None,
+        platforms: &["Windows"],
         stop: Stop::CloseWindows,
         source: Source::Own,
     },
@@ -74,6 +77,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/RustWinUtil",
         tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
         icon: None,
+        platforms: &["Windows"],
         // Runs as administrator, so the launcher can't close it itself.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
         source: Source::Own,
@@ -84,6 +88,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/photocraft",
         tagline: "Open-source raster photo editor and image manipulation tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/photocraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "photocraft-{version}-windows-x64-portable.zip",
@@ -96,6 +101,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/vectorcraft",
         tagline: "Open-source vector art and illustration tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/vectorcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "vectorcraft-{version}-windows-x64-portable.zip",
@@ -108,6 +114,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/filmcraft",
         tagline: "Open-source non-linear video editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/filmcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "filmcraft-{version}-windows-x64-portable.zip",
@@ -120,6 +127,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/effectcraft",
         tagline: "Open-source motion graphics and compositing tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/effectcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "effectcraft-{version}-windows-x64-portable.zip",
@@ -132,6 +140,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/lightcraft",
         tagline: "Open-source non-destructive RAW and photo workflow editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/lightcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "lightcraft-{version}-windows-x64-portable.zip",
@@ -144,6 +153,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/designcraft",
         tagline: "Open-source page and layout publishing design editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/designcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "designcraft-{version}-windows-x64-portable.zip",
@@ -156,6 +166,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/pdfcraft",
         tagline: "Open-source PDF reader and editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/pdfcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "pdfcraft-{version}-windows-x64-portable.zip",
@@ -168,6 +179,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/figcraft",
         tagline: "Open-source interface design and interactive prototyping tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/figcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "figcraft-{version}-windows-x64-portable.zip",
@@ -180,6 +192,7 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "storytold/soundcraft",
         tagline: "Open-source digital audio workstation written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/soundcraft.png")),
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::ThirdParty {
             package: "soundcraft-{version}-windows-x64-portable.zip",
@@ -361,6 +374,7 @@ impl Library {
                     "name": a.info.name,
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
+                    "platforms": a.info.platforms,
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
                     "installed": a.installed,
                     "latest": a.latest,

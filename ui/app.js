@@ -505,7 +505,17 @@ function appCard(a) {
   } else {
     tile.textContent = a.name[0];
   }
-  card.append(tile);
+
+  const top = h('div', 'app-top');
+  top.append(tile);
+  if (a.platforms && a.platforms.length) {
+    const osRow = h('div', 'app-platforms');
+    for (const os of a.platforms) {
+      osRow.append(h('span', 'os-tag', os));
+    }
+    top.append(osRow);
+  }
+  card.append(top);
 
   // Name, version line, tagline.
   const main = h('div', 'app-main');
