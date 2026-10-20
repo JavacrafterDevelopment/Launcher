@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "channels": {
+    "beta": {
+      "version": "0.2.8",
+      "published": "2026-10-20T17:53:44Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.2.7...v0.2.8",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.2.8",
+      "package": {
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.2.8/Launcher-macos.zip",
+        "size": 2274115,
+        "sha256": "2eabc25bb75f7f95c7116df37de2d56b664193c408e221f7fdd78a3e1c92bd1c"
+      },
+      "exe": "Launcher.app/Contents/MacOS/Launcher",
+      "files": [
+        {
+          "path": "Launcher.app/Contents/Info.plist",
+          "size": 926,
+          "sha256": "4df5f342bf2aed6f038e94998484660046f595794103a7275b7f66755e350afd"
+        },
+        {
+          "path": "Launcher.app/Contents/MacOS/Launcher",
+          "size": 3847424,
+          "sha256": "6717188d0e7d42d4d40d64e0504b09fec7a2f120a589570860663f39ce5076a2"
+        },
+        {
+          "path": "Launcher.app/Contents/Resources/launcher.icns",
+          "size": 198323,
+          "sha256": "b00f67ee8515a60355e93d272b4fa28a4599d2fe842c7ca694e30ca7221b4e68"
+        },
+        {
+          "path": "Launcher.app/Contents/_CodeSignature/CodeResources",
+          "size": 2448,
+          "sha256": "8a84535b335a106117e0022a545738256fc7a1d4cf245fa23dd05c81e249bf01"
+        }
+      ]
+    },
+    "stable": {
+      "version": "0.2.8",
+      "published": "2026-10-20T17:53:44Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.2.7...v0.2.8",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.2.8",
+      "package": {
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.2.8/Launcher-macos.zip",
+        "size": 2274115,
+        "sha256": "2eabc25bb75f7f95c7116df37de2d56b664193c408e221f7fdd78a3e1c92bd1c"
+      },
+      "exe": "Launcher.app/Contents/MacOS/Launcher",
+      "files": [
+        {
+          "path": "Launcher.app/Contents/Info.plist",
+          "size": 926,
+          "sha256": "4df5f342bf2aed6f038e94998484660046f595794103a7275b7f66755e350afd"
+        },
+        {
+          "path": "Launcher.app/Contents/MacOS/Launcher",
+          "size": 3847424,
+          "sha256": "6717188d0e7d42d4d40d64e0504b09fec7a2f120a589570860663f39ce5076a2"
+        },
+        {
+          "path": "Launcher.app/Contents/Resources/launcher.icns",
+          "size": 198323,
+          "sha256": "b00f67ee8515a60355e93d272b4fa28a4599d2fe842c7ca694e30ca7221b4e68"
+        },
+        {
+          "path": "Launcher.app/Contents/_CodeSignature/CodeResources",
+          "size": 2448,
+          "sha256": "8a84535b335a106117e0022a545738256fc7a1d4cf245fa23dd05c81e249bf01"
+        }
+      ]
+    }
+  }
+}
