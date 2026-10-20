@@ -808,5 +808,14 @@ renderUpdate();
 if (BOOT.justUpdated) flashToast(`Updated to v${BOOT.version}`, 'You’re on the newest release.');
 
 // Tells the host the page is painted: it shows the window only now, so there is
-// no blank frame, and starts the launch-time update check.
-requestAnimationFrame(() => post({ cmd: 'ready' }));
+// no blank frame, and starts the launch-time update check. WebKit on macOS never
+// runs animation frames for a window that isn't on screen yet, so a timer stands
+// in there; whichever fires first wins.
+let readySent = false;
+const ready = () => {
+  if (readySent) return;
+  readySent = true;
+  post({ cmd: 'ready' });
+};
+requestAnimationFrame(ready);
+setTimeout(ready, 50);

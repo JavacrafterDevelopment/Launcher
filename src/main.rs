@@ -58,6 +58,9 @@ pub(crate) enum UserEvent {
     App(&'static str, AppEvent),
     /// Every couple of seconds: time to look at which apps are running.
     Tick,
+    /// A few seconds after start: shows the window if the page never said it was
+    /// ready, so a page that fails to boot doesn't leave an invisible process.
+    Reveal,
 }
 
 struct App {
@@ -141,6 +144,11 @@ fn main() {
     };
 
     let library = Library::new(proxy.clone());
+    let revealer = proxy.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        let _ = revealer.send_event(UserEvent::Reveal);
+    });
     let ticker = proxy.clone();
     std::thread::spawn(move || {
         while ticker.send_event(UserEvent::Tick).is_ok() {
@@ -177,6 +185,12 @@ fn main() {
             Event::UserEvent(UserEvent::App(id, event)) => {
                 app.library.on_event(id, event);
                 send(&webview, app.library.snapshot());
+            }
+            Event::UserEvent(UserEvent::Reveal) => {
+                if !window.is_visible() {
+                    window.set_visible(true);
+                    window.set_focus();
+                }
             }
             Event::UserEvent(UserEvent::Tick) => {
                 if app.library.refresh_running() {
