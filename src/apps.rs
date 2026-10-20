@@ -693,7 +693,7 @@ impl Library {
             return;
         }
         let exe = target.dir().join(&installed.exe);
-        match shell_open(&exe, target.dir()) {
+        match shell_open(a.info, &exe, target.dir()) {
             Ok(()) => {
                 a.log("info", format!("Started {}", exe.display()));
                 a.starting = Some(Instant::now());
@@ -827,7 +827,7 @@ impl Library {
 /// Starts a program the way Explorer would. Unlike spawning it directly, this
 /// lets an app that asks for administrator rights show the UAC prompt.
 #[cfg(windows)]
-fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
+fn shell_open(_info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
@@ -855,9 +855,15 @@ fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String
 }
 
 #[cfg(not(windows))]
-fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
+fn shell_open(info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755));
+
+    // Point Craft apps' `<ID>_CONFIG_DIR` (e.g. PHOTOCRAFT_CONFIG_DIR) at
+    // `<dir>/<Name>Data` so all settings, presets, and recovery files stay inside
+    // the app's portable folder on macOS rather than ~/Library/Application Support.
+    let config_var = format!("{}_CONFIG_DIR", info.id.to_ascii_uppercase());
+    let portable_data = dir.join(format!("{}Data", info.name));
 
     if let Some(bundle) = exe
         .ancestors()
@@ -865,6 +871,8 @@ fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String
     {
         let _ = std::process::Command::new("xattr").arg("-cr").arg(bundle).status();
         let status = std::process::Command::new("open")
+            .arg("--env")
+            .arg(format!("{}={}", config_var, portable_data.display()))
             .arg(bundle)
             .current_dir(dir)
             .status()
@@ -875,6 +883,7 @@ fn shell_open(exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String
     }
 
     std::process::Command::new(exe)
+        .env(config_var, portable_data)
         .current_dir(dir)
         .spawn()
         .map(|_| ())
