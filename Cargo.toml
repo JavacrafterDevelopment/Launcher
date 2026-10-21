@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "Portable launcher for Javacrafter apps and games, updated from GitHub releases."
 license = "MIT OR Apache-2.0"
@@ -27,6 +27,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+# The menu bar: the "Launcher" app menu and Edit, so Cmd+C/V reach the page.
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "0.21", default-features = false }
 
 [profile.release]
 opt-level = "s"

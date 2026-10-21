@@ -13,6 +13,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+#[cfg(target_os = "macos")]
+use tao::platform::macos::WindowBuilderExtMacOS;
 #[cfg(windows)]
 use tao::platform::windows::WindowBuilderExtWindows;
 use tao::window::{Icon, ResizeDirection, Window, WindowBuilder};
@@ -61,7 +63,14 @@ pub(crate) enum UserEvent {
     /// A few seconds after start: shows the window if the page never said it was
     /// ready, so a page that fails to boot doesn't leave an invisible process.
     Reveal,
+    /// A menu bar item was picked (macOS); carries the item's id.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Menu(String),
 }
+
+const MENU_CHECK_LAUNCHER: &str = "check-launcher";
+const MENU_CHECK_APPS: &str = "check-apps";
+const MENU_QUIT: &str = "quit";
 
 struct App {
     settings: Settings,
@@ -118,28 +127,30 @@ fn main() {
             .with_window_classname(instance::WINDOW_CLASS)
             .with_undecorated_shadow(true);
     }
+    // A real titled window under a see-through title bar: AppKit draws the traffic
+    // lights (hover glyphs, the zoom button's tiling menu), the rounded corners,
+    // the shadow and the edge resizing, and the page runs up underneath.
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.with_transparent(true);
+        window_builder = window_builder
+            .with_decorations(true)
+            .with_titlebar_transparent(true)
+            .with_title_hidden(true)
+            .with_fullsize_content_view(true)
+            .with_traffic_light_inset(tao::dpi::LogicalPosition::new(18.0, 24.0));
     }
     let window = window_builder.build(&event_loop).expect("create window");
 
     let mut web_context = WebContext::new(Some(data_dir().join("webview")));
     let ipc_proxy = proxy.clone();
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_html(page_html(&settings))
+        .with_background_color(settings.paper())
         .with_devtools(cfg!(debug_assertions))
         .with_ipc_handler(move |req| {
             let _ = ipc_proxy.send_event(UserEvent::Ipc(req.into_body()));
         });
-    #[cfg(target_os = "macos")]
-    {
-        webview_builder = webview_builder.with_transparent(true);
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        webview_builder = webview_builder.with_background_color(settings.paper());
-    }
     #[cfg(windows)]
     {
         webview_builder = webview_builder.with_browser_accelerator_keys(false);
@@ -166,6 +177,8 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
     });
+    #[cfg(target_os = "macos")]
+    let menu = menu_bar(proxy.clone());
     let mut app = App { settings, update: Update::Idle, auto_run: false, library, proxy };
 
     event_loop.run(move |event, _, flow| {
@@ -174,7 +187,35 @@ fn main() {
         let _ = &web_context;
 
         match event {
-            Event::NewEvents(StartCause::Init) => {}
+            Event::NewEvents(StartCause::Init) => {
+                // NSApp is only finished once the loop is running.
+                #[cfg(target_os = "macos")]
+                menu.init_for_nsapp();
+            }
+            Event::UserEvent(UserEvent::Menu(id)) => {
+                window.set_visible(true);
+                window.set_minimized(false);
+                window.set_focus();
+                match id.as_str() {
+                    MENU_CHECK_LAUNCHER => {
+                        send(&webview, json!({ "type": "menuCheck", "check": "launcher", "page": "settings" }));
+                        app.start_check(false);
+                        // A check already under way, or an update already down,
+                        // still gets reported to the page that's now waiting on it.
+                        app.push_update(&webview);
+                    }
+                    MENU_CHECK_APPS => {
+                        send(&webview, json!({ "type": "menuCheck", "check": "apps", "page": "library" }));
+                        app.library.check_all(app.settings.prereleases);
+                        send(&webview, app.library.snapshot());
+                    }
+                    MENU_QUIT => {
+                        app.finish_on_exit();
+                        *flow = ControlFlow::Exit;
+                    }
+                    _ => {}
+                }
+            }
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 app.finish_on_exit();
                 *flow = ControlFlow::Exit;
@@ -211,6 +252,47 @@ fn main() {
             _ => {}
         }
     });
+}
+
+/// The menu bar. The first submenu is the app menu, shown under the app's name;
+/// Edit is there because WebKit only gets Cmd+C/V/X/A/Z through menu items.
+#[cfg(target_os = "macos")]
+fn menu_bar(proxy: EventLoopProxy<UserEvent>) -> muda::Menu {
+    use muda::accelerator::{Accelerator, Code, Modifiers};
+    use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+
+    let quit = Accelerator::new(Modifiers::META, Code::KeyQ);
+    let app_menu = Submenu::with_items(
+        "Launcher",
+        true,
+        &[
+            &MenuItem::with_id(MENU_CHECK_LAUNCHER, "Check for Updates…", true, None),
+            &MenuItem::with_id(MENU_CHECK_APPS, "Check for Software Updates…", true, None),
+            &PredefinedMenuItem::separator(),
+            &MenuItem::with_id(MENU_QUIT, "Quit Launcher", true, Some(quit)),
+        ],
+    )
+    .expect("app menu");
+    let edit_menu = Submenu::with_items(
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(None),
+            &PredefinedMenuItem::redo(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::cut(None),
+            &PredefinedMenuItem::copy(None),
+            &PredefinedMenuItem::paste(None),
+            &PredefinedMenuItem::select_all(None),
+        ],
+    )
+    .expect("edit menu");
+    let menu = Menu::with_items(&[&app_menu, &edit_menu]).expect("menu bar");
+
+    MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
+        let _ = proxy.send_event(UserEvent::Menu(e.id.0));
+    }));
+    menu
 }
 
 /// The page is inlined into one document with the theme already stamped on, so a

@@ -743,6 +743,28 @@ function flashToast(title, desc) {
 
 /* ---------------------------------------------------------------- host */
 
+/* A check picked from the menu bar says how it went once it's done, the way a
+   Mac app's "Check for Updates…" does, rather than just flickering the page. */
+let menuCheck = null;
+
+function reportMenuCheck() {
+  // Never cover a launch-time update toast that is still asking something.
+  const busyToast = el.toast.classList.contains('on') && !el.toast.classList.contains('done');
+  if (menuCheck === 'launcher') {
+    if (!['upToDate', 'available', 'ready', 'error'].includes(state.update.state)) return;
+    menuCheck = null;
+    const d = describe(state.update);
+    if (!busyToast) flashToast(d.title, d.detail);
+  } else if (menuCheck === 'apps') {
+    if (library.apps.some((a) => a.task.state === 'checking')) return;
+    menuCheck = null;
+    const n = library.apps.filter((a) => a.updateAvailable).length;
+    if (busyToast) return;
+    if (n) flashToast(`${n} app update${n > 1 ? 's' : ''} available`, 'Install them from the Library.');
+    else flashToast('Your apps are up to date', 'Everything installed is on its newest release.');
+  }
+}
+
 window.onHost = (msg) => {
   switch (msg.type) {
     case 'settings':
@@ -753,13 +775,19 @@ window.onHost = (msg) => {
       state.update = msg.update;
       state.auto = !!msg.auto;
       renderUpdate();
+      reportMenuCheck();
       break;
     case 'window':
       el.root.classList.toggle('maximized', !!msg.maximized);
       break;
+    case 'menuCheck':
+      showPage(msg.page);
+      menuCheck = msg.check;
+      break;
     case 'apps':
       library.apps = msg.apps;
       renderLibrary();
+      reportMenuCheck();
       break;
   }
 };
