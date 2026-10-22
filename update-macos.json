@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.7",
-      "published": "2026-10-22T03:21:17Z",
-      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.6...v0.3.7",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.7",
+      "version": "0.3.8",
+      "published": "2026-10-22T16:39:34Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.7...v0.3.8",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.8",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.7/Launcher-macos.zip",
-        "size": 2454942,
-        "sha256": "086be6ffd488570cd4f5a5d5b4b66926adecb994eef583397ef10ebef2ccd140"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.8/Launcher-macos.zip",
+        "size": 2460369,
+        "sha256": "37578dcb9b4bb47e4a7cfacfd0d83c59ffa5fe1220c5156d53b4d857829f7b80"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 926,
-          "sha256": "a6d7e347f3e1d57745a21c05782092892d2d5c04a3b9d3d2010acec631740315"
+          "sha256": "3bf8b8ad9acd5fb235a1df2f6a4f6c2946ec9f6cb2880f3a35df9fceeecc4455"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4181408,
-          "sha256": "d583b1192519b247f49dd2a954f69e9a59e914e156eab3ceeb81137805922b03"
+          "size": 4214208,
+          "sha256": "bfd76509e28a0300ef7e175fc09edcfa98142f9b6beca82c44776a5ea0213a4d"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.7",
-      "published": "2026-10-22T03:21:17Z",
-      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.6...v0.3.7",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.7",
+      "version": "0.3.8",
+      "published": "2026-10-22T16:39:34Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.7...v0.3.8",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.8",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.7/Launcher-macos.zip",
-        "size": 2454942,
-        "sha256": "086be6ffd488570cd4f5a5d5b4b66926adecb994eef583397ef10ebef2ccd140"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.8/Launcher-macos.zip",
+        "size": 2460369,
+        "sha256": "37578dcb9b4bb47e4a7cfacfd0d83c59ffa5fe1220c5156d53b4d857829f7b80"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 926,
-          "sha256": "a6d7e347f3e1d57745a21c05782092892d2d5c04a3b9d3d2010acec631740315"
+          "sha256": "3bf8b8ad9acd5fb235a1df2f6a4f6c2946ec9f6cb2880f3a35df9fceeecc4455"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4181408,
-          "sha256": "d583b1192519b247f49dd2a954f69e9a59e914e156eab3ceeb81137805922b03"
+          "size": 4214208,
+          "sha256": "bfd76509e28a0300ef7e175fc09edcfa98142f9b6beca82c44776a5ea0213a4d"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
