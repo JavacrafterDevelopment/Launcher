@@ -210,42 +210,72 @@ function describe(u) {
   const v = u.release ? `v${u.release.version}` : '';
   switch (u.state) {
     case 'checking':
-      return { lamp: 'busy', pill: 'busy', short: 'Checking for updates…',
+      return { pill: 'busy', short: 'Checking for updates…',
                title: 'Checking…', detail: `Asking GitHub for the latest release of ${BOOT.repo}.` };
     case 'upToDate':
-      return { lamp: 'ok', pill: 'ok', short: 'Up to date',
+      return { pill: 'ok', short: 'Up to date',
                title: 'Up to date', detail: 'This is the newest release on GitHub.' };
     case 'available':
-      return { lamp: 'gilt', pill: 'gilt', short: `${v} is available`,
+      return { pill: 'gilt', short: `${v} is available`,
                title: `${v} available`, detail: `A newer release is out (${fmtMB(u.release.size)}).` };
     case 'downloading':
-      return { lamp: 'busy', pill: 'busy', short: `Downloading ${v} — ${pct(u)}%`,
+      return { pill: 'busy', short: `Downloading ${v} — ${pct(u)}%`,
                title: `Downloading ${v}`,
                detail: u.total ? `${fmtMB(u.done)} of ${fmtMB(u.total)}` : 'Starting the download…' };
     case 'ready':
-      return { lamp: 'gilt', pill: 'gilt',
+      return { pill: 'gilt',
                short: state.deferred ? `${v} installs when you close the launcher` : `${v} is ready to install`,
                title: `${v} ready`,
                detail: 'Downloaded and verified. Restart to switch over, or it installs itself when you close the launcher.' };
     case 'error':
-      return { lamp: 'bad', pill: 'bad', short: u.message, title: 'Update failed', detail: u.message };
+      return { pill: 'bad', short: u.message, title: 'Update failed', detail: u.message };
     default:
-      return { lamp: '', pill: '', short: `Version ${BOOT.version}`,
+      return { pill: '', short: `Version ${BOOT.version}`,
                title: 'Not checked', detail: 'The launcher can check GitHub for a newer release.' };
   }
+}
+
+/* The status bar's left end only speaks while something is moving: the
+   launcher downloading its own update, or an app downloading, installing,
+   verifying or repairing. Otherwise the lamp and text stay hidden. */
+function activityText(a) {
+  const t = a.task;
+  const p = t.total ? Math.floor((t.done / t.total) * 100) : 0;
+  switch (t.state) {
+    case 'downloading':
+      return `${a.installed ? 'Updating' : 'Downloading'} ${a.name}` + (t.total ? ` — ${p}%` : '…');
+    case 'installing': return `Installing ${a.name}…`;
+    case 'verifying':  return `Verifying ${a.name}` + (t.total ? ` — ${t.done} of ${t.total} files` : '…');
+    case 'repairing':  return `Repairing ${a.name}` + (t.total ? ` — ${p}%` : '…');
+    default:           return null;
+  }
+}
+
+function renderActivity() {
+  const jobs = [];
+  const u = state.update;
+  if (u.state === 'downloading') jobs.push(`Updating Launcher${u.release ? ` to v${u.release.version}` : ''} — ${pct(u)}%`);
+  for (const a of library.apps) {
+    const text = activityText(a);
+    if (text) jobs.push(text);
+  }
+  const on = jobs.length > 0;
+  el.lamp.className = on ? 'busy' : '';
+  el.statusText.textContent = on ? jobs[0] + (jobs.length > 1 ? ` · +${jobs.length - 1} more` : '') : '';
+  el.statusText.title = jobs.join('\n');
 }
 
 function renderUpdate() {
   const u = state.update;
   const d = describe(u);
 
-  el.lamp.className = d.lamp;
-  el.statusText.textContent = d.short;
+  renderActivity();
   el.root.classList.toggle('fuelling', u.state === 'downloading');
 
   // A shortcut from the status bar to whatever the update wants next.
   const nudge = { available: 'Install', ready: 'Restart', error: 'Details' }[u.state];
   el.statusUpd.classList.toggle('on', !!nudge);
+  el.statusUpd.title = nudge ? d.short : 'Update settings';
   if (nudge) el.statusUpdT.textContent = nudge;
 
   el.pill.className = `pill ${d.pill}`;
@@ -787,6 +817,7 @@ window.onHost = (msg) => {
     case 'apps':
       library.apps = msg.apps;
       renderLibrary();
+      renderActivity();
       reportMenuCheck();
       break;
   }
