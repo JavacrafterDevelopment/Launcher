@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.3.7"
+version = "0.3.8"
 edition = "2021"
 description = "Portable launcher for Javacrafter apps and games, updated from GitHub releases."
 license = "MIT OR Apache-2.0"
@@ -31,6 +31,8 @@ winresource = "0.1"
 # The menu bar: the "Launcher" app menu and Edit, so Cmd+C/V reach the page.
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = { version = "0.21", default-features = false }
+# NSFileManager's Move to Trash, for app bundles macOS won't let us delete inside.
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSError", "NSFileManager", "NSString", "NSURL"] }
 
 [profile.release]
 opt-level = "s"

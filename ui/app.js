@@ -638,7 +638,10 @@ function appCard(a) {
       actions.append(iconButton('notes', 'Release notes on GitHub', () => post({ cmd: 'openUrl', url: latest.page })));
     }
     const armed = library.armed === a.id;
-    const del = iconButton('trash', armed ? 'Click again to delete it and its settings' : 'Uninstall',
+    const armedTip = CURRENT_OS === 'MacOS'
+      ? 'Click again to move it and its settings to the Trash'
+      : 'Click again to delete it and its settings';
+    const del = iconButton('trash', armed ? armedTip : 'Uninstall',
       () => uninstallClick(a.id), armed ? 'danger armed' : 'danger');
     del.disabled = busy;
     actions.append(del);

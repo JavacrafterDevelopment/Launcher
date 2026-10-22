@@ -917,8 +917,19 @@ impl Library {
             a.task = Task::Error { message };
             return;
         }
-        a.log("info", format!("Deleting {}", target.dir().display()));
-        let result = std::fs::remove_dir_all(target.dir());
+        // On macOS the folder goes to the Trash whole: once an app from another
+        // developer has run, macOS won't let the launcher delete inside its bundle,
+        // and deleting file by file would stop partway with the app half gone.
+        #[cfg(target_os = "macos")]
+        let result = {
+            a.log("info", format!("Moving {} to the Trash", target.dir().display()));
+            crate::updater::trash(target.dir())
+        };
+        #[cfg(not(target_os = "macos"))]
+        let result = {
+            a.log("info", format!("Deleting {}", target.dir().display()));
+            std::fs::remove_dir_all(target.dir()).map_err(|e| e.to_string())
+        };
         a.refresh_installed();
         a.task = match result {
             Ok(()) => {
@@ -969,31 +980,31 @@ fn shell_open(info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> R
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755));
 
-    // Point Craft apps' `<ID>_CONFIG_DIR` (e.g. PHOTOCRAFT_CONFIG_DIR) at
-    // `<dir>/<Name>Data` so all settings, presets, and recovery files stay inside
-    // the app's portable folder on macOS rather than ~/Library/Application Support.
-    let config_var = format!("{}_CONFIG_DIR", info.id.to_ascii_uppercase());
+    // Point Craft apps at `<dir>/<Name>Data` so all settings, presets, and recovery
+    // files stay inside the app's portable folder on macOS rather than
+    // ~/Library/Application Support. Apps differ in what they read: PhotoCraft and
+    // SoundCraft take `<ID>_CONFIG_DIR`, FilmCraft `<ID>_DATA_DIR`; both are set.
+    let id = info.id.to_ascii_uppercase();
     let portable_data = dir.join(format!("{}Data", info.name));
+    let vars = [format!("{id}_CONFIG_DIR"), format!("{id}_DATA_DIR")];
 
     if let Some(bundle) = exe
         .ancestors()
         .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")))
     {
         let _ = std::process::Command::new("xattr").arg("-cr").arg(bundle).status();
-        let status = std::process::Command::new("open")
-            .arg("--env")
-            .arg(format!("{}={}", config_var, portable_data.display()))
-            .arg(bundle)
-            .current_dir(dir)
-            .status()
-            .map_err(|e| e.to_string())?;
+        let mut open = std::process::Command::new("open");
+        for var in &vars {
+            open.arg("--env").arg(format!("{var}={}", portable_data.display()));
+        }
+        let status = open.arg(bundle).current_dir(dir).status().map_err(|e| e.to_string())?;
         if status.success() {
             return Ok(());
         }
     }
 
     std::process::Command::new(exe)
-        .env(config_var, portable_data)
+        .envs(vars.iter().map(|var| (var, &portable_data)))
         .current_dir(dir)
         .spawn()
         .map(|_| ())

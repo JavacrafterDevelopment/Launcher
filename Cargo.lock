@@ -1172,9 +1172,10 @@ dependencies = [
 
 [[package]]
 name = "launcher"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "muda",
+ "objc2-foundation",
  "semver",
  "serde",
  "serde_json",

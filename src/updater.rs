@@ -536,8 +536,19 @@ impl Target {
         log(format!("Moving {} files into {}", incoming.len(), self.dir.display()));
         let mut replaced = 0;
 
-        let mut moved: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+        // An `.app` bundle moves as one piece. Once a bundle signed by another
+        // developer has run, macOS (App Management) refuses any change to the files
+        // inside it, but still lets the bundle itself be moved aside.
+        let mut units: Vec<PathBuf> = Vec::new();
         for rel in &incoming {
+            let unit = bundle_of(rel).unwrap_or_else(|| rel.clone());
+            if !units.contains(&unit) {
+                units.push(unit);
+            }
+        }
+
+        let mut moved: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+        for rel in &units {
             let (src, dst) = (files.join(rel), target(rel));
             let step = || -> std::io::Result<Option<PathBuf>> {
                 if let Some(parent) = dst.parent() {
@@ -567,7 +578,7 @@ impl Target {
                     log(format!("Couldn't place {}; putting the previous files back", rel.display()));
                     // Undo in reverse so the old version is whole again.
                     for (done, backup) in moved.into_iter().rev() {
-                        let _ = fs::remove_file(&done);
+                        let _ = if done.is_dir() { fs::remove_dir_all(&done) } else { fs::remove_file(&done) };
                         if let Some(b) = backup {
                             let _ = fs::rename(b, &done);
                         }
@@ -593,7 +604,7 @@ impl Target {
         }
 
         let _ = fs::remove_dir_all(&stage);
-        log(format!("{replaced} files replaced, {} added, {retired} removed", incoming.len() - replaced));
+        log(format!("{replaced} replaced, {} added, {retired} removed", units.len() - replaced));
         Ok(())
     }
 
@@ -893,6 +904,15 @@ impl Target {
                     for e in entries.flatten() {
                         let name = e.file_name().to_string_lossy().to_ascii_lowercase();
                         let path = e.path();
+                        // A whole `.app` bundle moved aside by an update. macOS
+                        // won't let us delete inside one that has run, so it goes
+                        // to the Trash instead.
+                        if path.is_dir() && name.ends_with(OLD_SUFFIX) {
+                            if fs::remove_dir_all(&path).is_err() && trash(&path).is_err() {
+                                remaining += 1;
+                            }
+                            continue;
+                        }
                         if path.is_dir() {
                             let skip = dir == root
                                 && (is_data_dir(&name)
@@ -1546,10 +1566,48 @@ fn verify_files(files: &Path) -> Result<Manifest, String> {
 }
 
 fn write_err(path: &Path, e: std::io::Error) -> String {
+    // EPERM inside a bundle is macOS App Management guarding an app from another
+    // developer, not a read-only folder.
+    if cfg!(target_os = "macos") && e.raw_os_error() == Some(1) {
+        if let Some(bundle) = path.ancestors().find(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("app"))) {
+            return format!(
+                "macOS won't let the launcher change files inside {}. Reinstall it instead, \
+                 or allow Launcher in System Settings › Privacy & Security › App Management.",
+                bundle.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
+    }
     format!(
         "Couldn't write {} ({e}). Is the launcher's folder read-only?",
         path.file_name().unwrap_or_default().to_string_lossy()
     )
+}
+
+/// The top-level `.app` bundle a package path lies inside, on macOS.
+fn bundle_of(rel: &Path) -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    let mut parts = rel.components();
+    let first = parts.next()?.as_os_str();
+    let is_app = Path::new(first).extension().is_some_and(|x| x.eq_ignore_ascii_case("app"));
+    (is_app && parts.next().is_some()).then(|| PathBuf::from(first))
+}
+
+/// Moves `path` to the Trash, as Finder's Move to Trash does. For app bundles
+/// macOS won't let the launcher delete the contents of.
+#[cfg(target_os = "macos")]
+pub fn trash(path: &Path) -> Result<(), String> {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+    NSFileManager::defaultManager()
+        .trashItemAtURL_resultingItemURL_error(&url, None)
+        .map_err(|e| e.localizedDescription().to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn trash(_path: &Path) -> Result<(), String> {
+    Err("There's no Trash to move it to here.".into())
 }
 
 /// The name a replaced file is moved aside to. Windows lets a running exe or a
@@ -1561,7 +1619,7 @@ fn aside(path: &Path) -> PathBuf {
         path.with_file_name(name)
     };
     let first = with(OLD_SUFFIX.into());
-    if !first.exists() || fs::remove_file(&first).is_ok() {
+    if !first.exists() || fs::remove_file(&first).is_ok() || fs::remove_dir_all(&first).is_ok() {
         return first;
     }
     // Still held by a copy that's exiting; pick a fresh name.
@@ -1784,6 +1842,54 @@ mod tests {
 
         target.repair(&bad, |_, _| {}, &log).unwrap();
         assert!(target.verify(|_, _| {}, &log).unwrap().is_empty());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// macOS App Management blocks changes inside a bundle that has run; a locked
+    /// file stands in for that. The update has to swap the bundle whole.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn apply_replaces_locked_bundle_whole() {
+        let tmp = std::env::temp_dir().join(format!("launcher-bundle-swap-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let target = Target {
+            repo: "JavacrafterDevelopment/PhotoCraft".into(),
+            package: "PhotoCraft-macos.zip".into(),
+            dir: tmp.clone(),
+            self_exe: None,
+            update_json: true,
+            default_exe: None,
+        };
+        let exe = "PhotoCraft.app/Contents/MacOS/PhotoCraft";
+        let macho: &[u8] = &[0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 1];
+        let lay_out = |root: &Path, version: &str, extra: &str| {
+            fs::create_dir_all(root.join("PhotoCraft.app/Contents/MacOS")).unwrap();
+            fs::create_dir_all(root.join("PhotoCraft.app/Contents/_CodeSignature")).unwrap();
+            fs::write(root.join(exe), [macho, version.as_bytes()].concat()).unwrap();
+            fs::write(root.join("PhotoCraft.app/Contents/_CodeSignature/CodeResources"), version).unwrap();
+            fs::write(root.join(extra), version).unwrap();
+            fs::write(root.join("portable.txt"), b"portable mode\n").unwrap();
+            write_manifest(root, version, exe).unwrap();
+        };
+
+        lay_out(&tmp, "1.0.0", "PhotoCraft.app/Contents/Old.txt");
+        let locked = tmp.join("PhotoCraft.app/Contents/_CodeSignature/CodeResources");
+        assert!(std::process::Command::new("chflags").arg("uchg").arg(&locked).status().unwrap().success());
+
+        lay_out(&target.stage_dir().join("files"), "2.0.0", "PhotoCraft.app/Contents/New.txt");
+        fs::write(target.ready_marker(), "2.0.0").unwrap();
+
+        let result = target.apply(&|line| println!("  {line}"));
+        let _ = std::process::Command::new("chflags").arg("-R").arg("nouchg").arg(&tmp).status();
+        result.unwrap();
+
+        let bundle = tmp.join("PhotoCraft.app/Contents");
+        assert_eq!(fs::read_to_string(bundle.join("_CodeSignature/CodeResources")).unwrap(), "2.0.0");
+        assert!(bundle.join("New.txt").is_file());
+        assert!(!bundle.join("Old.txt").exists(), "the old bundle's files went with it");
+        assert!(tmp.join(format!("PhotoCraft.app{OLD_SUFFIX}/Contents/Old.txt")).is_file());
+        assert_eq!(target.installed().unwrap().version, "2.0.0");
 
         let _ = fs::remove_dir_all(&tmp);
     }
