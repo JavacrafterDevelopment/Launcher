@@ -31,6 +31,7 @@ pub struct AppInfo {
     pub platforms: &'static [&'static str],
     pub stop: Stop,
     pub source: Source,
+    pub category: Category,
 }
 
 impl AppInfo {
@@ -52,6 +53,27 @@ pub enum Source {
         mac_package: &'static str,
         mac_exe: &'static str,
     },
+}
+
+/// Which tab an app is listed under.
+#[derive(Clone, Copy)]
+pub enum Category {
+    Apps,
+    /// Short-lived tools, kept apart so they're easy to find and remove later.
+    Temporary,
+    /// Nothing is listed here yet; the tab is ready for the first game.
+    #[allow(dead_code)]
+    Games,
+}
+
+impl Category {
+    fn id(self) -> &'static str {
+        match self {
+            Category::Apps => "apps",
+            Category::Temporary => "temporary",
+            Category::Games => "games",
+        }
+    }
 }
 
 /// How the Stop button asks an app to quit.
@@ -76,6 +98,7 @@ pub const CATALOG: &[AppInfo] = &[
         // Runs as administrator, and its close button only hides it to the tray.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
         source: Source::Own,
+        category: Category::Apps,
     },
     AppInfo {
         id: "screenshotapp",
@@ -86,6 +109,7 @@ pub const CATALOG: &[AppInfo] = &[
         platforms: &["Windows"],
         stop: Stop::CloseWindows,
         source: Source::Own,
+        category: Category::Apps,
     },
     AppInfo {
         id: "rustwinutil",
@@ -97,6 +121,7 @@ pub const CATALOG: &[AppInfo] = &[
         // Runs as administrator, so the launcher can't close it itself.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
         source: Source::Own,
+        category: Category::Apps,
     },
     AppInfo {
         id: "photocraft",
@@ -112,6 +137,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "photocraft-{version}-macos-universal.dmg",
             mac_exe: "PhotoCraft.app/Contents/MacOS/PhotoCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "vectorcraft",
@@ -127,6 +153,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "vectorcraft-{version}-macos-universal.dmg",
             mac_exe: "VectorCraft.app/Contents/MacOS/VectorCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "filmcraft",
@@ -142,6 +169,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "filmcraft-{version}-macos-universal.dmg",
             mac_exe: "FilmCraft.app/Contents/MacOS/FilmCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "effectcraft",
@@ -157,6 +185,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "effectcraft-{version}-macos-universal.dmg",
             mac_exe: "EffectCraft.app/Contents/MacOS/EffectCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "lightcraft",
@@ -172,6 +201,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "lightcraft-{version}-macos-universal.dmg",
             mac_exe: "LightCraft.app/Contents/MacOS/LightCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "designcraft",
@@ -187,6 +217,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "designcraft-{version}-macos-universal.dmg",
             mac_exe: "DesignCraft.app/Contents/MacOS/DesignCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "pdfcraft",
@@ -202,6 +233,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "pdfcraft-{version}-macos-universal.dmg",
             mac_exe: "PdfCraft.app/Contents/MacOS/PdfCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "figcraft",
@@ -217,6 +249,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "figcraft-{version}-macos-universal.dmg",
             mac_exe: "FigCraft.app/Contents/MacOS/FigCraft",
         },
+        category: Category::Apps,
     },
     AppInfo {
         id: "soundcraft",
@@ -232,6 +265,18 @@ pub const CATALOG: &[AppInfo] = &[
             mac_package: "soundcraft-{version}-macos-universal.dmg",
             mac_exe: "SoundCraft.app/Contents/MacOS/SoundCraft",
         },
+        category: Category::Apps,
+    },
+    AppInfo {
+        id: "tempcraftbackup",
+        name: "TempCraftBackup",
+        repo: "JavacrafterDevelopment/TempCraftBackup",
+        tagline: "Backs up the current source code of every Craft app into one 7z archive.",
+        icon: None,
+        platforms: &["Windows"],
+        stop: Stop::CloseWindows,
+        source: Source::Own,
+        category: Category::Temporary,
     },
 ];
 
@@ -416,6 +461,7 @@ impl Library {
                     "platforms": a.info.platforms,
                     "supported": a.info.supported_on_current_os(),
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
+                    "category": a.info.category.id(),
                     "installed": a.installed,
                     "latest": a.latest,
                     "checked": a.checked,

@@ -376,10 +376,10 @@ function textButton(label, cls, onClick) {
   return b;
 }
 
-function summarizeApps(list) {
+function summarizeApps(list, noun = 'app') {
   const updates = list.filter((a) => a.updateAvailable).length;
   const installed = list.filter((a) => a.installed).length;
-  return `${list.length} app${list.length === 1 ? '' : 's'} · ${installed} installed`
+  return `${list.length} ${noun}${list.length === 1 ? '' : 's'} · ${installed} installed`
     + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
 }
 
@@ -460,18 +460,34 @@ function renderAppList(container, list) {
   }
 }
 
-function renderLibrary() {
-  const apps = library.apps;
-  const ownApps = apps.filter((a) => !a.thirdParty);
-  const thirdPartyApps = apps.filter((a) => a.thirdParty);
-  const updates = apps.filter((a) => a.updateAvailable).length;
-
-  const badge = $('lib-badge');
+/* Each tab's count of available updates, on its chip. */
+function setBadge(id, list) {
+  const updates = list.filter((a) => a.updateAvailable).length;
+  const badge = $(id);
   badge.textContent = updates;
   badge.classList.toggle('on', updates > 0);
+}
+
+function renderLibrary() {
+  const apps = library.apps;
+  const inTab = (cat) => apps.filter((a) => (a.category || 'apps') === cat);
+  const mainApps = inTab('apps');
+  const ownApps = mainApps.filter((a) => !a.thirdParty);
+  const thirdPartyApps = mainApps.filter((a) => a.thirdParty);
+  const tempApps = inTab('temporary');
+  const games = inTab('games');
+
+  setBadge('lib-badge', mainApps);
+  setBadge('temp-badge', tempApps);
+  setBadge('games-badge', games);
   $('lib-summary').textContent = summarizeApps(ownApps);
   $('third-party-summary').textContent = summarizeApps(thirdPartyApps);
-  $('lib-check').disabled = apps.some((a) => a.task.state === 'checking');
+  $('temp-summary').textContent = tempApps.length ? summarizeApps(tempApps) : '';
+  $('games-summary').textContent = games.length ? summarizeApps(games, 'game') : '';
+  $('temp-empty').classList.toggle('on', tempApps.length === 0);
+  $('games-empty').classList.toggle('on', games.length === 0);
+  const checking = apps.some((a) => a.task.state === 'checking');
+  document.querySelectorAll('.app-check').forEach((b) => { b.disabled = checking; });
 
   // Rebuilding replaces the log bodies, so keep where each was scrolled to: a log
   // scrolled to the bottom follows new lines; one scrolled up stays put.
@@ -482,6 +498,8 @@ function renderLibrary() {
 
   renderAppList($('apps'), ownApps);
   renderAppList($('third-party-apps'), thirdPartyApps);
+  renderAppList($('temp-apps'), tempApps);
+  renderAppList($('games'), games);
 
   document.querySelectorAll('.log-body').forEach((b) => {
     const s = scroll[b.dataset.id];
@@ -703,7 +721,8 @@ function uninstallClick(id) {
   renderLibrary();
 }
 
-$('lib-check').addEventListener('click', () => post({ cmd: 'appCheck' }));
+document.querySelectorAll('.app-check').forEach((b) =>
+  b.addEventListener('click', () => post({ cmd: 'appCheck' })));
 
 /* --------------------------------------------------------------- toast */
 
@@ -790,7 +809,7 @@ function reportMenuCheck() {
     menuCheck = null;
     const n = library.apps.filter((a) => a.updateAvailable).length;
     if (busyToast) return;
-    if (n) flashToast(`${n} app update${n > 1 ? 's' : ''} available`, 'Install them from the Library.');
+    if (n) flashToast(`${n} app update${n > 1 ? 's' : ''} available`, 'Press Update on each one to install it.');
     else flashToast('Your apps are up to date', 'Everything installed is on its newest release.');
   }
 }

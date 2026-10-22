@@ -50,15 +50,34 @@
         </div>
 
         <nav id="tabs">
-          <button class="chip on" data-page="library" title="Your apps and games">
+          <button class="chip on" data-page="library" title="Your apps">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="9" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
             </svg>
-            Library
+            Apps
             <span class="badge" id="lib-badge" title="App updates available"></span>
+          </button>
+          <button class="chip" data-page="temporary" title="Short-lived tools">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 1.8h8M4 14.2h8M4.8 1.8c0 3.2 3.2 4.4 3.2 6.2S4.8 11 4.8 14.2M11.2 1.8c0 3.2-3.2 4.4-3.2 6.2s3.2 3 3.2 6.2"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Temporary Apps
+            <span class="badge" id="temp-badge" title="App updates available"></span>
+          </button>
+          <button class="chip" data-page="games" title="Your games">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4.6 4.2h6.8a3.4 3.4 0 0 1 3.3 2.6l.6 2.9a1.9 1.9 0 0 1-3.3 1.6L10.6 9.8H5.4L4 11.3a1.9 1.9 0 0 1-3.3-1.6l.6-2.9a3.4 3.4 0 0 1 3.3-2.6z"
+                    stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M4.9 6v2.2M3.8 7.1H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="10.4" cy="6.6" r=".85" fill="currentColor"/>
+              <circle cx="11.9" cy="8" r=".85" fill="currentColor"/>
+            </svg>
+            Games
+            <span class="badge" id="games-badge" title="Game updates available"></span>
           </button>
           <button class="chip" data-page="settings" title="Settings (Ctrl+,)">
             <!-- A cog, not a sun: short thick teeth on a heavy ring around a hub hole. -->
@@ -92,10 +111,10 @@
       <section id="page-library" class="page on">
         <div class="column wide">
           <div class="lib-head">
-            <h1 class="page-title">Library</h1>
+            <h1 class="page-title">Apps</h1>
             <span class="meta" id="lib-summary"></span>
             <span class="grow"></span>
-            <button class="btn small" id="lib-check" title="Look for new releases of every app">
+            <button class="btn small app-check" title="Look for new releases of every app">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
@@ -117,6 +136,51 @@
               <code>portableApplications\</code> with the same update and file checks.</p>
             <div id="third-party-apps" class="apps"></div>
           </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- temporary -->
+      <section id="page-temporary" class="page">
+        <div class="column wide">
+          <div class="lib-head">
+            <h1 class="page-title">Temporary Apps</h1>
+            <span class="meta" id="temp-summary"></span>
+            <span class="grow"></span>
+            <button class="btn small app-check" title="Look for new releases of every app">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
+              </svg>
+              Check for updates
+            </button>
+          </div>
+          <p class="lib-note">Short-lived tools for a job at hand. They install into
+            <code>portableApplications\</code> like any other app; uninstall them once
+            they've done their work.</p>
+          <div id="temp-apps" class="apps"></div>
+          <p class="apps-empty" id="temp-empty">No temporary apps right now.</p>
+        </div>
+      </section>
+
+      <!-- -------------------------------------------------------------- games -->
+      <section id="page-games" class="page">
+        <div class="column wide">
+          <div class="lib-head">
+            <h1 class="page-title">Games</h1>
+            <span class="meta" id="games-summary"></span>
+            <span class="grow"></span>
+            <button class="btn small app-check" title="Look for new releases of every app">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
+              </svg>
+              Check for updates
+            </button>
+          </div>
+          <p class="lib-note">Games install into <code>portableApplications\</code> and
+            update the same way as apps; their saves and settings are kept.</p>
+          <div id="games" class="apps"></div>
+          <p class="apps-empty" id="games-empty">No games yet. They'll appear here once they're added.</p>
         </div>
       </section>
 

@@ -483,6 +483,20 @@ code {
 
 .lib-note b { font-weight: 600; color: var(--ink-soft); }
 
+/* What a tab says while it has nothing in it. */
+.apps-empty {
+  display: none;
+  padding: 28px 20px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.apps-empty.on { display: block; }
+.apps:empty { display: none; }
+
 .apps {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
