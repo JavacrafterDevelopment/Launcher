@@ -331,6 +331,12 @@ impl Target {
             .read_json()
             .map_err(|e| format!("GitHub sent something unreadable ({e})"))?;
 
+        // The API now and then answers 200 with an empty list for a repo that has
+        // releases, so the release page gets the last word before "none".
+        if releases.is_empty() {
+            return self.latest_via_website().or(Ok(None));
+        }
+
         Ok(releases
             .into_iter()
             .filter(|r| !r.draft && (prereleases || !r.prerelease))
