@@ -38,6 +38,17 @@ impl AppInfo {
     pub fn supported_on_current_os(&self) -> bool {
         self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
     }
+
+    /// On macOS, whether the app keeps its data in its own folder. None elsewhere:
+    /// every Windows package is a portable one.
+    pub fn portable_here(&self) -> Option<bool> {
+        match self.source {
+            Source::ThirdParty { mac_portable, .. } if cfg!(target_os = "macos") && self.supported_on_current_os() => {
+                Some(mac_portable)
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -52,6 +63,10 @@ pub enum Source {
         win_exe: &'static str,
         mac_package: &'static str,
         mac_exe: &'static str,
+        /// Whether the macOS build keeps its data in `<Name>Data` beside the app
+        /// when the launcher points it there (see `shell_open`). False for apps
+        /// that always use ~/Library/Application Support.
+        mac_portable: bool,
     },
 }
 
@@ -136,6 +151,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "photocraft.exe",
             mac_package: "photocraft-{version}-macos-universal.dmg",
             mac_exe: "PhotoCraft.app/Contents/MacOS/PhotoCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -152,6 +168,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "vectorcraft.exe",
             mac_package: "vectorcraft-{version}-macos-universal.dmg",
             mac_exe: "VectorCraft.app/Contents/MacOS/VectorCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -168,6 +185,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "filmcraft.exe",
             mac_package: "filmcraft-{version}-macos-universal.dmg",
             mac_exe: "FilmCraft.app/Contents/MacOS/FilmCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -184,6 +202,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "effectcraft.exe",
             mac_package: "effectcraft-{version}-macos-universal.dmg",
             mac_exe: "EffectCraft.app/Contents/MacOS/EffectCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -200,6 +219,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "lightcraft.exe",
             mac_package: "lightcraft-{version}-macos-universal.dmg",
             mac_exe: "LightCraft.app/Contents/MacOS/LightCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -216,6 +236,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "designcraft.exe",
             mac_package: "designcraft-{version}-macos-universal.dmg",
             mac_exe: "DesignCraft.app/Contents/MacOS/DesignCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -232,6 +253,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "pdfcraft.exe",
             mac_package: "pdfcraft-{version}-macos-universal.dmg",
             mac_exe: "PdfCraft.app/Contents/MacOS/PdfCraft",
+            mac_portable: false,
         },
         category: Category::Apps,
     },
@@ -248,6 +270,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "figcraft.exe",
             mac_package: "figcraft-{version}-macos-universal.dmg",
             mac_exe: "FigCraft.app/Contents/MacOS/FigCraft",
+            mac_portable: false,
         },
         category: Category::Apps,
     },
@@ -264,6 +287,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "soundcraft.exe",
             mac_package: "soundcraft-{version}-macos-universal.dmg",
             mac_exe: "SoundCraft.app/Contents/MacOS/SoundCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -280,6 +304,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "cadcraft.exe",
             mac_package: "cadcraft-{version}-macos-universal.dmg",
             mac_exe: "CADCraft.app/Contents/MacOS/CADCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -296,6 +321,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "deckcraft.exe",
             mac_package: "deckcraft-{version}-macos-universal.dmg",
             mac_exe: "DeckCraft.app/Contents/MacOS/DeckCraft",
+            mac_portable: false,
         },
         category: Category::Apps,
     },
@@ -312,6 +338,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "gridcraft.exe",
             mac_package: "gridcraft-{version}-macos-universal.dmg",
             mac_exe: "GridCraft.app/Contents/MacOS/GridCraft",
+            mac_portable: false,
         },
         category: Category::Apps,
     },
@@ -328,6 +355,7 @@ pub const CATALOG: &[AppInfo] = &[
             win_exe: "wordcraft.exe",
             mac_package: "wordcraft-{version}-macos-universal.dmg",
             mac_exe: "WordCraft.app/Contents/MacOS/WordCraft",
+            mac_portable: true,
         },
         category: Category::Apps,
     },
@@ -432,7 +460,7 @@ impl AppState {
     fn target(&self) -> Target {
         match self.info.source {
             Source::Own => Target::app(self.info.repo, self.info.name),
-            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe } => {
+            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
                 let (package, exe) = if cfg!(target_os = "macos") {
                     (mac_package, mac_exe)
                 } else {
@@ -525,6 +553,7 @@ impl Library {
                     "platforms": a.info.platforms,
                     "supported": a.info.supported_on_current_os(),
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
+                    "portable": a.info.portable_here(),
                     "category": a.info.category.id(),
                     "installed": a.installed,
                     "latest": a.latest,
@@ -982,11 +1011,12 @@ fn shell_open(info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> R
 
     // Point Craft apps at `<dir>/<Name>Data` so all settings, presets, and recovery
     // files stay inside the app's portable folder on macOS rather than
-    // ~/Library/Application Support. Apps differ in what they read: PhotoCraft and
-    // SoundCraft take `<ID>_CONFIG_DIR`, FilmCraft `<ID>_DATA_DIR`; both are set.
+    // ~/Library/Application Support. Apps differ in what they read: most take
+    // `<ID>_CONFIG_DIR`, FilmCraft `<ID>_DATA_DIR`, WordCraft `<ID>_PROFILE_DIR`;
+    // all three are set. Apps marked `mac_portable: false` read none of them.
     let id = info.id.to_ascii_uppercase();
     let portable_data = dir.join(format!("{}Data", info.name));
-    let vars = [format!("{id}_CONFIG_DIR"), format!("{id}_DATA_DIR")];
+    let vars = [format!("{id}_CONFIG_DIR"), format!("{id}_DATA_DIR"), format!("{id}_PROFILE_DIR")];
 
     if let Some(bundle) = exe
         .ancestors()

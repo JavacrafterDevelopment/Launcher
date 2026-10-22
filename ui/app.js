@@ -572,7 +572,17 @@ function appCard(a) {
   const main = h('div', 'app-main');
   const title = h('div', 'app-title');
   let live = null;
-  title.append(h('span', 'app-name', a.name));
+  const nameRow = h('div', 'app-namerow');
+  nameRow.append(h('span', 'app-name', a.name));
+  // macOS only (null elsewhere): whether the app keeps its data in its own folder.
+  if (a.portable != null) {
+    const tag = h('span', `app-tag${a.portable ? ' portable' : ''}`, a.portable ? 'Portable' : 'Not portable');
+    tag.title = a.portable
+      ? `Keeps its settings and data in ${a.name}Data, inside its own folder.`
+      : `Keeps its settings in ~/Library/Application Support/${a.name}, outside its own folder.`;
+    nameRow.append(tag);
+  }
+  title.append(nameRow);
   const ver = h('span', 'app-ver');
   if (!supported && !a.installed) {
     ver.append(platformsLabel ? `${platformsLabel} only` : `Not available on ${CURRENT_OS}`);

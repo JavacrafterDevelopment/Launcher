@@ -598,6 +598,21 @@ code {
   color: var(--walnut-deep);
 }
 
+.app-namerow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+
+/* Portable or not, on macOS: whether the app's data stays in its own folder. */
+.app-tag {
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.app-tag.portable { border-color: transparent; background: var(--ok-wash); color: var(--ok); }
+
 .app-ver { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .app-ver .new { color: var(--gilt); font-weight: 600; }
 
