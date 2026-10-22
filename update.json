@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.8",
-      "published": "2026-10-22T16:39:34Z",
-      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.7...v0.3.8",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.8",
+      "version": "0.3.9",
+      "published": "2026-10-22T16:50:07Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.8...v0.3.9",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.9",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.8/Launcher-windows-x64.zip",
-        "size": 1033881,
-        "sha256": "aaf53b38d95c0a90b33b011ec16ce6133e3427209f1125c6b7714fab09f138bc"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.9/Launcher-windows-x64.zip",
+        "size": 1034262,
+        "sha256": "687d94b96f850368237abfe7f4083e008a0e7e188b5fffb804074f48118a8370"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1804800,
-          "sha256": "6fa06e6ef99a50d208b7c5b847679763ba62d0b8883cfe20b48951b7aaa4e797"
+          "size": 1805824,
+          "sha256": "8fa5210638f58d7e1efe8f57ed969fd2b6978585d4edd045f149e10e4ef9df41"
         }
       ]
     },
     "stable": {
-      "version": "0.3.8",
-      "published": "2026-10-22T16:39:34Z",
-      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.7...v0.3.8",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.8",
+      "version": "0.3.9",
+      "published": "2026-10-22T16:50:07Z",
+      "notes": "**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.8...v0.3.9",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.9",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.8/Launcher-windows-x64.zip",
-        "size": 1033881,
-        "sha256": "aaf53b38d95c0a90b33b011ec16ce6133e3427209f1125c6b7714fab09f138bc"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.9/Launcher-windows-x64.zip",
+        "size": 1034262,
+        "sha256": "687d94b96f850368237abfe7f4083e008a0e7e188b5fffb804074f48118a8370"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1804800,
-          "sha256": "6fa06e6ef99a50d208b7c5b847679763ba62d0b8883cfe20b48951b7aaa4e797"
+          "size": 1805824,
+          "sha256": "8fa5210638f58d7e1efe8f57ed969fd2b6978585d4edd045f149e10e4ef9df41"
         }
       ]
     }
