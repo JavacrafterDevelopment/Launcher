@@ -139,6 +139,18 @@ pub const CATALOG: &[AppInfo] = &[
         category: Category::Apps,
     },
     AppInfo {
+        id: "kittyconnect",
+        name: "KittyConnect",
+        repo: "JavacrafterDevelopment/KittyConnect",
+        tagline: "Peer-to-peer file sharing and port opening over TailCat. No account, no router setup.",
+        icon: None,
+        platforms: &["Windows"],
+        // Closing its window ends every TailCat tunnel it opened.
+        stop: Stop::CloseWindows,
+        source: Source::Own,
+        category: Category::Apps,
+    },
+    AppInfo {
         id: "photocraft",
         name: "PhotoCraft",
         repo: "storytold/photocraft",
