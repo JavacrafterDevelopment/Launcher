@@ -150,7 +150,9 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/KittyConnect",
         tagline: "Peer-to-peer file sharing and port opening over TailCat. No account, no router setup.",
         icon: None,
-        platforms: &["Windows"],
+        // macOS from KittyConnect 0.8.0. On a Mac its data goes in
+        // KittyConnectData beside the app, which `shell_open` points it at.
+        platforms: &["Windows", "MacOS"],
         // Closing its window ends every TailCat tunnel it opened.
         stop: Stop::CloseWindows,
         source: Source::Own,
