@@ -639,6 +639,13 @@ function appCard(a) {
       launch.disabled = busy || !supported;
     }
     actions.append(launch);
+    // Apps that ship a start .bat can be started through it instead.
+    if (a.bat && !a.running && !a.starting && t.state !== 'stopping') {
+      const viaBat = textButton('Launch with .bat', '', () => post({ cmd: 'appLaunchBat', id: a.id }));
+      viaBat.title = `Start ${a.name} through the .bat in its folder`;
+      viaBat.disabled = busy || !supported;
+      actions.append(viaBat);
+    }
     actions.append(iconButton('folder', 'Open its folder', () => post({ cmd: 'appFolder', id: a.id })));
     const check = iconButton('verify', 'Verify files: check every file against its SHA-256 and re-download any that are damaged',
       () => post({ cmd: 'appVerify', id: a.id }));

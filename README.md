@@ -77,6 +77,10 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 rights can ask), its folder, **Verify files**, its release notes, and uninstall (two clicks; it
 deletes the folder, the app's settings included).
 
+An app that ships a start `.bat` (KittyConnect 0.7.1 and later: `Start KittyConnect.bat`)
+also gets **Launch with .bat** beside Launch, which starts it through that file
+instead of its exe. The button shows only once the installed version has the file.
+
 App updates are **found** automatically — on every start and from **Check for
 updates** — but **never installed on their own**. A card with a newer release gets
 a gilt **Update to vX** button and the Library tab shows a count. An app updates
