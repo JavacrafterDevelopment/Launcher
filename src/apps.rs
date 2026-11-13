@@ -32,6 +32,9 @@ pub struct AppInfo {
     pub stop: Stop,
     pub source: Source,
     pub category: Category,
+    /// A .bat in the app's folder that starts it, offered as "Launch with .bat"
+    /// beside Launch once an installed version has it. Windows only.
+    pub bat: Option<&'static str>,
 }
 
 impl AppInfo {
@@ -114,6 +117,7 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
         source: Source::Own,
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "screenshotapp",
@@ -125,6 +129,7 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::CloseWindows,
         source: Source::Own,
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "rustwinutil",
@@ -137,6 +142,7 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
         source: Source::Own,
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "kittyconnect",
@@ -149,6 +155,8 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::CloseWindows,
         source: Source::Own,
         category: Category::Apps,
+        // Ships from KittyConnect 0.7.1.
+        bat: Some("Start KittyConnect.bat"),
     },
     AppInfo {
         id: "photocraft",
@@ -166,6 +174,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "vectorcraft",
@@ -183,6 +192,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "filmcraft",
@@ -200,6 +210,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "effectcraft",
@@ -217,6 +228,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "lightcraft",
@@ -234,6 +246,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "designcraft",
@@ -251,6 +264,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "pdfcraft",
@@ -268,6 +282,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: false,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "figcraft",
@@ -285,6 +300,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: false,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "soundcraft",
@@ -302,6 +318,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "cadcraft",
@@ -319,6 +336,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "deckcraft",
@@ -336,6 +354,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: false,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "gridcraft",
@@ -353,6 +372,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: false,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "wordcraft",
@@ -370,6 +390,7 @@ pub const CATALOG: &[AppInfo] = &[
             mac_portable: true,
         },
         category: Category::Apps,
+        bat: None,
     },
     AppInfo {
         id: "tempcraftbackup",
@@ -381,6 +402,7 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::CloseWindows,
         source: Source::Own,
         category: Category::Temporary,
+        bat: None,
     },
 ];
 
@@ -487,6 +509,12 @@ impl AppState {
         self.installed = self.target().installed().map(|i| i.version);
     }
 
+    /// The app's start .bat, if it has one and the installed version shipped it.
+    fn bat_path(&self) -> Option<std::path::PathBuf> {
+        let name = self.info.bat.filter(|_| cfg!(windows) && self.installed.is_some())?;
+        Some(self.target().dir().join(name)).filter(|p| p.is_file())
+    }
+
     fn update_available(&self) -> bool {
         let latest = self.latest.as_ref().and_then(|r| r.semver());
         let installed = self.installed.as_deref().and_then(|v| semver::Version::parse(v).ok());
@@ -576,6 +604,7 @@ impl Library {
                     "damaged": a.damaged,
                     "running": a.running,
                     "starting": a.starting.is_some(),
+                    "bat": a.bat_path().is_some(),
                 })
             })
             .collect();
@@ -833,6 +862,15 @@ impl Library {
     }
 
     pub fn launch(&mut self, id: &str) {
+        self.start(id, false);
+    }
+
+    /// Starts the app through the .bat in its folder instead of its exe.
+    pub fn launch_bat(&mut self, id: &str) {
+        self.start(id, true);
+    }
+
+    fn start(&mut self, id: &str, bat: bool) {
         let Some(a) = self.get(id) else { return };
         let target = a.target();
         let Some(installed) = target.installed() else { return };
@@ -843,7 +881,16 @@ impl Library {
             a.log("info", format!("{} is already running", a.info.name));
             return;
         }
-        let exe = target.dir().join(&installed.exe);
+        let exe = match bat {
+            false => target.dir().join(&installed.exe),
+            true => match a.bat_path() {
+                Some(p) => p,
+                None => {
+                    a.log("error", format!("This version of {} has no .bat to start it with", a.info.name));
+                    return;
+                }
+            },
+        };
         match shell_open(a.info, &exe, target.dir()) {
             Ok(()) => {
                 a.log("info", format!("Started {}", exe.display()));

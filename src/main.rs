@@ -341,12 +341,14 @@ impl App {
                 self.library.check_all(self.settings.prereleases);
                 send(webview, self.library.snapshot());
             }
-            "appCheck" | "appInstall" | "appLaunch" | "appFolder" | "appUninstall" | "appVerify" | "appRepair" | "appStop" => {
+            "appCheck" | "appInstall" | "appLaunch" | "appLaunchBat" | "appFolder" | "appUninstall" | "appVerify" | "appRepair"
+            | "appStop" => {
                 let id = msg["id"].as_str().unwrap_or_default();
                 match cmd {
                     "appCheck" => self.library.check_all(self.settings.prereleases),
                     "appInstall" => self.library.install(id),
                     "appLaunch" => self.library.launch(id),
+                    "appLaunchBat" => self.library.launch_bat(id),
                     "appFolder" => self.library.open_folder(id),
                     "appVerify" => self.library.verify(id),
                     "appStop" => self.library.stop(id),
