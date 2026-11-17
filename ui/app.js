@@ -578,7 +578,7 @@ function appCard(a) {
   if (a.portable != null) {
     const tag = h('span', `app-tag${a.portable ? ' portable' : ''}`, a.portable ? 'Portable' : 'Not portable');
     tag.title = a.portable
-      ? `Keeps its settings and data in ${a.name}Data, inside its own folder.`
+      ? `Keeps its settings and data in ${a.folder}Data, inside its own folder.`
       : `Keeps its settings in ~/Library/Application Support/${a.name}, outside its own folder.`;
     nameRow.append(tag);
   }

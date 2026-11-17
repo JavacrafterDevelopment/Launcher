@@ -23,8 +23,14 @@ pub const CURRENT_OS: &str = "Windows";
 
 pub struct AppInfo {
     pub id: &'static str,
-    /// Also the folder name under portableApplications.
+    /// What the card and the log call it.
     pub name: &'static str,
+    /// Its folder under portableApplications, when that isn't `name`: an app
+    /// renamed after people installed it keeps the folder it was installed
+    /// in, so updating never moves it or its data. Its release packages are
+    /// named after the folder too (`<folder>-windows-x64.zip`), and on macOS
+    /// its data folder (`<folder>Data`).
+    pub folder: Option<&'static str>,
     pub repo: &'static str,
     pub tagline: &'static str,
     pub icon: Option<&'static [u8]>,
@@ -38,6 +44,11 @@ pub struct AppInfo {
 }
 
 impl AppInfo {
+    /// The folder it's installed in, under portableApplications.
+    pub fn folder(&self) -> &'static str {
+        self.folder.unwrap_or(self.name)
+    }
+
     pub fn supported_on_current_os(&self) -> bool {
         self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
     }
@@ -109,6 +120,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "lighthouse",
         name: "Lighthouse",
+        folder: None,
         repo: "JavacrafterDevelopment/Lighthouse",
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
         icon: None,
@@ -122,6 +134,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "screenshotapp",
         name: "ScreenshotApp",
+        folder: None,
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
         icon: None,
@@ -134,6 +147,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "rustwinutil",
         name: "RustWinUtil",
+        folder: None,
         repo: "JavacrafterDevelopment/RustWinUtil",
         tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
         icon: None,
@@ -146,9 +160,13 @@ pub const CATALOG: &[AppInfo] = &[
     },
     AppInfo {
         id: "kittyconnect",
-        name: "KittyConnect",
+        // Called KittyConnect until 0.13.0: it keeps that folder (and the
+        // repo, its packages' names and its data folders), so it updates in
+        // place and nobody loses their hubs or settings.
+        name: "Portside",
+        folder: Some("KittyConnect"),
         repo: "JavacrafterDevelopment/KittyConnect",
-        tagline: "Peer-to-peer file sharing and port opening over TailCat. No account, no router setup.",
+        tagline: "Hubs, voice rooms, file sharing and game hosting with friends over encrypted TailCat tunnels. No account, no router setup.",
         icon: None,
         // macOS from KittyConnect 0.8.0. On a Mac its data goes in
         // KittyConnectData beside the app, which `shell_open` points it at.
@@ -163,6 +181,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "photocraft",
         name: "PhotoCraft",
+        folder: None,
         repo: "storytold/photocraft",
         tagline: "Open-source raster photo editor and image manipulation tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/photocraft.png")),
@@ -181,6 +200,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "vectorcraft",
         name: "VectorCraft",
+        folder: None,
         repo: "storytold/vectorcraft",
         tagline: "Open-source vector art and illustration tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/vectorcraft.png")),
@@ -199,6 +219,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "filmcraft",
         name: "FilmCraft",
+        folder: None,
         repo: "storytold/filmcraft",
         tagline: "Open-source non-linear video editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/filmcraft.png")),
@@ -217,6 +238,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "effectcraft",
         name: "EffectCraft",
+        folder: None,
         repo: "storytold/effectcraft",
         tagline: "Open-source motion graphics and compositing tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/effectcraft.png")),
@@ -235,6 +257,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "lightcraft",
         name: "LightCraft",
+        folder: None,
         repo: "storytold/lightcraft",
         tagline: "Open-source non-destructive RAW and photo workflow editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/lightcraft.png")),
@@ -253,6 +276,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "designcraft",
         name: "DesignCraft",
+        folder: None,
         repo: "storytold/designcraft",
         tagline: "Open-source page and layout publishing design editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/designcraft.png")),
@@ -271,6 +295,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "pdfcraft",
         name: "PdfCraft",
+        folder: None,
         repo: "storytold/pdfcraft",
         tagline: "Open-source PDF reader and editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/pdfcraft.png")),
@@ -289,6 +314,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "figcraft",
         name: "FigCraft",
+        folder: None,
         repo: "storytold/figcraft",
         tagline: "Open-source interface design and interactive prototyping tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/figcraft.png")),
@@ -307,6 +333,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "soundcraft",
         name: "SoundCraft",
+        folder: None,
         repo: "storytold/soundcraft",
         tagline: "Open-source digital audio workstation written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/soundcraft.png")),
@@ -325,6 +352,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "cadcraft",
         name: "CADCraft",
+        folder: None,
         repo: "storytold/cadcraft",
         tagline: "Open-source computer-aided design and drafting tool written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/cadcraft.png")),
@@ -343,6 +371,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "deckcraft",
         name: "DeckCraft",
+        folder: None,
         repo: "storytold/deckcraft",
         tagline: "Open-source presentation and slide show editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/deckcraft.png")),
@@ -361,6 +390,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "gridcraft",
         name: "GridCraft",
+        folder: None,
         repo: "storytold/gridcraft",
         tagline: "Open-source spreadsheet editor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/gridcraft.png")),
@@ -379,6 +409,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "wordcraft",
         name: "WordCraft",
+        folder: None,
         repo: "storytold/wordcraft",
         tagline: "Open-source word processor written from scratch in pure Rust.",
         icon: Some(include_bytes!("../assets/wordcraft.png")),
@@ -397,6 +428,7 @@ pub const CATALOG: &[AppInfo] = &[
     AppInfo {
         id: "tempcraftbackup",
         name: "TempCraftBackup",
+        folder: None,
         repo: "JavacrafterDevelopment/TempCraftBackup",
         tagline: "Backs up the current source code of every Craft app into one 7z archive.",
         icon: None,
@@ -495,14 +527,14 @@ pub fn icons() -> Value {
 impl AppState {
     fn target(&self) -> Target {
         match self.info.source {
-            Source::Own => Target::app(self.info.repo, self.info.name),
+            Source::Own => Target::app(self.info.repo, self.info.folder()),
             Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
                 let (package, exe) = if cfg!(target_os = "macos") {
                     (mac_package, mac_exe)
                 } else {
                     (win_package, win_exe)
                 };
-                Target::third_party(self.info.repo, self.info.name, package, exe)
+                Target::third_party(self.info.repo, self.info.folder(), package, exe)
             }
         }
     }
@@ -590,6 +622,7 @@ impl Library {
                 json!({
                     "id": a.info.id,
                     "name": a.info.name,
+                    "folder": a.info.folder(),
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
                     "platforms": a.info.platforms,
@@ -1076,7 +1109,7 @@ fn shell_open(info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> R
     // `<ID>_CONFIG_DIR`, FilmCraft `<ID>_DATA_DIR`, WordCraft `<ID>_PROFILE_DIR`;
     // all three are set. Apps marked `mac_portable: false` read none of them.
     let id = info.id.to_ascii_uppercase();
-    let portable_data = dir.join(format!("{}Data", info.name));
+    let portable_data = dir.join(format!("{}Data", info.folder()));
     let vars = [format!("{id}_CONFIG_DIR"), format!("{id}_DATA_DIR"), format!("{id}_PROFILE_DIR")];
 
     if let Some(bundle) = exe
@@ -1118,3 +1151,30 @@ fn png_data_url(bytes: &[u8]) -> String {
     out
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::updater::APPS_DIR;
+
+    #[test]
+    fn portside_keeps_the_folder_it_had_as_kittyconnect() {
+        let a = CATALOG.iter().find(|a| a.id == "kittyconnect").unwrap();
+        assert_eq!(a.name, "Portside");
+        assert_eq!(a.folder(), "KittyConnect");
+        // Installed copies are found, and updated, where they already are.
+        let t = Target::app(a.repo, a.folder());
+        assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("KittyConnect")), "{}", t.dir().display());
+    }
+
+    #[test]
+    fn every_other_app_is_in_a_folder_named_after_it_and_no_two_share_one() {
+        for a in CATALOG.iter().filter(|a| a.folder.is_none()) {
+            assert_eq!(a.folder(), a.name);
+        }
+        let mut folders: Vec<String> = CATALOG.iter().map(|a| a.folder().to_ascii_lowercase()).collect();
+        folders.sort();
+        folders.dedup();
+        assert_eq!(folders.len(), CATALOG.len());
+    }
+}

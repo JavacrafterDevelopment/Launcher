@@ -31,7 +31,7 @@ Launcher\
     Lighthouse\       each installed app in its own folder
     ScreenshotApp\
     RustWinUtil\
-    KittyConnect\
+    KittyConnect\      Portside (it keeps the folder it had as KittyConnect)
 ```
 
 The launcher checks the current operating system (`Windows` or `MacOS`) against
@@ -61,7 +61,7 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | Lighthouse | [JavacrafterDevelopment/Lighthouse](https://github.com/JavacrafterDevelopment/Lighthouse) | Library |
 | ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) | Library |
 | RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
-| KittyConnect | [JavacrafterDevelopment/KittyConnect](https://github.com/JavacrafterDevelopment/KittyConnect) | Library |
+| Portside (formerly KittyConnect) | [JavacrafterDevelopment/KittyConnect](https://github.com/JavacrafterDevelopment/KittyConnect) | Library |
 | PhotoCraft | [storytold/photocraft](https://github.com/storytold/photocraft) | Third-party apps |
 | VectorCraft | [storytold/vectorcraft](https://github.com/storytold/vectorcraft) | Third-party apps |
 | FilmCraft | [storytold/filmcraft](https://github.com/storytold/filmcraft) | Third-party apps |
@@ -72,12 +72,14 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | FigCraft | [storytold/figcraft](https://github.com/storytold/figcraft) | Third-party apps |
 | SoundCraft | [storytold/soundcraft](https://github.com/storytold/soundcraft) | Third-party apps |
 
-**Install** puts an app in `portableApplications\<Name>\`. Each card then offers
+**Install** puts an app in `portableApplications\<Name>\` (an app renamed
+after people installed it, like Portside, keeps its old folder, so it updates
+in place with its data). Each card then offers
 **Launch** (started the way Explorer would, so an app that wants administrator
 rights can ask), its folder, **Verify files**, its release notes, and uninstall (two clicks; it
 deletes the folder, the app's settings included).
 
-An app that ships a start `.bat` (KittyConnect 0.7.1 and later: `Start KittyConnect.bat`)
+An app that ships a start `.bat` (Portside, from its KittyConnect 0.7.1: `Start KittyConnect.bat`)
 also gets **Launch with .bat** beside Launch, which starts it through that file
 instead of its exe. The button shows only once the installed version has the file.
 
