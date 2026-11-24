@@ -90,8 +90,7 @@ pub enum Category {
     Apps,
     /// Short-lived tools, kept apart so they're easy to find and remove later.
     Temporary,
-    /// Nothing is listed here yet; the tab is ready for the first game.
-    #[allow(dead_code)]
+    /// Games, installed and launched like any app.
     Games,
 }
 
@@ -177,6 +176,21 @@ pub const CATALOG: &[AppInfo] = &[
         category: Category::Apps,
         // Ships from KittyConnect 0.7.1.
         bat: Some("Start KittyConnect.bat"),
+    },
+    AppInfo {
+        id: "inkcognito",
+        name: "Ink-cognito",
+        folder: None,
+        repo: "JavacrafterDevelopment/Ink-cognito",
+        tagline: "A 3D multiplayer game: host a world, share its TailCat address, and walk the plate with friends.",
+        icon: None,
+        // Its release workflow builds both packages (a universal .app on macOS).
+        platforms: &["Windows", "MacOS"],
+        // Closing its window ends the game and its TailCat session.
+        stop: Stop::CloseWindows,
+        source: Source::Own,
+        category: Category::Games,
+        bat: None,
     },
     AppInfo {
         id: "photocraft",
@@ -1165,6 +1179,15 @@ mod tests {
         // Installed copies are found, and updated, where they already are.
         let t = Target::app(a.repo, a.folder());
         assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("KittyConnect")), "{}", t.dir().display());
+    }
+
+    #[test]
+    fn ink_cognito_is_a_game_installed_from_its_own_releases() {
+        let a = CATALOG.iter().find(|a| a.id == "inkcognito").unwrap();
+        assert_eq!(a.category.id(), "games");
+        assert!(matches!(a.source, Source::Own));
+        let t = Target::app(a.repo, a.folder());
+        assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("Ink-cognito")), "{}", t.dir().display());
     }
 
     #[test]

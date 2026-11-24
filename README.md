@@ -62,6 +62,7 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) | Library |
 | RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
 | Portside (formerly KittyConnect) | [JavacrafterDevelopment/KittyConnect](https://github.com/JavacrafterDevelopment/KittyConnect) | Library |
+| Ink-cognito | [JavacrafterDevelopment/Ink-cognito](https://github.com/JavacrafterDevelopment/Ink-cognito) | Games |
 | PhotoCraft | [storytold/photocraft](https://github.com/storytold/photocraft) | Third-party apps |
 | VectorCraft | [storytold/vectorcraft](https://github.com/storytold/vectorcraft) | Third-party apps |
 | FilmCraft | [storytold/filmcraft](https://github.com/storytold/filmcraft) | Third-party apps |
