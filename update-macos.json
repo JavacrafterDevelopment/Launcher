@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.15",
-      "published": "2026-11-24T08:16:47Z",
-      "notes": "## What's Changed\n* List Ink-cognito in the Games tab by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n## New Contributors\n* @JavacrafterDevelopment made their first contribution in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.14...v0.3.15",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.15",
+      "version": "0.3.16",
+      "published": "2026-11-25T08:28:44Z",
+      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.15/Launcher-macos.zip",
-        "size": 2492821,
-        "sha256": "1de1579060b30f21f59207f728876f63d2ed7080beef13f835aed62882725fbb"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-macos.zip",
+        "size": 2801629,
+        "sha256": "383a76d2284853c66a4304a2cfcb0bb942a341461ada858cf007e01112db730a"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "e22ed402ebb1c6630047a323c38acba563e77810873bf06881d1fe0fddda56f5"
+          "sha256": "432f18945331e44892653edaf18c48ba2531fa064c643b02da0e0f9d8f6903eb"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4279808,
-          "sha256": "8ef8db8438985135a391fd76e408bc2cb15db7f25233e5375a1c375082f8a43c"
+          "size": 4591456,
+          "sha256": "5e2ca2b8bd66470b975ab0a0c4f5845317e4afaaa69b73e7681d9c9b3d0ac808"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.15",
-      "published": "2026-11-24T08:16:47Z",
-      "notes": "## What's Changed\n* List Ink-cognito in the Games tab by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n## New Contributors\n* @JavacrafterDevelopment made their first contribution in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.14...v0.3.15",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.15",
+      "version": "0.3.16",
+      "published": "2026-11-25T08:28:44Z",
+      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.15/Launcher-macos.zip",
-        "size": 2492821,
-        "sha256": "1de1579060b30f21f59207f728876f63d2ed7080beef13f835aed62882725fbb"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-macos.zip",
+        "size": 2801629,
+        "sha256": "383a76d2284853c66a4304a2cfcb0bb942a341461ada858cf007e01112db730a"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "e22ed402ebb1c6630047a323c38acba563e77810873bf06881d1fe0fddda56f5"
+          "sha256": "432f18945331e44892653edaf18c48ba2531fa064c643b02da0e0f9d8f6903eb"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4279808,
-          "sha256": "8ef8db8438985135a391fd76e408bc2cb15db7f25233e5375a1c375082f8a43c"
+          "size": 4591456,
+          "sha256": "5e2ca2b8bd66470b975ab0a0c4f5845317e4afaaa69b73e7681d9c9b3d0ac808"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",

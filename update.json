@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.15",
-      "published": "2026-11-24T08:16:47Z",
-      "notes": "## What's Changed\n* List Ink-cognito in the Games tab by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n## New Contributors\n* @JavacrafterDevelopment made their first contribution in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.14...v0.3.15",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.15",
+      "version": "0.3.16",
+      "published": "2026-11-25T08:28:44Z",
+      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.15/Launcher-windows-x64.zip",
-        "size": 1039217,
-        "sha256": "c098eb756388553a2ec658de235f7cc232e8831515a4d5d6b20fe476364785aa"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-windows-x64.zip",
+        "size": 1191527,
+        "sha256": "ba1e29d9c82ea403f065cd5f6de738eb28850b89ec2ce3c539b53c3db498a0b2"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1811968,
-          "sha256": "77cd49ccea1032ebfdd93b32508bc7893ee116ecc2d96517201df93c47cac324"
+          "size": 1965056,
+          "sha256": "a262dfceb8d2b5eeae4fa5561857717973046eb0885f7a901de312aace547fbd"
         }
       ]
     },
     "stable": {
-      "version": "0.3.15",
-      "published": "2026-11-24T08:16:47Z",
-      "notes": "## What's Changed\n* List Ink-cognito in the Games tab by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n## New Contributors\n* @JavacrafterDevelopment made their first contribution in https://github.com/JavacrafterDevelopment/Launcher/pull/1\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.14...v0.3.15",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.15",
+      "version": "0.3.16",
+      "published": "2026-11-25T08:28:44Z",
+      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.15/Launcher-windows-x64.zip",
-        "size": 1039217,
-        "sha256": "c098eb756388553a2ec658de235f7cc232e8831515a4d5d6b20fe476364785aa"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-windows-x64.zip",
+        "size": 1191527,
+        "sha256": "ba1e29d9c82ea403f065cd5f6de738eb28850b89ec2ce3c539b53c3db498a0b2"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1811968,
-          "sha256": "77cd49ccea1032ebfdd93b32508bc7893ee116ecc2d96517201df93c47cac324"
+          "size": 1965056,
+          "sha256": "a262dfceb8d2b5eeae4fa5561857717973046eb0885f7a901de312aace547fbd"
         }
       ]
     }
