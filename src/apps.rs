@@ -184,8 +184,8 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/Ink-cognito",
         tagline: "A 3D multiplayer game: host a world, share its TailCat address, and walk the plate with friends.",
         icon: None,
-        // Its release workflow builds both packages (a universal .app on macOS).
-        platforms: &["Windows", "MacOS"],
+        // Its release workflow builds only the Windows package.
+        platforms: &["Windows"],
         // Closing its window ends the game and its TailCat session.
         stop: Stop::CloseWindows,
         source: Source::Own,
