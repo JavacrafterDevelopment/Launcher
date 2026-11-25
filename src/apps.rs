@@ -183,9 +183,9 @@ pub const CATALOG: &[AppInfo] = &[
         folder: None,
         repo: "JavacrafterDevelopment/Ink-cognito",
         tagline: "A 3D multiplayer game: host a world, share its TailCat address, and walk the plate with friends.",
-        icon: None,
-        // Its release workflow builds only the Windows package.
-        platforms: &["Windows"],
+        icon: Some(include_bytes!("../assets/inkcognito.png")),
+        // Its release workflow builds Windows and macOS packages.
+        platforms: &["Windows", "MacOS"],
         // Closing its window ends the game and its TailCat session.
         stop: Stop::CloseWindows,
         source: Source::Own,
@@ -1186,6 +1186,8 @@ mod tests {
         let a = CATALOG.iter().find(|a| a.id == "inkcognito").unwrap();
         assert_eq!(a.category.id(), "games");
         assert!(matches!(a.source, Source::Own));
+        assert!(a.icon.is_some());
+        assert_eq!(a.platforms, &["Windows", "MacOS"]);
         let t = Target::app(a.repo, a.folder());
         assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("Ink-cognito")), "{}", t.dir().display());
     }
