@@ -251,15 +251,24 @@ impl Target {
         !crate::procs::running_in(&self.dir).is_empty()
     }
 
-    fn update_json_url(&self) -> String {
+    fn update_json_url(&self) -> Result<String, String> {
         let file = if cfg!(windows) { "update.json" } else { "update-macos.json" };
         if cfg!(debug_assertions) {
             if let Ok(base) = std::env::var("LAUNCHER_UPDATE_BASE") {
                 let name = self.repo.rsplit('/').next().unwrap_or_default();
-                return format!("{}/{name}/{file}", base.trim_end_matches('/'));
+                return Ok(format!("{}/{name}/{file}", base.trim_end_matches('/')));
             }
         }
-        format!("https://raw.githubusercontent.com/{}/updates/{file}", self.repo)
+        // raw.githubusercontent.com caches branch URLs (`.../updates/update.json`) for
+        // 5 minutes (`max-age=300`) and ignores cache-busting query strings. Resolving
+        // the `updates` branch's current commit SHA via Git Smart HTTP (uncached, no
+        // API rate limit) lets us fetch by immutable commit SHA so new releases appear
+        // immediately.
+        match resolve_git_ref(&self.repo, "refs/heads/updates") {
+            Ok(Some(sha)) => Ok(format!("https://raw.githubusercontent.com/{}/{sha}/{file}", self.repo)),
+            Ok(None) => Err("no updates branch".into()),
+            Err(()) => Ok(format!("https://raw.githubusercontent.com/{}/updates/{file}", self.repo)),
+        }
     }
 
     /// The newest published release, whatever is installed. update.json first (for
@@ -275,7 +284,8 @@ impl Target {
     }
 
     fn latest_via_update_json(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        let mut resp = agent().get(&self.update_json_url()).call().map_err(|e| e.to_string())?;
+        let url = self.update_json_url()?;
+        let mut resp = agent().get(&url).call().map_err(|e| e.to_string())?;
         if resp.status() != 200 {
             return Err(format!("HTTP {}", resp.status().as_u16()));
         }
@@ -1145,6 +1155,61 @@ fn website_asset_digest(repo: &str, tag: &str, package: &str) -> Option<String> 
     (digest.len() == 71 && digest.starts_with("sha256:")).then(|| digest.to_string())
 }
 
+/// Resolves a Git ref (such as `refs/heads/updates`) to its current 40-char commit
+/// SHA using GitHub's Git Smart HTTP discovery endpoint. Unlike
+/// `raw.githubusercontent.com`, `/info/refs` is never cached (`max-age=0`) and is
+/// not subject to the GitHub REST API's hourly rate limit.
+///
+/// Returns `Ok(Some(sha))` when found, `Ok(None)` when the repo answered cleanly
+/// without that ref, or `Err(())` on network/protocol errors so the caller can
+/// fall back to the branch URL.
+fn resolve_git_ref(repo: &str, target_ref: &str) -> Result<Option<String>, ()> {
+    let url = format!("https://github.com/{repo}.git/info/refs?service=git-upload-pack");
+    let mut resp = agent().get(&url).call().map_err(|_| ())?;
+    if resp.status() != 200 {
+        return Err(());
+    }
+    let body = resp.body_mut().read_to_vec().map_err(|_| ())?;
+    parse_git_ref(&body, target_ref)
+}
+
+/// Parses a Git Smart HTTP v1 `git-upload-pack` pkt-line advertisement and returns
+/// the 40-char lowercase hex commit SHA for `target_ref`.
+fn parse_git_ref(body: &[u8], target_ref: &str) -> Result<Option<String>, ()> {
+    let mut pos = 0;
+    let mut saw_service = false;
+    while pos < body.len() {
+        let len_hex = body.get(pos..pos + 4).and_then(|b| std::str::from_utf8(b).ok()).ok_or(())?;
+        let len = usize::from_str_radix(len_hex, 16).map_err(|_| ())?;
+        if len == 0 {
+            pos += 4;
+            continue;
+        }
+        if len < 4 || pos + len > body.len() {
+            return Err(());
+        }
+        let payload = &body[pos + 4..pos + len];
+        pos += len;
+        if payload.starts_with(b"# service=git-upload-pack") {
+            saw_service = true;
+            continue;
+        }
+        if !saw_service || payload.starts_with(b"#") {
+            continue;
+        }
+        // The first ref line carries capabilities after a NUL byte (`<sha> <ref>\0<caps>\n`).
+        let line = payload.split(|&b| b == 0).next().unwrap_or(payload);
+        let Ok(text) = std::str::from_utf8(line) else { continue };
+        let trimmed = text.trim_end_matches(['\r', '\n']);
+        if let Some((sha, name)) = trimmed.split_once(' ') {
+            if name == target_ref && sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Ok(Some(sha.to_ascii_lowercase()));
+            }
+        }
+    }
+    if saw_service { Ok(None) } else { Err(()) }
+}
+
 /// Portable user-data folders (`data\` and `<App>CraftData\`), which updates,
 /// verifies and leftover sweeps never touch.
 fn is_data_dir(lower: &str) -> bool {
@@ -1923,5 +1988,39 @@ mod tests {
         assert!(m.files.iter().any(|f| f.path == m.exe));
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn parse_git_ref_extracts_updates_branch_sha() {
+        let pkt = |payload: &[u8]| {
+            let mut out = format!("{:04x}", payload.len() + 4).into_bytes();
+            out.extend_from_slice(payload);
+            out
+        };
+        let head_sha = "128c063c5c55f9d7ac5700b3d60a9701ea6a5058";
+        let updates_sha = "7a2fbd99e9ccc4a4056de2521cbd7608d0460c94";
+
+        let mut body = Vec::new();
+        body.extend(pkt(b"# service=git-upload-pack\n"));
+        body.extend(b"0000");
+        body.extend(pkt(format!("{head_sha} HEAD\0multi_ack thin-pack\n").as_bytes()));
+        body.extend(pkt(format!("{head_sha} refs/heads/main\n").as_bytes()));
+        body.extend(pkt(format!("{updates_sha} refs/heads/updates\n").as_bytes()));
+        body.extend(b"0000");
+
+        assert_eq!(parse_git_ref(&body, "refs/heads/updates"), Ok(Some(updates_sha.into())));
+        assert_eq!(parse_git_ref(&body, "refs/heads/nonexistent"), Ok(None));
+
+        // First ref line carrying NUL-separated capabilities directly on `refs/heads/updates`.
+        let mut first_only = Vec::new();
+        first_only.extend(pkt(b"# service=git-upload-pack\n"));
+        first_only.extend(b"0000");
+        first_only.extend(pkt(format!("{updates_sha} refs/heads/updates\0side-band-64k\n").as_bytes()));
+        first_only.extend(b"0000");
+        assert_eq!(parse_git_ref(&first_only, "refs/heads/updates"), Ok(Some(updates_sha.into())));
+
+        // Non-git error bodies (e.g. HTML) must return Err so callers fall back.
+        assert_eq!(parse_git_ref(b"<html>502 Bad Gateway</html>", "refs/heads/updates"), Err(()));
+        assert_eq!(parse_git_ref(b"", "refs/heads/updates"), Err(()));
     }
 }
