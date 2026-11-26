@@ -54,11 +54,21 @@ pub struct Release {
     /// manifest inside the downloaded package must match it exactly.
     #[serde(skip)]
     pub expected: Option<Expected>,
+    /// GitHub REST API URL for this asset (`https://api.github.com/repos/.../releases/assets/<id>`),
+    /// required when downloading assets from private repositories.
+    #[serde(skip)]
+    pub api_asset_url: Option<String>,
+    /// Exact asset filename on GitHub (recorded in manifest for auto-matched repairs).
+    #[serde(skip)]
+    pub asset_name: Option<String>,
+    /// Release tag name on GitHub (e.g. `v1.2.0` or `1.2.0`).
+    #[serde(skip)]
+    pub tag: Option<String>,
 }
 
 impl Release {
     pub fn semver(&self) -> Option<semver::Version> {
-        parse_version(&self.version)
+        parse_version_lenient(&self.version)
     }
 }
 
@@ -69,23 +79,25 @@ pub struct Expected {
 }
 
 #[derive(Deserialize)]
-struct GhRelease {
-    tag_name: String,
-    name: Option<String>,
-    body: Option<String>,
-    html_url: String,
-    draft: bool,
-    prerelease: bool,
-    published_at: Option<String>,
-    assets: Vec<GhAsset>,
+pub(crate) struct GhRelease {
+    pub tag_name: String,
+    pub name: Option<String>,
+    pub body: Option<String>,
+    pub html_url: String,
+    pub draft: bool,
+    pub prerelease: bool,
+    pub published_at: Option<String>,
+    pub assets: Vec<GhAsset>,
 }
 
 #[derive(Deserialize)]
-struct GhAsset {
-    name: String,
-    browser_download_url: String,
-    size: u64,
-    digest: Option<String>,
+pub(crate) struct GhAsset {
+    pub name: String,
+    #[serde(default)]
+    pub url: String,
+    pub browser_download_url: String,
+    pub size: u64,
+    pub digest: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -94,6 +106,9 @@ struct Manifest {
     /// Which entry is the program itself.
     exe: String,
     files: Vec<ManifestFile>,
+    /// Release asset filename this install came from (used by repair for auto-matched apps).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    asset_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -145,6 +160,7 @@ pub struct Target {
     repo: String,
     /// The release asset holding the program folder. `{version}` is replaced with
     /// the release's version for repos that put the version in the file name.
+    /// Empty when `auto_match` is true.
     package: String,
     /// The install folder.
     dir: PathBuf,
@@ -156,6 +172,10 @@ pub struct Target {
     /// For third-party packages that don't ship a launcher-manifest.json: the
     /// program exe inside the archive, used to write a manifest on unpack.
     default_exe: Option<String>,
+    /// True for user-added GitHub repos where assets and executables are auto-detected.
+    auto_match: bool,
+    /// True when the repository is private (uses authenticated GitHub API endpoints).
+    private: bool,
 }
 
 impl Target {
@@ -177,6 +197,8 @@ impl Target {
             self_exe: if cfg!(windows) { std::env::current_exe().ok() } else { None },
             update_json: true,
             default_exe: None,
+            auto_match: false,
+            private: false,
         }
     }
 
@@ -200,6 +222,8 @@ impl Target {
             self_exe: None,
             update_json: true,
             default_exe: None,
+            auto_match: false,
+            private: false,
         }
     }
 
@@ -219,6 +243,23 @@ impl Target {
             self_exe: None,
             update_json: false,
             default_exe: Some(exe.into()),
+            auto_match: false,
+            private: false,
+        }
+    }
+
+    /// A user-added GitHub repository (public or private) whose release assets and
+    /// executable are auto-detected, installed at `<root>/<folder>`.
+    pub fn custom_in(repo: &str, folder: &str, own_format: bool, private: bool, root: &Path) -> Self {
+        Self {
+            repo: repo.into(),
+            package: String::new(),
+            dir: root.join(folder),
+            self_exe: None,
+            update_json: own_format,
+            default_exe: None,
+            auto_match: true,
+            private,
         }
     }
 
@@ -296,12 +337,27 @@ impl Target {
     }
 
     fn latest_via_update_json(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        let url = self.update_json_url()?;
-        let mut resp = agent().get(&url).call().map_err(|e| e.to_string())?;
-        if resp.status() != 200 {
-            return Err(format!("HTTP {}", resp.status().as_u16()));
-        }
-        let doc: UpdateJson = resp.body_mut().read_json().map_err(|e| e.to_string())?;
+        let token = crate::github_auth::current_token();
+        let doc: UpdateJson = if self.private {
+            let Some(tok) = token.as_deref() else {
+                return Err("Sign in to GitHub in Settings to check this private repository.".into());
+            };
+            self.fetch_update_json_via_api(tok)?
+        } else {
+            let url = self.update_json_url()?;
+            let mut resp = agent().get(&url).call().map_err(|e| e.to_string())?;
+            if resp.status() == 200 {
+                resp.body_mut().read_json().map_err(|e| e.to_string())?
+            } else if resp.status() == 404 {
+                if let Some(tok) = token.as_deref() {
+                    self.fetch_update_json_via_api(tok)?
+                } else {
+                    return Err("HTTP 404".into());
+                }
+            } else {
+                return Err(format!("HTTP {}", resp.status().as_u16()));
+            }
+        };
 
         // With pre-releases on, whichever of the two channels is newer.
         let candidates = [Some(doc.channels.stable), prereleases.then_some(doc.channels.beta)];
@@ -312,39 +368,83 @@ impl Target {
             .filter_map(|e| Some((parse_version(&e.version)?, e)))
             .max_by(|a, b| a.0.cmp(&b.0));
 
-        Ok(best.map(|(v, e)| Release {
-            version: v.to_string(),
-            name: format!("v{v}"),
-            notes: e.notes,
-            published: e.published,
-            page: e.page,
-            prerelease: !v.pre.is_empty(),
-            asset_url: e.package.url,
-            size: e.package.size,
-            digest: Some(format!("sha256:{}", e.package.sha256)),
-            expected: Some(Expected { exe: e.exe, files: e.files }),
+        Ok(best.map(|(v, e)| {
+            let asset_name = e.package.url.rsplit('/').next().map(String::from);
+            Release {
+                version: v.to_string(),
+                name: format!("v{v}"),
+                notes: e.notes,
+                published: e.published,
+                page: e.page,
+                prerelease: !v.pre.is_empty(),
+                asset_url: e.package.url,
+                size: e.package.size,
+                digest: Some(format!("sha256:{}", e.package.sha256)),
+                expected: Some(Expected { exe: e.exe, files: e.files }),
+                api_asset_url: None,
+                asset_name,
+                tag: Some(format!("v{v}")),
+            }
         }))
     }
 
-    fn latest_via_api(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        let url = format!("{}/repos/{}/releases?per_page=30", api_base(), self.repo);
+    fn fetch_update_json_via_api(&self, token: &str) -> Result<UpdateJson, String> {
+        let file = if cfg!(windows) { "update.json" } else { "update-macos.json" };
+        let url = format!("{}/repos/{}/contents/{file}?ref=updates", api_base(), self.repo);
         let mut resp = agent()
             .get(&url)
-            .header("Accept", "application/vnd.github+json")
+            .header("Accept", "application/vnd.github.raw+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Authorization", &format!("Bearer {token}"))
+            .call()
+            .map_err(|e| e.to_string())?;
+        if resp.status() != 200 {
+            return Err(format!("HTTP {}", resp.status().as_u16()));
+        }
+        resp.body_mut().read_json().map_err(|e| e.to_string())
+    }
+
+    fn latest_via_api(&self, prereleases: bool) -> Result<Option<Release>, String> {
+        let token = crate::github_auth::current_token();
+        if self.private && token.is_none() {
+            return Err("Sign in to GitHub in Settings to access this private repository.".into());
+        }
+        let url = format!("{}/repos/{}/releases?per_page=30", api_base(), self.repo);
+        let mut req = agent()
+            .get(&url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(tok) = &token {
+            req = req.header("Authorization", &format!("Bearer {tok}"));
+        }
+        let mut resp = req
             .call()
             .map_err(|_| "Couldn't reach GitHub. Are you online?".to_string())?;
 
         match resp.status().as_u16() {
             200 => {}
+            401 => return Err("Your GitHub sign-in expired. Sign in again in Settings.".into()),
             // The anonymous API allows 60 requests an hour per IP, which a VPN or a
             // shared network can use up. The website isn't limited that way.
             403 | 429 => {
-                return self.latest_via_website().map_err(|_| {
-                    "GitHub's hourly request limit is used up. Try again in a little while.".into()
+                if !self.private && !self.auto_match {
+                    return self.latest_via_website().map_err(|_| {
+                        "GitHub's hourly request limit is used up. Sign in to GitHub in Settings or try again later.".into()
+                    });
+                }
+                return Err(if token.is_some() {
+                    "GitHub denied access to this repository's releases.".into()
+                } else {
+                    "GitHub's hourly request limit is used up. Sign in to GitHub in Settings for 5,000 requests/hour.".into()
                 });
             }
-            404 => return Err(format!("The repository {} wasn't found, or it's private.", self.repo)),
+            404 => {
+                return Err(if token.is_some() {
+                    format!("The repository {} wasn't found, or your account doesn't have access to it.", self.repo)
+                } else {
+                    format!("The repository {} wasn't found, or it's private. Sign in to GitHub in Settings.", self.repo)
+                });
+            }
             s => return Err(format!("GitHub answered with HTTP {s}.")),
         }
 
@@ -356,16 +456,27 @@ impl Target {
         // The API now and then answers 200 with an empty list for a repo that has
         // releases, so the release page gets the last word before "none".
         if releases.is_empty() {
-            return self.latest_via_website().or(Ok(None));
+            if !self.private && !self.auto_match {
+                return self.latest_via_website().or(Ok(None));
+            }
+            return Ok(None);
         }
 
         Ok(releases
             .into_iter()
             .filter(|r| !r.draft && (prereleases || !r.prerelease))
             .filter_map(|r| {
-                let v = parse_version(&r.tag_name)?;
-                let want = self.asset_name(&v.to_string());
-                let a = r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&want))?;
+                let v = if self.auto_match {
+                    parse_version_lenient(&r.tag_name)?
+                } else {
+                    parse_version(&r.tag_name)?
+                };
+                let a = if self.auto_match {
+                    select_release_asset_for_os(&r.assets, cfg!(target_os = "macos"))?
+                } else {
+                    let want = self.asset_name(&v.to_string());
+                    r.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&want))?
+                };
                 Some((v, release_from_api(&r, a)))
             })
             .max_by(|a, b| a.0.cmp(&b.0))
@@ -406,7 +517,85 @@ impl Target {
             size: 0,
             digest,
             expected: None,
+            api_asset_url: None,
+            asset_name: Some(package),
+            tag: Some(tag),
         }))
+    }
+
+    /// Resolves a signed, directly downloadable URL for a private release asset via
+    /// GitHub's REST API (`Accept: application/octet-stream`), stripping the `Authorization`
+    /// header before following the redirect to GitHub's blob storage host.
+    fn resolve_private_asset_url(
+        &self,
+        api_asset_url: Option<&str>,
+        version: &str,
+        tag_hint: Option<&str>,
+        asset_name_hint: Option<&str>,
+    ) -> Result<String, String> {
+        let Some(token) = crate::github_auth::current_token() else {
+            return Err("Sign in to GitHub in Settings to download from this private repository.".into());
+        };
+        let api_url = match api_asset_url.filter(|u| !u.is_empty()) {
+            Some(u) => u.to_string(),
+            None => self.lookup_api_asset_url(&token, version, tag_hint, asset_name_hint)?,
+        };
+        resolve_authenticated_download_url(&api_url, &token)
+    }
+
+    fn lookup_api_asset_url(
+        &self,
+        token: &str,
+        version: &str,
+        tag_hint: Option<&str>,
+        asset_name_hint: Option<&str>,
+    ) -> Result<String, String> {
+        let mut tags = Vec::new();
+        if let Some(t) = tag_hint {
+            tags.push(t.to_string());
+        }
+        tags.push(format!("v{version}"));
+        tags.push(version.to_string());
+        tags.dedup();
+
+        for tag in &tags {
+            let url = format!("{}/repos/{}/releases/tags/{tag}", api_base(), self.repo);
+            let Ok(mut resp) = agent()
+                .get(&url)
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .header("Authorization", &format!("Bearer {token}"))
+                .call()
+            else {
+                continue;
+            };
+            if resp.status() != 200 {
+                continue;
+            }
+            if let Ok(rel) = resp.body_mut().read_json::<GhRelease>() {
+                if let Some(want) = asset_name_hint {
+                    if let Some(a) = rel.assets.iter().find(|a| a.name.eq_ignore_ascii_case(want)) {
+                        if !a.url.is_empty() {
+                            return Ok(a.url.clone());
+                        }
+                    }
+                }
+                if !self.package.is_empty() {
+                    let want = self.asset_name(version);
+                    if let Some(a) = rel.assets.iter().find(|a| a.name.eq_ignore_ascii_case(&want)) {
+                        if !a.url.is_empty() {
+                            return Ok(a.url.clone());
+                        }
+                    }
+                }
+                if let Some(a) = select_release_asset_for_os(&rel.assets, cfg!(target_os = "macos")) {
+                    if !a.url.is_empty() {
+                        return Ok(a.url.clone());
+                    }
+                }
+            }
+        }
+        Err(format!("Couldn't find the v{version} release asset on GitHub."))
     }
 
     /// Where a download is unpacked and checked, inside the install folder so the
@@ -447,13 +636,52 @@ impl Target {
     ) -> Result<(), String> {
         log(format!("Downloading v{} from {}", rel.version, rel.asset_url));
         fs::create_dir_all(stage).map_err(|e| write_err(stage, e))?;
-        let is_dmg = self.package.ends_with(".dmg") || rel.asset_url.ends_with(".dmg");
-        let pkg_path = stage.join(if is_dmg { "package.dmg" } else { "package.zip" });
+        let asset_name = rel
+            .asset_name
+            .as_deref()
+            .or_else(|| rel.asset_url.rsplit('/').next())
+            .unwrap_or("package.zip");
+        let lower_name = asset_name.to_ascii_lowercase();
+        let is_dmg = self.package.to_ascii_lowercase().ends_with(".dmg") || lower_name.ends_with(".dmg");
+        let is_exe = cfg!(windows) && lower_name.ends_with(".exe");
+        let pkg_path = stage.join(if is_dmg {
+            "package.dmg"
+        } else if is_exe {
+            "package.exe"
+        } else {
+            "package.zip"
+        });
+
+        let download_url = if self.private {
+            log("Authenticating download with GitHub".into());
+            self.resolve_private_asset_url(
+                rel.api_asset_url.as_deref(),
+                &rel.version,
+                rel.tag.as_deref(),
+                rel.asset_name.as_deref(),
+            )?
+        } else {
+            rel.asset_url.clone()
+        };
 
         let mut resp = agent()
-            .get(&rel.asset_url)
+            .get(&download_url)
             .call()
             .map_err(|e| format!("Download failed ({e})"))?;
+        if resp.status() == 404 && !self.private && crate::github_auth::current_token().is_some() {
+            // A repo that was later made private returns 404 on browser_download_url; retry via API.
+            log("Public link returned 404; retrying with your GitHub sign-in".into());
+            let signed = self.resolve_private_asset_url(
+                rel.api_asset_url.as_deref(),
+                &rel.version,
+                rel.tag.as_deref(),
+                rel.asset_name.as_deref(),
+            )?;
+            resp = agent()
+                .get(&signed)
+                .call()
+                .map_err(|e| format!("Download failed ({e})"))?;
+        }
         if resp.status() != 200 {
             return Err(format!("Download failed: HTTP {}", resp.status().as_u16()));
         }
@@ -512,13 +740,26 @@ impl Target {
         log("Unpacking".into());
         if is_dmg {
             extract_dmg(&pkg_path, &files)?;
+        } else if is_exe {
+            fs::create_dir_all(&files).map_err(|e| write_err(&files, e))?;
+            let safe_exe = safe_relative(asset_name)
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| "app.exe".into());
+            fs::copy(&pkg_path, files.join(&safe_exe)).map_err(|e| write_err(&files.join(&safe_exe), e))?;
+            write_manifest_with_asset(&files, &rel.version, &safe_exe, Some(asset_name))?;
         } else {
             extract(&pkg_path, &files)?;
         }
         if !files.join(MANIFEST).exists() {
-            if let Some(exe) = &self.default_exe {
-                write_manifest(&files, &rel.version, exe)?;
-            }
+            let exe = match &self.default_exe {
+                Some(e) => e.clone(),
+                None if self.auto_match => {
+                    let hint = self.dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    detect_exe(&files, hint)?
+                }
+                None => return Err("The update package has no manifest.".into()),
+            };
+            write_manifest_with_asset(&files, &rel.version, &exe, rel.asset_name.as_deref())?;
         }
         let manifest = verify_files(&files)?;
         log(format!("Checked all {} files against their SHA-256 in the manifest", manifest.files.len()));
@@ -703,13 +944,33 @@ impl Target {
         if wanted.is_empty() {
             return Ok(());
         }
-        let url = self.package_url(&m.version);
-        log(format!("Reading the v{} package's index from {url}", m.version));
+        let (url, asset_hint) = if self.private {
+            log("Authenticating repair download with GitHub".into());
+            let signed = self.resolve_private_asset_url(None, &m.version, None, m.asset_name.as_deref())?;
+            (signed, m.asset_name.clone().unwrap_or_default())
+        } else if self.auto_match {
+            let pkg = m.asset_name.as_deref().unwrap_or("");
+            if !pkg.is_empty() {
+                (
+                    format!("https://github.com/{}/releases/download/v{}/{pkg}", self.repo, m.version),
+                    pkg.to_string(),
+                )
+            } else if let Some(tok) = crate::github_auth::current_token() {
+                let api_url = self.lookup_api_asset_url(&tok, &m.version, None, None)?;
+                let signed = resolve_authenticated_download_url(&api_url, &tok)?;
+                (signed, String::new())
+            } else {
+                return Err("Couldn't determine which release package to repair from. Reinstall it instead.".into());
+            }
+        } else {
+            (self.package_url(&m.version), self.asset_name(&m.version))
+        };
+        log(format!("Reading the v{} package's index", m.version));
 
         let stage = self.stage_dir().join("repair");
         let _ = fs::remove_dir_all(&stage);
         fs::create_dir_all(&stage).map_err(|e| write_err(&stage, e))?;
-        let result = self.repair_from(&m, &wanted, &url, &stage, &mut progress, log);
+        let result = self.repair_from(&m, &wanted, &url, &asset_hint, &stage, &mut progress, log);
         let _ = fs::remove_dir_all(self.stage_dir());
         result
     }
@@ -719,12 +980,17 @@ impl Target {
         m: &Manifest,
         wanted: &[&ManifestFile],
         url: &str,
+        asset_hint: &str,
         stage: &Path,
         progress: &mut dyn FnMut(u64, u64),
         log: &dyn Fn(String),
     ) -> Result<(), String> {
-        if self.package.ends_with(".dmg") || url.ends_with(".dmg") {
+        let lower_hint = asset_hint.to_ascii_lowercase();
+        if self.package.ends_with(".dmg") || lower_hint.ends_with(".dmg") || url.ends_with(".dmg") {
             return self.repair_from_dmg(m, wanted, url, stage, progress, log);
+        }
+        if cfg!(windows) && (lower_hint.ends_with(".exe") || url.ends_with(".exe")) {
+            return self.repair_single_exe(m, wanted, url, stage, progress, log);
         }
         let fetched = std::rc::Rc::new(std::cell::Cell::new((0u64, 0u32)));
         let source = open_package(url, stage, fetched.clone(), log)?;
@@ -736,10 +1002,10 @@ impl Target {
         };
 
         // The repair must come from the release that's installed. Our own packages
-        // carry launcher-manifest.json inside the zip; third-party ones don't, so
-        // their zip index is checked for each wanted file and its size, then the
-        // fetched bytes are checked against the SHA-256 recorded at install time.
-        if self.default_exe.is_none() {
+        // carry launcher-manifest.json inside the zip; third-party and auto-matched
+        // ones may not, so check for an in-zip manifest first and otherwise verify
+        // against the zip index + installed SHA-256.
+        if self.default_exe.is_none() && !self.auto_match {
             let remote: Manifest = {
                 let mut entry = archive
                     .by_name(MANIFEST)
@@ -906,6 +1172,55 @@ impl Target {
         Ok(())
     }
 
+    fn repair_single_exe(
+        &self,
+        m: &Manifest,
+        wanted: &[&ManifestFile],
+        url: &str,
+        stage: &Path,
+        progress: &mut dyn FnMut(u64, u64),
+        log: &dyn Fn(String),
+    ) -> Result<(), String> {
+        let Some(f) = wanted.first() else { return Ok(()) };
+        let rel = safe_relative(&f.path).ok_or_else(|| format!("Unsafe path in the file list: {}", f.path))?;
+        let tmp = stage.join("repaired.exe");
+        let mut resp = agent()
+            .get(url)
+            .call()
+            .map_err(|e| format!("Couldn't reach the release ({e})"))?;
+        if resp.status() != 200 {
+            return Err(format!("The release download answered HTTP {}.", resp.status().as_u16()));
+        }
+        let mut out = File::create(&tmp).map_err(|e| write_err(&tmp, e))?;
+        let mut reader = resp.body_mut().as_reader();
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut done = 0u64;
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted ({e})"))?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).map_err(|e| write_err(&tmp, e))?;
+            hasher.update(&buf[..n]);
+            done += n as u64;
+            progress(done, f.size);
+        }
+        out.sync_all().map_err(|e| write_err(&tmp, e))?;
+        drop(out);
+        let hash = format!("{:x}", hasher.finalize());
+        if done != f.size || !hash.eq_ignore_ascii_case(&f.sha256) {
+            return Err(format!("The downloaded {} didn't match its SHA-256.", f.path));
+        }
+        let dst = self.installed_path(m, &rel);
+        if dst.exists() {
+            fs::rename(&dst, aside(&dst)).map_err(|e| write_err(&dst, e))?;
+        }
+        fs::rename(&tmp, &dst).map_err(|e| write_err(&dst, e))?;
+        log(format!("Repaired {}", f.path));
+        Ok(())
+    }
+
     /// Removes what the last update moved aside and any half-finished download.
     /// Replaced files may still be held for a moment by a copy that's exiting, so
     /// the deleting retries briefly off-thread. `data\`, the staging folder and the
@@ -970,7 +1285,7 @@ impl Target {
     }
 }
 
-fn agent() -> ureq::Agent {
+pub(crate) fn agent() -> ureq::Agent {
     agent_with_redirects(10)
 }
 
@@ -1121,13 +1436,174 @@ fn parse_version(tag: &str) -> Option<semver::Version> {
     semver::Version::parse(tag.trim().trim_start_matches(['v', 'V'])).ok()
 }
 
+/// Lenient version parser for arbitrary GitHub release tags (e.g. `v1.2.3`, `1.2`,
+/// `v2`, `release-1.4.0`, `app-v0.8.1-beta.1`), normalized to semver so update
+/// comparisons work reliably across third-party repos.
+pub(crate) fn parse_version_lenient(tag: &str) -> Option<semver::Version> {
+    if let Some(v) = parse_version(tag) {
+        return Some(v);
+    }
+    let trimmed = tag.trim();
+    // Strip common prefixes like `release-`, `rel-`, `app-v`, etc., by finding the first digit.
+    let start = trimmed.find(|c: char| c.is_ascii_digit())?;
+    let rest = &trimmed[start..];
+    if let Ok(v) = semver::Version::parse(rest) {
+        return Some(v);
+    }
+    // Split off optional pre-release suffix (`-beta.1`) or build metadata (`+...`).
+    let (core, suffix) = match rest.find(['-', '+']) {
+        Some(idx) => (&rest[..idx], &rest[idx..]),
+        None => (rest, ""),
+    };
+    let nums: Vec<&str> = core.split('.').collect();
+    if nums.is_empty() || nums.len() > 4 || nums.iter().any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    let normalized = match nums.len() {
+        1 => format!("{}.0.0{suffix}", nums[0]),
+        2 => format!("{}.{}.0{suffix}", nums[0], nums[1]),
+        3 => format!("{}.{}.{}{suffix}", nums[0], nums[1], nums[2]),
+        4 => format!("{}.{}.{}{suffix}", nums[0], nums[1], nums[2]),
+        _ => return None,
+    };
+    semver::Version::parse(&normalized).ok()
+}
+
+/// Follows a GitHub REST API asset URL (`https://api.github.com/repos/.../releases/assets/<id>`)
+/// with `Accept: application/octet-stream` and `Authorization: Bearer <token>`, returning
+/// the final pre-signed storage URL so downloads and HTTP Range requests can proceed
+/// without sending `Authorization` to S3/Azure blob storage.
+fn resolve_authenticated_download_url(api_asset_url: &str, token: &str) -> Result<String, String> {
+    let no_redirects = agent_with_redirects(0);
+    let resp = no_redirects
+        .get(api_asset_url)
+        .header("Accept", "application/octet-stream")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("Authorization", &format!("Bearer {token}"))
+        .call()
+        .map_err(|e| format!("Couldn't authenticate asset download ({e})"))?;
+    match resp.status().as_u16() {
+        301 | 302 | 303 | 307 | 308 => resp
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+            .ok_or_else(|| "GitHub redirected the private asset download nowhere.".into()),
+        200 => Ok(api_asset_url.to_string()),
+        401 => Err("Your GitHub sign-in expired. Sign in again in Settings.".into()),
+        403 | 404 => Err("Your GitHub account couldn't download that release asset (check token 'repo' / Contents permission).".into()),
+        s => Err(format!("GitHub answered HTTP {s} while authenticating the download.")),
+    }
+}
+
+/// Scores a GitHub release asset for either Windows (`macos == false`) or macOS (`macos == true`).
+/// Returns `None` if the asset is definitely not installable on that OS.
+fn score_asset_for_os(name: &str, macos: bool) -> Option<i32> {
+    let n = name.to_ascii_lowercase();
+    // Skip checksums, signatures, source tarballs, docs, Linux/mobile packages.
+    for skip in [
+        ".sha256", ".sha512", ".md5", ".sig", ".asc", ".txt", ".json", ".yml", ".yaml", ".blockmap",
+        ".appimage", ".deb", ".rpm", ".flatpak", ".snap", ".apk", ".ipa", ".tar.gz", ".tgz", ".tar.xz",
+        ".msi", ".pkg", ".pdb", ".dsym",
+    ] {
+        if n.ends_with(skip) {
+            return None;
+        }
+    }
+    if n.contains("linux") || n.contains("ubuntu") || n.contains("android") || n.contains("freebsd") || n.contains("source") {
+        return None;
+    }
+
+    if macos {
+        if n.contains("windows") || n.contains("win64") || n.contains("win32") || n.contains("-win-") || n.ends_with(".exe") {
+            return None;
+        }
+        let is_dmg = n.ends_with(".dmg");
+        let is_zip = n.ends_with(".zip");
+        if !is_dmg && !is_zip {
+            return None;
+        }
+        let mut score = if is_zip { 25 } else { 20 };
+        let has_mac_tag = n.contains("macos") || n.contains("darwin") || n.contains("osx") || n.contains("-mac") || n.contains("_mac");
+        if has_mac_tag {
+            score += 40;
+        } else if is_dmg {
+            score += 35;
+        } else {
+            // Unlabelled `.zip` could be anything; only pick if nothing better exists.
+            score -= 10;
+        }
+        let host_arm = cfg!(target_arch = "aarch64");
+        if n.contains("universal") {
+            score += 20;
+        } else if host_arm && (n.contains("arm64") || n.contains("aarch64")) {
+            score += 25;
+        } else if !host_arm && (n.contains("x86_64") || n.contains("x64") || n.contains("amd64") || n.contains("intel")) {
+            score += 25;
+        } else if host_arm && (n.contains("x86_64") || n.contains("x64") || n.contains("intel")) {
+            score += 5; // Rosetta fallback
+        } else if !host_arm && (n.contains("arm64") || n.contains("aarch64")) {
+            return None; // arm64 binary cannot run on Intel Mac
+        }
+        Some(score)
+    } else {
+        if n.contains("macos") || n.contains("darwin") || n.contains("osx") || n.contains("-mac") || n.contains("_mac") || n.ends_with(".dmg") {
+            return None;
+        }
+        let is_zip = n.ends_with(".zip");
+        let is_exe = n.ends_with(".exe");
+        if !is_zip && !is_exe {
+            return None;
+        }
+        let mut score = if is_zip { 30 } else { 10 };
+        if n.contains("windows") || n.contains("win64") || n.contains("win32") || n.contains("-win") || n.contains("_win") {
+            score += 40;
+        }
+        if n.contains("portable") {
+            score += 20;
+        }
+        if n.contains("x64") || n.contains("x86_64") || n.contains("amd64") || n.contains("win64") {
+            score += 15;
+        } else if n.contains("arm64") || n.contains("aarch64") {
+            score -= 10;
+        } else if n.contains("x86") || n.contains("i686") || n.contains("win32") {
+            score += 2;
+        }
+        if n.contains("setup") || n.contains("installer") {
+            score -= 40;
+        }
+        Some(score)
+    }
+}
+
+/// Picks the best release asset for Windows or macOS from a release's asset list.
+pub(crate) fn select_release_asset_for_os<'a>(assets: &'a [GhAsset], macos: bool) -> Option<&'a GhAsset> {
+    assets
+        .iter()
+        .filter_map(|a| Some((score_asset_for_os(&a.name, macos)?, a)))
+        .max_by_key(|(score, _)| *score)
+        .map(|(_, a)| a)
+}
+
+/// Infers which platforms (`"Windows"`, `"MacOS"`) have installable release assets.
+pub(crate) fn detect_platforms_from_assets(assets: &[&GhAsset]) -> Vec<String> {
+    let mut platforms = Vec::new();
+    if assets.iter().any(|a| score_asset_for_os(&a.name, false).is_some_and(|s| s >= 20)) {
+        platforms.push("Windows".into());
+    }
+    if assets.iter().any(|a| score_asset_for_os(&a.name, true).is_some_and(|s| s >= 20)) {
+        platforms.push("MacOS".into());
+    }
+    platforms
+}
+
 pub fn current_version() -> semver::Version {
     semver::Version::parse(VERSION).expect("crate version is semver")
 }
 
 /// Debug builds can be pointed at a stand-in for the GitHub API to test the
 /// fallback without GitHub. Release builds always use GitHub.
-fn api_base() -> String {
+pub(crate) fn api_base() -> String {
     if cfg!(debug_assertions) {
         if let Ok(base) = std::env::var("LAUNCHER_UPDATE_API") {
             return base.trim_end_matches('/').to_string();
@@ -1148,6 +1624,9 @@ fn release_from_api(r: &GhRelease, a: &GhAsset) -> Release {
         size: a.size,
         digest: a.digest.clone(),
         expected: None,
+        api_asset_url: (!a.url.is_empty()).then(|| a.url.clone()),
+        asset_name: Some(a.name.clone()),
+        tag: Some(r.tag_name.clone()),
     }
 }
 
@@ -1455,10 +1934,107 @@ fn resolve_bundle_exe(dir: &Path, exe: &str) -> String {
     fallback.unwrap_or_else(|| exe.to_string())
 }
 
+/// Auto-detects the main executable inside an unpacked third-party/custom release
+/// folder when no `launcher-manifest.json` or hardcoded `default_exe` is available.
+fn detect_exe(files_dir: &Path, name_hint: &str) -> Result<String, String> {
+    let hint_lower = name_hint.to_ascii_lowercase();
+    let hint_compact: String = hint_lower.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+
+    if cfg!(target_os = "macos") {
+        let bundle = resolve_bundle_exe(files_dir, "");
+        if !bundle.is_empty() && files_dir.join(&bundle).is_file() {
+            return Ok(bundle);
+        }
+    }
+
+    let mut candidates: Vec<(i32, String)> = Vec::new();
+    let mut pending = vec![(files_dir.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        for e in entries.flatten() {
+            let path = e.path();
+            let Ok(rel) = path.strip_prefix(files_dir) else { continue };
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            if safe_relative(&rel_str).is_none() {
+                continue;
+            }
+            if path.is_dir() {
+                if depth < 4 {
+                    pending.push((path, depth + 1));
+                }
+                continue;
+            }
+            let file_name = e.file_name().to_string_lossy().into_owned();
+            let lower = file_name.to_ascii_lowercase();
+            let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
+            let stem_compact: String = stem.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+
+            if cfg!(windows) {
+                if !lower.ends_with(".exe") {
+                    continue;
+                }
+                let mut score: i32 = 50 - (depth as i32 * 15);
+                if !hint_compact.is_empty() && stem_compact == hint_compact {
+                    score += 80;
+                } else if !hint_compact.is_empty() && stem_compact.contains(&hint_compact) {
+                    score += 40;
+                }
+                for bad in ["unins", "setup", "install", "crashpad", "crash", "elevate", "updater", "helper", "vcredist"] {
+                    if stem.contains(bad) {
+                        score -= 60;
+                    }
+                }
+                candidates.push((score, rel_str));
+            } else {
+                // macOS / Unix: check for `.app/Contents/MacOS/<bin>` or Mach-O executable.
+                if rel_str.contains(".app/Contents/MacOS/") {
+                    let mut score = 100 - (depth as i32 * 5);
+                    if !hint_compact.is_empty() && stem_compact.contains(&hint_compact) {
+                        score += 50;
+                    }
+                    candidates.push((score, rel_str));
+                    continue;
+                }
+                let mut head = [0u8; 4];
+                if File::open(&path).and_then(|mut f| f.read_exact(&mut head)).is_ok() {
+                    let magic = u32::from_be_bytes(head);
+                    let is_macho = matches!(
+                        magic,
+                        0xFEEDFACF | 0xCFFAEDFE | 0xFEEDFACE | 0xCEFAEDFE | 0xCAFEBABE | 0xBEBAFECA | 0xCAFEBABF | 0xBFBAFECA
+                    );
+                    let is_pe = &head[..2] == b"MZ";
+                    if is_macho || (!cfg!(target_os = "macos") && is_pe) {
+                        let mut score = 40 - (depth as i32 * 10);
+                        if !hint_compact.is_empty() && stem_compact == hint_compact {
+                            score += 60;
+                        }
+                        candidates.push((score, rel_str));
+                    }
+                }
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .max_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.len().cmp(&a.1.len())))
+        .map(|(_, path)| path)
+        .ok_or_else(|| "Couldn't find a runnable program inside that release package.".into())
+}
+
 /// Writes `launcher-manifest.json` for a third-party package after it has been
 /// checked against its release checksum and unpacked, so verify, repair and
 /// updates work identically to first-party packages.
 fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), String> {
+    write_manifest_with_asset(files_dir, version, exe, None)
+}
+
+fn write_manifest_with_asset(
+    files_dir: &Path,
+    version: &str,
+    exe: &str,
+    asset_name: Option<&str>,
+) -> Result<(), String> {
     let mut resolved_exe = resolve_bundle_exe(files_dir, exe);
     let mut files = Vec::new();
     let mut pending = vec![files_dir.to_path_buf()];
@@ -1491,7 +2067,12 @@ fn write_manifest(files_dir: &Path, version: &str, exe: &str) -> Result<(), Stri
             resolved_exe = found.path.clone();
         }
     }
-    let manifest = Manifest { version: version.to_string(), exe: resolved_exe, files };
+    let manifest = Manifest {
+        version: version.to_string(),
+        exe: resolved_exe,
+        files,
+        asset_name: asset_name.map(String::from),
+    };
     let json = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let out = files_dir.join(MANIFEST);
     fs::write(&out, json).map_err(|e| write_err(&out, e))
@@ -1787,6 +2368,8 @@ mod tests {
             self_exe: None,
             update_json: true,
             default_exe: None,
+            auto_match: false,
+            private: false,
         };
         let log = |line: String| println!("  {line}");
 
@@ -1839,6 +2422,8 @@ mod tests {
             self_exe: None,
             update_json: false,
             default_exe: Some("photocraft.exe".into()),
+            auto_match: false,
+            private: false,
         };
         let stage_files = target.stage_dir().join("files");
         fs::create_dir_all(target.stage_dir()).unwrap();
@@ -1870,6 +2455,8 @@ mod tests {
             self_exe: None,
             update_json: false,
             default_exe: Some("photocraft.exe".into()),
+            auto_match: false,
+            private: false,
         };
 
         let inst = target.installed().expect("adopted unpacked folder");
@@ -1901,6 +2488,8 @@ mod tests {
             self_exe: None,
             update_json: false,
             default_exe: Some("photocraft.exe".into()),
+            auto_match: false,
+            private: false,
         };
         let log = |line: String| println!("  {line}");
 
@@ -1918,6 +2507,7 @@ mod tests {
                 size: 527,
                 sha256: "765cf8f8ffc8ee57f83f31e5eb2d453183e2e96ba97417ab9238717ccb27183b".into(),
             }],
+            asset_name: None,
         };
         fs::write(tmp.join(MANIFEST), serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let bad = target.verify(|_, _| {}, &log).unwrap();
@@ -1943,6 +2533,8 @@ mod tests {
             self_exe: None,
             update_json: true,
             default_exe: None,
+            auto_match: false,
+            private: false,
         };
         let exe = "PhotoCraft.app/Contents/MacOS/PhotoCraft";
         let macho: &[u8] = &[0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 1];
@@ -2034,5 +2626,39 @@ mod tests {
         // Non-git error bodies (e.g. HTML) must return Err so callers fall back.
         assert_eq!(parse_git_ref(b"<html>502 Bad Gateway</html>", "refs/heads/updates"), Err(()));
         assert_eq!(parse_git_ref(b"", "refs/heads/updates"), Err(()));
+    }
+
+    #[test]
+    fn lenient_version_and_asset_matching() {
+        assert_eq!(parse_version_lenient("v1.2.3").unwrap().to_string(), "1.2.3");
+        assert_eq!(parse_version_lenient("v1.2").unwrap().to_string(), "1.2.0");
+        assert_eq!(parse_version_lenient("release-2.4-beta.1").unwrap().to_string(), "2.4.0-beta.1");
+        assert_eq!(parse_version_lenient("v3").unwrap().to_string(), "3.0.0");
+        assert!(parse_version_lenient("nightly").is_none());
+
+        let mk = |name: &str| GhAsset {
+            name: name.into(),
+            url: format!("https://api.github.com/assets/{name}"),
+            browser_download_url: format!("https://github.com/dl/{name}"),
+            size: 100,
+            digest: None,
+        };
+        let assets = vec![
+            mk("mytool-1.0.0-linux-x86_64.tar.gz"),
+            mk("mytool-1.0.0-windows-x64-setup.exe"),
+            mk("mytool-1.0.0-windows-x64-portable.zip"),
+            mk("mytool-1.0.0-macos-universal.dmg"),
+            mk("mytool-1.0.0-windows-x64-portable.zip.sha256"),
+        ];
+        assert_eq!(
+            select_release_asset_for_os(&assets, false).unwrap().name,
+            "mytool-1.0.0-windows-x64-portable.zip"
+        );
+        assert_eq!(
+            select_release_asset_for_os(&assets, true).unwrap().name,
+            "mytool-1.0.0-macos-universal.dmg"
+        );
+        let refs: Vec<&GhAsset> = assets.iter().collect();
+        assert_eq!(detect_platforms_from_assets(&refs), vec!["Windows", "MacOS"]);
     }
 }

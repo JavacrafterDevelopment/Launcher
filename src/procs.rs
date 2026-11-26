@@ -106,10 +106,14 @@ pub fn terminate(pids: &[u32]) -> usize {
     ended
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 extern "C" {
     fn proc_listallpids(buffer: *mut std::ffi::c_void, buffersize: std::ffi::c_int) -> std::ffi::c_int;
     fn proc_pidpath(pid: std::ffi::c_int, buffer: *mut std::ffi::c_void, buffersize: u32) -> std::ffi::c_int;
+}
+
+#[cfg(not(windows))]
+extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
 
@@ -118,7 +122,7 @@ const SIGTERM: i32 = 15;
 #[cfg(not(windows))]
 const SIGKILL: i32 = 9;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 pub fn running_in(dir: &Path) -> Vec<u32> {
     let mut prefixes = Vec::new();
     let add = |p: &Path, list: &mut Vec<String>| {
@@ -154,7 +158,7 @@ pub fn running_in(dir: &Path) -> Vec<u32> {
     found
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn image_path(pid: i32) -> Option<String> {
     let mut buf = [0u8; 4096];
     let len = unsafe { proc_pidpath(pid, buf.as_mut_ptr() as *mut _, buf.len() as u32) };
@@ -162,6 +166,26 @@ fn image_path(pid: i32) -> Option<String> {
         return None;
     }
     std::str::from_utf8(&buf[..len as usize]).ok().map(String::from)
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub fn running_in(dir: &Path) -> Vec<u32> {
+    let prefix = format!("{}/", dir.to_string_lossy().trim_end_matches('/'));
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for e in entries.flatten() {
+        let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
+            continue;
+        };
+        if let Ok(exe) = std::fs::read_link(e.path().join("exe")) {
+            if exe.to_string_lossy().starts_with(&prefix) {
+                found.push(pid);
+            }
+        }
+    }
+    found
 }
 
 #[cfg(not(windows))]

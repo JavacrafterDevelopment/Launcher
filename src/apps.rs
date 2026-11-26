@@ -48,21 +48,6 @@ impl AppInfo {
     pub fn folder(&self) -> &'static str {
         self.folder.unwrap_or(self.name)
     }
-
-    pub fn supported_on_current_os(&self) -> bool {
-        self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
-    }
-
-    /// On macOS, whether the app keeps its data in its own folder. None elsewhere:
-    /// every Windows package is a portable one.
-    pub fn portable_here(&self) -> Option<bool> {
-        match self.source {
-            Source::ThirdParty { mac_portable, .. } if cfg!(target_os = "macos") && self.supported_on_current_os() => {
-                Some(mac_portable)
-            }
-            _ => None,
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -100,6 +85,14 @@ impl Category {
             Category::Apps => "apps",
             Category::Temporary => "temporary",
             Category::Games => "games",
+        }
+    }
+
+    pub fn from_id(s: &str) -> Self {
+        match s {
+            "temporary" => Category::Temporary,
+            "games" => Category::Games,
+            _ => Category::Apps,
         }
     }
 }
@@ -510,8 +503,120 @@ struct LogLine {
 /// Enough to follow an install; older lines fall off the top.
 const LOG_LINES: usize = 300;
 
+#[derive(Clone)]
+enum RuntimeSource {
+    Own,
+    ThirdParty {
+        win_package: String,
+        win_exe: String,
+        mac_package: String,
+        mac_exe: String,
+        mac_portable: bool,
+    },
+    GitHubAuto {
+        own_format: bool,
+        private: bool,
+    },
+}
+
+#[derive(Clone)]
+struct RuntimeApp {
+    id: String,
+    name: String,
+    folder: String,
+    repo: String,
+    tagline: String,
+    publisher: String,
+    platforms: Vec<String>,
+    stop: Stop,
+    source: RuntimeSource,
+    category: Category,
+    bat: Option<String>,
+    custom: bool,
+    private: bool,
+}
+
+impl RuntimeApp {
+    fn from_builtin(info: &'static AppInfo) -> Self {
+        let source = match info.source {
+            Source::Own => RuntimeSource::Own,
+            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, mac_portable } => {
+                RuntimeSource::ThirdParty {
+                    win_package: win_package.into(),
+                    win_exe: win_exe.into(),
+                    mac_package: mac_package.into(),
+                    mac_exe: mac_exe.into(),
+                    mac_portable,
+                }
+            }
+        };
+        Self {
+            id: info.id.into(),
+            name: info.name.into(),
+            folder: info.folder().into(),
+            repo: info.repo.into(),
+            tagline: info.tagline.into(),
+            publisher: publisher_of(info).into(),
+            platforms: info.platforms.iter().map(|p| (*p).into()).collect(),
+            stop: info.stop,
+            source,
+            category: info.category,
+            bat: info.bat.map(String::from),
+            custom: false,
+            private: false,
+        }
+    }
+
+    fn from_custom(c: &crate::settings::CustomApp) -> Self {
+        let platforms = if c.platforms.is_empty() {
+            vec!["Windows".into(), "MacOS".into()]
+        } else {
+            c.platforms.clone()
+        };
+        let publisher = if c.publisher.trim().is_empty() {
+            c.repo.split('/').next().unwrap_or("GitHub").to_string()
+        } else {
+            c.publisher.clone()
+        };
+        Self {
+            id: c.id.clone(),
+            name: c.name.clone(),
+            folder: c.folder.clone(),
+            repo: c.repo.clone(),
+            tagline: c.tagline.clone(),
+            publisher,
+            platforms,
+            stop: Stop::CloseWindows,
+            source: RuntimeSource::GitHubAuto { own_format: c.own_format, private: c.private },
+            category: Category::from_id(&c.category),
+            bat: None,
+            custom: true,
+            private: c.private,
+        }
+    }
+
+    fn folder(&self) -> &str {
+        &self.folder
+    }
+
+    fn supported_on_current_os(&self) -> bool {
+        self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
+    }
+
+    fn portable_here(&self) -> Option<bool> {
+        match self.source {
+            RuntimeSource::ThirdParty { mac_portable, .. }
+                if cfg!(target_os = "macos") && self.supported_on_current_os() =>
+            {
+                Some(mac_portable)
+            }
+            _ => None,
+        }
+    }
+}
+
 struct AppState {
-    info: &'static AppInfo,
+    info: RuntimeApp,
     installed: Option<String>,
     latest: Option<Release>,
     /// True once a check has answered, so "no release yet" can be told apart
@@ -540,7 +645,8 @@ pub fn icons() -> Value {
 }
 
 /// Brand colours `(accent, ink_light, ink_dark)` for the Modern theme: matches the Craft suite
-/// colours for ArtCraft apps and gives Javacrafter apps distinct accents.
+/// colours for ArtCraft apps, gives Javacrafter apps distinct accents, and hashes custom apps
+/// onto a curated palette.
 fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
     match id {
         "lighthouse" => ("#d99326", "#9a630a", "#f2bc5a"),
@@ -562,7 +668,20 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
         "deckcraft" => ("#f07a1e", "#a84f0a", "#ffa060"),
         "gridcraft" => ("#1f9d55", "#12703a", "#4fd68a"),
         "wordcraft" => ("#3f5fe0", "#2a44b8", "#8ea2ff"),
-        _ => ("#2d81ff", "#1659c4", "#74aaff"),
+        other => {
+            const PALETTE: &[(&str, &str, &str)] = &[
+                ("#2d81ff", "#1659c4", "#74aaff"),
+                ("#8b5cf6", "#6a3fd6", "#b69cff"),
+                ("#1fa5c9", "#0e7290", "#5fd0ee"),
+                ("#1f9d55", "#12703a", "#4fd68a"),
+                ("#e0622d", "#a83e12", "#ff9668"),
+                ("#d99326", "#9a630a", "#f2bc5a"),
+                ("#e0368f", "#b0206c", "#ff7ab8"),
+                ("#3f5fe0", "#2a44b8", "#8ea2ff"),
+            ];
+            let hash = other.bytes().fold(0usize, |h, b| h.wrapping_mul(31).wrapping_add(b as usize));
+            PALETTE[hash % PALETTE.len()]
+        }
     }
 }
 
@@ -575,16 +694,35 @@ fn publisher_of(info: &AppInfo) -> &'static str {
 }
 
 impl AppState {
+    fn from_runtime(info: RuntimeApp, root: &std::path::Path) -> Self {
+        let mut a = Self {
+            info,
+            installed: None,
+            latest: None,
+            checked: false,
+            task: Task::Idle,
+            log: Vec::new(),
+            damaged: Vec::new(),
+            running: false,
+            starting: None,
+        };
+        a.refresh_installed(root);
+        a
+    }
+
     fn target_in(&self, root: &std::path::Path) -> Target {
-        match self.info.source {
-            Source::Own => Target::app_in(self.info.repo, self.info.folder(), root),
-            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
+        match &self.info.source {
+            RuntimeSource::Own => Target::app_in(&self.info.repo, self.info.folder(), root),
+            RuntimeSource::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
                 let (package, exe) = if cfg!(target_os = "macos") {
-                    (mac_package, mac_exe)
+                    (mac_package.as_str(), mac_exe.as_str())
                 } else {
-                    (win_package, win_exe)
+                    (win_package.as_str(), win_exe.as_str())
                 };
-                Target::third_party_in(self.info.repo, self.info.folder(), package, exe, root)
+                Target::third_party_in(&self.info.repo, self.info.folder(), package, exe, root)
+            }
+            RuntimeSource::GitHubAuto { own_format, private } => {
+                Target::custom_in(&self.info.repo, self.info.folder(), *own_format, *private, root)
             }
         }
     }
@@ -613,13 +751,16 @@ impl AppState {
 
     /// The app's start .bat, if it has one and the installed version shipped it.
     fn bat_path(&self, root: &std::path::Path) -> Option<std::path::PathBuf> {
-        let name = self.info.bat.filter(|_| cfg!(windows) && self.installed.is_some())?;
+        let name = self.info.bat.as_deref().filter(|_| cfg!(windows) && self.installed.is_some())?;
         Some(self.target(root).dir().join(name)).filter(|p| p.is_file())
     }
 
     fn update_available(&self) -> bool {
         let latest = self.latest.as_ref().and_then(|r| r.semver());
-        let installed = self.installed.as_deref().and_then(|v| semver::Version::parse(v).ok());
+        let installed = self
+            .installed
+            .as_deref()
+            .and_then(crate::updater::parse_version_lenient);
         matches!((latest, installed), (Some(l), Some(i)) if l > i)
     }
 
@@ -657,30 +798,61 @@ pub struct Library {
     proxy: EventLoopProxy<UserEvent>,
     install_root: std::path::PathBuf,
     max_downloads: u8,
-    queue: Vec<&'static str>,
+    queue: Vec<String>,
 }
 
 impl Library {
-    pub fn new(proxy: EventLoopProxy<UserEvent>, install_root: std::path::PathBuf, max_downloads: u8) -> Self {
-        let apps = CATALOG
+    pub fn new(
+        proxy: EventLoopProxy<UserEvent>,
+        install_root: std::path::PathBuf,
+        max_downloads: u8,
+        custom_apps: &[crate::settings::CustomApp],
+    ) -> Self {
+        let mut apps: Vec<AppState> = CATALOG
             .iter()
-            .map(|info| {
-                let mut a = AppState {
-                    info,
-                    installed: None,
-                    latest: None,
-                    checked: false,
-                    task: Task::Idle,
-                    log: Vec::new(),
-                    damaged: Vec::new(),
-                    running: false,
-                    starting: None,
-                };
-                a.refresh_installed(&install_root);
-                a
-            })
+            .map(|info| AppState::from_runtime(RuntimeApp::from_builtin(info), &install_root))
             .collect();
+        for c in custom_apps {
+            if !apps.iter().any(|a| a.info.id == c.id) {
+                apps.push(AppState::from_runtime(RuntimeApp::from_custom(c), &install_root));
+            }
+        }
         Self { apps, proxy, install_root, max_downloads, queue: Vec::new() }
+    }
+
+    /// Synchronizes user-added custom apps with the live library, preserving state for
+    /// existing entries and kicking off a release check for newly added ones.
+    pub fn sync_custom_apps(&mut self, custom_apps: &[crate::settings::CustomApp], prereleases: bool) {
+        let keep_ids: std::collections::HashSet<&str> = custom_apps.iter().map(|c| c.id.as_str()).collect();
+        self.apps.retain(|a| !a.info.custom || keep_ids.contains(a.info.id.as_str()));
+        self.queue.retain(|qid| self.apps.iter().any(|a| a.info.id == *qid));
+
+        let mut added_ids = Vec::new();
+        for c in custom_apps {
+            if let Some(existing) = self.apps.iter_mut().find(|a| a.info.id == c.id) {
+                existing.info = RuntimeApp::from_custom(c);
+                existing.refresh_installed(&self.install_root);
+            } else {
+                let state = AppState::from_runtime(RuntimeApp::from_custom(c), &self.install_root);
+                added_ids.push(state.info.id.clone());
+                self.apps.push(state);
+            }
+        }
+        for id in added_ids {
+            self.check_one(&id, prereleases);
+        }
+    }
+
+    pub fn has_repo(&self, repo: &str) -> bool {
+        self.apps.iter().any(|a| a.info.repo.eq_ignore_ascii_case(repo))
+    }
+
+    pub fn existing_ids(&self) -> Vec<String> {
+        self.apps.iter().map(|a| a.info.id.clone()).collect()
+    }
+
+    pub fn existing_folders(&self) -> Vec<String> {
+        self.apps.iter().map(|a| a.info.folder.clone()).collect()
     }
 
     pub fn set_install_root(&mut self, root: std::path::PathBuf) {
@@ -711,20 +883,22 @@ impl Library {
             .apps
             .iter()
             .map(|a| {
-                let (accent, ink_light, ink_dark) = app_colors(a.info.id);
+                let (accent, ink_light, ink_dark) = app_colors(&a.info.id);
                 json!({
                     "id": a.info.id,
                     "name": a.info.name,
                     "folder": a.info.folder(),
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
-                    "publisher": publisher_of(a.info),
+                    "publisher": a.info.publisher,
                     "accent": accent,
                     "inkLight": ink_light,
                     "inkDark": ink_dark,
                     "platforms": a.info.platforms,
                     "supported": a.info.supported_on_current_os(),
-                    "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
+                    "thirdParty": matches!(a.info.source, RuntimeSource::ThirdParty { .. }),
+                    "custom": a.info.custom,
+                    "private": a.info.private,
                     "portable": a.info.portable_here(),
                     "category": a.info.category.id(),
                     "installed": a.installed,
@@ -747,6 +921,41 @@ impl Library {
         self.apps.iter_mut().find(|a| a.info.id == id)
     }
 
+    /// Checks a single app for its latest release.
+    pub fn check_one(&mut self, id: &str, prereleases: bool) {
+        let root = self.install_root.clone();
+        let proxy = self.proxy.clone();
+        let Some(a) = self.get(id) else { return };
+        if a.busy() {
+            return;
+        }
+        a.refresh_installed(&root);
+        if !a.info.supported_on_current_os() {
+            a.checked = true;
+            a.task = Task::Idle;
+            return;
+        }
+        a.task = Task::Checking;
+        let (app_id, target) = (a.info.id.clone(), a.target(&root));
+        std::thread::spawn(move || {
+            let result = target.latest(prereleases);
+            let _ = proxy.send_event(UserEvent::App(app_id, AppEvent::Checked(result)));
+        });
+    }
+
+    /// Re-checks private apps and any apps that previously failed (e.g. after signing in to GitHub).
+    pub fn recheck_private_or_failed(&mut self, prereleases: bool) {
+        let ids: Vec<String> = self
+            .apps
+            .iter()
+            .filter(|a| !a.busy() && (a.info.private || matches!(a.task, Task::Error { .. })))
+            .map(|a| a.info.id.clone())
+            .collect();
+        for id in ids {
+            self.check_one(&id, prereleases);
+        }
+    }
+
     /// Looks for new releases of every app supported on the current OS. Finding one
     /// only shows the Update button; nothing is downloaded until it's pressed.
     pub fn check_all(&mut self, prereleases: bool) {
@@ -759,7 +968,7 @@ impl Library {
                 continue;
             }
             a.task = Task::Checking;
-            let (id, target, proxy) = (a.info.id, a.target(&root), self.proxy.clone());
+            let (id, target, proxy) = (a.info.id.clone(), a.target(&root), self.proxy.clone());
             std::thread::spawn(move || {
                 let result = target.latest(prereleases);
                 let _ = proxy.send_event(UserEvent::App(id, AppEvent::Checked(result)));
@@ -800,12 +1009,12 @@ impl Library {
         }
 
         if limit_hit {
-            let static_id = a.info.id;
+            let owned_id = a.info.id.clone();
             a.log.clear();
             a.log("info", "Waiting for another download to finish…");
             a.task = Task::Queued;
-            if !self.queue.contains(&static_id) {
-                self.queue.push(static_id);
+            if !self.queue.iter().any(|q| q == &owned_id) {
+                self.queue.push(owned_id);
             }
             return;
         }
@@ -814,20 +1023,20 @@ impl Library {
 
     /// Starts updating every eligible installed app that has a newer release available.
     pub fn update_all(&mut self) {
-        let ids: Vec<&'static str> = self
+        let ids: Vec<String> = self
             .apps
             .iter()
             .filter(|a| a.installed.is_some() && a.update_available() && a.info.supported_on_current_os() && !a.busy() && !a.running)
-            .map(|a| a.info.id)
+            .map(|a| a.info.id.clone())
             .collect();
         for id in ids {
-            self.install(id);
+            self.install(&id);
         }
     }
 
     /// Cancels a queued download before it has begun.
     pub fn cancel_queued(&mut self, id: &str) {
-        self.queue.retain(|q| *q != id);
+        self.queue.retain(|q| q != id);
         if let Some(a) = self.get(id) {
             if matches!(a.task, Task::Queued) {
                 a.task = Task::Idle;
@@ -839,13 +1048,13 @@ impl Library {
     fn drain_queue(&mut self) {
         while !self.queue.is_empty() && (self.max_downloads == 0 || self.active_downloads() < self.max_downloads as usize) {
             let next_id = self.queue.remove(0);
-            if let Some(a) = self.get(next_id) {
+            if let Some(a) = self.get(&next_id) {
                 if !matches!(a.task, Task::Queued) {
                     continue;
                 }
                 a.task = Task::Idle;
             }
-            self.start_install(next_id);
+            self.start_install(&next_id);
         }
     }
 
@@ -874,10 +1083,10 @@ impl Library {
             None => a.log("info", format!("Installing {} v{}", a.info.name, release.version)),
         }
         a.task = Task::Downloading { done: 0, total: release.size };
-        let id = a.info.id;
+        let id = a.info.id.clone();
         std::thread::spawn(move || {
             let send = |e: AppEvent| {
-                let _ = proxy.send_event(UserEvent::App(id, e));
+                let _ = proxy.send_event(UserEvent::App(id.clone(), e));
             };
             let log = |line: String| send(AppEvent::Log(line));
             let mut last_pct = u64::MAX;
@@ -1003,10 +1212,10 @@ impl Library {
         a.log.clear();
         a.log("info", format!("Verifying {} v{}", a.info.name, a.installed.as_deref().unwrap_or("?")));
         a.task = Task::Verifying { done: 0, total: 0 };
-        let (id, target) = (a.info.id, a.target(&root));
+        let (id, target) = (a.info.id.clone(), a.target(&root));
         std::thread::spawn(move || {
             let send = |e: AppEvent| {
-                let _ = proxy.send_event(UserEvent::App(id, e));
+                let _ = proxy.send_event(UserEvent::App(id.clone(), e));
             };
             let mut last = 0;
             let progress = |done, total| {
@@ -1038,10 +1247,10 @@ impl Library {
         }
         a.log("info", format!("Repairing {} file{}", a.damaged.len(), if a.damaged.len() == 1 { "" } else { "s" }));
         a.task = Task::Repairing { done: 0, total: 0 };
-        let (id, paths) = (a.info.id, a.damaged.clone());
+        let (id, paths) = (a.info.id.clone(), a.damaged.clone());
         std::thread::spawn(move || {
             let send = |e: AppEvent| {
-                let _ = proxy.send_event(UserEvent::App(id, e));
+                let _ = proxy.send_event(UserEvent::App(id.clone(), e));
             };
             let mut last_pct = u64::MAX;
             let progress = |done, total| {
@@ -1107,7 +1316,7 @@ impl Library {
                 }
             },
         };
-        match shell_open(a.info, &exe, target.dir()) {
+        match shell_open(&a.info, &exe, target.dir()) {
             Ok(()) => {
                 a.log("info", format!("Started {}", exe.display()));
                 a.starting = Some(Instant::now());
@@ -1128,13 +1337,13 @@ impl Library {
         if a.busy() || !a.running {
             return;
         }
-        let (id, name, how, target) = (a.info.id, a.info.name, a.info.stop, a.target(&root));
+        let (id, name, how, target) = (a.info.id.clone(), a.info.name.clone(), a.info.stop, a.target(&root));
         let Some(installed) = target.installed() else { return };
         a.task = Task::Stopping;
         a.starting = None;
         std::thread::spawn(move || {
             let log = |line: String| {
-                let _ = proxy.send_event(UserEvent::App(id, AppEvent::Log(line)));
+                let _ = proxy.send_event(UserEvent::App(id.clone(), AppEvent::Log(line)));
             };
             let dir = target.dir().to_path_buf();
             // Versions from before an app learned its quit argument would just start
@@ -1160,7 +1369,7 @@ impl Library {
                             let message = format!(
                                 "{name} is in the middle of a job, so it's asking in its own window whether to close once it's done"
                             );
-                            let _ = proxy.send_event(UserEvent::App(id, AppEvent::StopDeferred(message)));
+                            let _ = proxy.send_event(UserEvent::App(id.clone(), AppEvent::StopDeferred(message)));
                             return;
                         }
                         Ok(_) => {}
@@ -1254,7 +1463,7 @@ impl Library {
 /// Starts a program the way Explorer would. Unlike spawning it directly, this
 /// lets an app that asks for administrator rights show the UAC prompt.
 #[cfg(windows)]
-fn shell_open(_info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
+fn shell_open(_info: &RuntimeApp, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
@@ -1282,7 +1491,7 @@ fn shell_open(_info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> 
 }
 
 #[cfg(not(windows))]
-fn shell_open(info: &AppInfo, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
+fn shell_open(info: &RuntimeApp, exe: &std::path::Path, dir: &std::path::Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755));
 

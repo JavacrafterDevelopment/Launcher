@@ -1,5 +1,9 @@
 /target
 /dist
-# Settings and the WebView2 profile, if the launcher is run from the repo root.
+# Settings, credentials (Linux dev fallback), and WebView2 profile.
 /data
+**/data/
 /portableApplications
+**/.github-credentials.json
+.env
+.env.*
