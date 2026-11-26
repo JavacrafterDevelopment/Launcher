@@ -357,7 +357,13 @@ fn page_html(settings: &Settings) -> String {
         "justUpdated": std::env::args().any(|a| a == "--updated"),
         "icons": apps::icons(),
     });
+    let html_lang = match settings.language_code() {
+        "ru" => "ru",
+        "es" => "es",
+        _ => "en",
+    };
     INDEX_HTML
+        .replace("{{LANG}}", html_lang)
         .replace("{{LOOK}}", settings.look_name())
         .replace("{{THEME}}", if settings.is_dark() { "dark" } else { "light" })
         .replace("{{PALETTE}}", settings.palette())
@@ -460,6 +466,9 @@ impl App {
                 }
                 if let Some(l) = msg["look"].as_str().filter(|l| settings::LOOKS.contains(l)) {
                     self.settings.look = l.into();
+                }
+                if let Some(lang) = msg["language"].as_str().filter(|l| settings::LANGUAGES.contains(l)) {
+                    self.settings.language = lang.into();
                 }
                 if let Some(c) = msg["checkEvery"].as_str() {
                     self.settings.check_every = if c == "manual" { "manual".into() } else { "auto".into() };

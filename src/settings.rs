@@ -107,6 +107,8 @@ pub struct Settings {
     pub theme: String,
     /// "modern" (ArtCraft-inspired) or "legacy" (original reading-room look).
     pub look: String,
+    /// Interface language: "auto" (follow system), "en", "es", or "ru".
+    pub language: String,
     /// "auto" (check on launch and every 5 minutes) or "manual" (only when asked).
     pub check_every: String,
     /// Check GitHub on launch (Discord-style loading splash), and if a newer launcher
@@ -139,6 +141,7 @@ pub struct Settings {
 pub const LIGHT_SCHEMES: &[&str] = &["walnut", "sage", "slate", "rose"];
 pub const DARK_SCHEMES: &[&str] = &["gold", "ocean", "forest", "plum"];
 pub const LOOKS: &[&str] = &["modern", "legacy"];
+pub const LANGUAGES: &[&str] = &["auto", "en", "es", "ru"];
 pub const VIEWS: &[&str] = &["grid", "table"];
 pub const SORTS: &[&str] = &["name-asc", "name-desc", "status", "updated"];
 
@@ -147,6 +150,7 @@ impl Default for Settings {
         Self {
             theme: "light".into(),
             look: "modern".into(),
+            language: "auto".into(),
             check_every: "auto".into(),
             auto_update: true,
             simultaneous_downloads: 1,
@@ -193,6 +197,10 @@ impl Settings {
 
     pub fn look_name(&self) -> &str {
         if self.look == "legacy" { "legacy" } else { "modern" }
+    }
+
+    pub fn language_code(&self) -> &str {
+        LANGUAGES.iter().find(|l| **l == self.language.as_str()).copied().unwrap_or("auto")
     }
 
     pub fn is_modern(&self) -> bool {
@@ -260,6 +268,8 @@ mod tests {
         assert_eq!(s.dark_scheme, "gold");
         assert_eq!(s.palette(), "gold");
         assert_eq!(s.look_name(), "modern");
+        assert_eq!(s.language, "auto");
+        assert_eq!(s.language_code(), "auto");
         assert_eq!(s.simultaneous_downloads, 1);
         assert!(s.notify_app_updates);
         assert!(s.checks_automatically());
@@ -269,8 +279,14 @@ mod tests {
     /// to the default instead of leaving the page unstyled.
     #[test]
     fn unknown_scheme_falls_back() {
-        let s = Settings { look: "legacy".into(), light_scheme: "neon".into(), ..Settings::default() };
+        let s = Settings {
+            look: "legacy".into(),
+            language: "klingon".into(),
+            light_scheme: "neon".into(),
+            ..Settings::default()
+        };
         assert_eq!(s.palette(), "walnut");
+        assert_eq!(s.language_code(), "auto");
         assert_eq!(s.paper(), (0xF4, 0xEE, 0xE2, 0xFF));
     }
 
@@ -286,6 +302,7 @@ mod tests {
     fn schemes_round_trip() {
         let s = Settings {
             look: "legacy".into(),
+            language: "ru".into(),
             theme: "dark".into(),
             light_scheme: "rose".into(),
             dark_scheme: "plum".into(),
@@ -297,6 +314,7 @@ mod tests {
         };
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
         assert_eq!((back.light_scheme.as_str(), back.dark_scheme.as_str()), ("rose", "plum"));
+        assert_eq!(back.language_code(), "ru");
         assert_eq!(back.palette(), "plum");
         assert_eq!(back.paper(), (0x12, 0x12, 0x12, 0xFF));
         assert_eq!(back.simultaneous_downloads, 3);

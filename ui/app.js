@@ -8,13 +8,14 @@
 
 const BOOT = window.BOOT || {
   // Opened as a plain file (browser preview): stand in for the host.
-  version: '0.3.17',
+  version: '0.3.18',
   repo: 'JavacrafterDevelopment/Launcher',
   githubOrgUrl: 'https://github.com/JavacrafterDevelopment',
   os: /Mac/i.test(navigator.platform || '') ? 'MacOS' : 'Windows',
   settings: {
     theme: 'light',
     look: 'modern',
+    language: 'auto',
     checkEvery: 'auto',
     autoUpdate: true,
     simultaneousDownloads: 1,
@@ -106,12 +107,15 @@ const el = {
   btnCheck:        $('btn-check'),
   btnDownload:     $('btn-download'),
   btnRestart:      $('btn-restart'),
+  currentVersion:  $('current-version'),
   last:            $('upd-last'),
+  setLanguage:     $('set-language'),
   setCheckEvery:   $('set-check-every'),
   setAuto:         $('set-auto'),
   setSimDl:        $('set-sim-dl'),
   setNotify:       $('set-notify'),
   setPre:          $('set-pre'),
+  portableDesc:    $('portable-desc'),
   installDisplay:  $('install-folder-display'),
   btnBrowseInst:   $('btn-browse-install'),
   btnDefaultInst:  $('btn-default-install'),
@@ -133,6 +137,7 @@ const state = {
   settings:         Object.assign({
     theme: 'light',
     look: 'modern',
+    language: 'auto',
     checkEvery: 'auto',
     autoUpdate: true,
     simultaneousDownloads: 1,
@@ -171,6 +176,666 @@ const state = {
   openMenuId:       null,
 };
 
+/* -------------------------------------------------------------- i18n */
+
+const SUPPORTED_LANGS = ['en', 'es', 'ru'];
+
+const I18N = {
+  ru: {
+    'Checking for updates…': 'Проверка обновлений…',
+    'Skip for now': 'Пропустить',
+    'Update found — starting download…': 'Найдено обновление — начинаем скачивание…',
+    'Downloading update — {pct}% ({done} of {total})': 'Скачивание обновления — {pct}% ({done} из {total})',
+    'Downloading update…': 'Скачивание обновления…',
+    'Installing update & restarting…': 'Установка обновления и перезапуск…',
+    'Javacrafter App Suite': 'Набор приложений Javacrafter',
+    'Your apps': 'Ваши приложения',
+    'Apps': 'Приложения',
+    'App updates available': 'Доступны обновления приложений',
+    'Short-lived tools': 'Временные утилиты',
+    'Temporary Apps': 'Временные',
+    'Your games': 'Ваши игры',
+    'Games': 'Игры',
+    'Game updates available': 'Доступны обновления игр',
+    'Settings (Ctrl+,)': 'Настройки (Ctrl+,)',
+    'Settings': 'Настройки',
+    'Updates & notices': 'Обновления и уведомления',
+    'Updates': 'Обновления',
+    'Available updates': 'Доступные обновления',
+    'Close': 'Закрыть',
+    'Minimize': 'Свернуть',
+    'Maximize': 'Развернуть',
+    'UPDATE': 'ОБНОВЛЕНИЕ',
+    'Update & restart': 'Обновить и перезапустить',
+    'Dismiss': 'Закрыть',
+    'Check for updates': 'Проверить обновления',
+    'Update all': 'Обновить все',
+    'Update 1 app': 'Обновить 1 приложение',
+    'Update all ({count})': 'Обновить все ({count})',
+    'Sort': 'Сортировка',
+    'Sort apps': 'Сортировка приложений',
+    'Name (A–Z)': 'Имя (А–Я)',
+    'Name (Z–A)': 'Имя (Я–А)',
+    'Status': 'Статус',
+    'Recently updated': 'Недавно обновлённые',
+    'Search apps': 'Поиск приложений',
+    'Clear search': 'Очистить поиск',
+    'Show apps as cards': 'Показывать приложения карточками',
+    'Grid': 'Сетка',
+    'Show apps as a table': 'Показывать приложения таблицей',
+    'Table': 'Таблица',
+    'Language': 'Язык',
+    'Auto': 'Авто',
+    'Open the releases page on GitHub': 'Открыть страницу релизов на GitHub',
+    'Automatically': 'Автоматически',
+    'Only when I ask': 'Только по запросу',
+    'Automatically download and install launcher updates': 'Автоматически скачивать и устанавливать обновления лаунчера',
+    'Checks on startup while loading, and updates before the launcher opens.': 'Проверяет при запуске во время загрузки и обновляется до открытия лаунчера.',
+    'Simultaneous downloads': 'Одновременные загрузки',
+    'No limit': 'Без ограничений',
+    'Downloads running together share your connection, so each one is slower.': 'Одновременные загрузки делят ваше подключение, поэтому каждая идёт медленнее.',
+    'Notify me when an installed app has an update': 'Уведомлять, когда у установленного приложения есть обновление',
+    'Include pre-releases (betas and release candidates)': 'Включать предварительные релизы (бета и RC)',
+    'Betas and release candidates can replace your stable installation.': 'Бета-версии и кандидаты в релизы могут заменить стабильную установку.',
+    'Not checked': 'Не проверялось',
+    'The launcher can check GitHub for a newer release.': 'Лаунчер может проверить наличие новой версии на GitHub.',
+    'View on GitHub': 'Открыть на GitHub',
+    'Download & install': 'Скачать и установить',
+    'Restart to update': 'Перезапустить для обновления',
+    'Current Version': 'Текущая версия',
+    'Portable': 'Портативность',
+    'Everything stays in this folder': 'Всё хранится в этой папке',
+    'Open folder': 'Открыть папку',
+    'Default Install Folder': 'Папка установки по умолчанию',
+    'Install folder': 'Папка установки',
+    'Apps are placed inside this folder.': 'Приложения размещаются внутри этой папки.',
+    'Browse…': 'Обзор…',
+    'Use default': 'По умолчанию',
+    'New installs use this folder. Updates stay in their current location.': 'Новые установки используют эту папку. Обновления остаются на прежнем месте.',
+    'Appearance': 'Внешний вид',
+    'Theme': 'Оформление',
+    'Switch between the crisp Modern layout and the classic Legacy look.': 'Переключайтесь между современным макетом и классическим оформлением.',
+    'Modern': 'Современная',
+    'Legacy': 'Классическая',
+    'Color mode': 'Цветовая тема',
+    'Follow your operating system, or pick Light or Dark.': 'Следуйте настройкам системы или выберите светлую или тёмную тему.',
+    'Match system': 'Как в системе',
+    'Light': 'Светлая',
+    'Dark': 'Тёмная',
+    'Light mode colours': 'Цвета светлой темы',
+    'Used in Legacy look while light mode is active.': 'Используются в классическом оформлении при светлой теме.',
+    'Dark mode colours': 'Цвета тёмной темы',
+    'Used in Legacy look while dark mode is active.': 'Используются в классическом оформлении при тёмной теме.',
+    'Walnut & Gilt': 'Орех и позолота',
+    'Sage': 'Шалфей',
+    'Slate': 'Сланец',
+    'Rose': 'Роза',
+    'Charcoal & Gold': 'Уголь и золото',
+    'Ocean': 'Океан',
+    'Forest': 'Лес',
+    'Plum': 'Слива',
+    'Default': 'По умолчанию',
+    '{name} (default)': '{name} (по умолчанию)',
+    'Quit Launcher': 'Выйти из Launcher',
+    'Done': 'Готово',
+    'Update settings': 'Настройки обновлений',
+    'Update': 'Обновить',
+    'Restart': 'Перезапуск',
+    'Details': 'Подробнее',
+    'JavacrafterDevelopment on GitHub': 'JavacrafterDevelopment на GitHub',
+    'Update now': 'Обновить сейчас',
+    'just now': 'только что',
+    'yesterday': 'вчера',
+    '{n} min ago': '{n} мин. назад',
+    '{n} h ago': '{n} ч. назад',
+    'Checked {ago}': 'Проверено {ago}',
+    'Checking…': 'Проверка…',
+    'Asking GitHub for the latest release of {repo}.': 'Запрос последнего релиза {repo} на GitHub.',
+    'Up to date': 'Актуальная версия',
+    'You are running the newest release on GitHub.': 'У вас установлена последняя версия с GitHub.',
+    'Launcher update available': 'Доступно обновление Launcher',
+    'Update available': 'Доступно обновление',
+    'A newer Launcher release is out ({size}).': 'Вышла новая версия Launcher ({size}).',
+    'Downloading update — {pct}%': 'Скачивание обновления — {pct}%',
+    'Downloading…': 'Скачивание…',
+    '{done} of {total}': '{done} из {total}',
+    'Starting the download…': 'Запуск скачивания…',
+    'Update installs when you close the launcher': 'Обновление установится при закрытии лаунчера',
+    'Update is ready to install': 'Обновление готово к установке',
+    'Ready to restart': 'Готово к перезапуску',
+    'Downloaded and verified. Restart to switch over, or it installs itself when you close the launcher.': 'Скачано и проверено. Перезапустите сейчас или обновление установится при закрытии лаунчера.',
+    'Update failed': 'Ошибка обновления',
+    'Queued: {name}': 'В очереди: {name}',
+    'Updating {name} — {pct}%': 'Обновление {name} — {pct}%',
+    'Updating {name}…': 'Обновление {name}…',
+    'Downloading {name} — {pct}%': 'Скачивание {name} — {pct}%',
+    'Downloading {name}…': 'Скачивание {name}…',
+    'Installing {name}…': 'Установка {name}…',
+    'Verifying {name} — {done} of {total} files': 'Проверка {name} — {done} из {total} файлов',
+    'Verifying {name}…': 'Проверка {name}…',
+    'Repairing {name} — {pct}%': 'Восстановление {name} — {pct}%',
+    'Repairing {name}…': 'Восстановление {name}…',
+    'Downloading Launcher update — {pct}%': 'Скачивание обновления Launcher — {pct}%',
+    '+{n} more': 'ещё +{n}',
+    'Checked {ago} · using GitHub': 'Проверено {ago} · через GitHub',
+    'Using GitHub': 'Через GitHub',
+    'Downloading Launcher update…': 'Скачивание обновления Launcher…',
+    '{done} of {total} · {pct}%': '{done} из {total} · {pct}%',
+    'Launcher update is ready to install.': 'Обновление Launcher готово к установке.',
+    'Restart now': 'Перезапустить',
+    'A newer Launcher update is available.': 'Доступна новая версия Launcher.',
+    'Pre-release notes': 'Заметки к предварительному релизу',
+    'Release notes': 'Заметки к релизу',
+    'No release notes.': 'Заметки к релизу отсутствуют.',
+    'Everything is up to date.': 'Всё обновлено до последних версий.',
+    '{n} installed': '{n} уст.',
+    'Pinned': 'Закреплённые',
+    'Installed': 'Установлены',
+    'status.Installed': 'Установлено',
+    'Not installed': 'Не установлены',
+    'No matches for “{q}”.': 'Ничего не найдено по запросу «{q}».',
+    'No temporary apps right now.': 'Сейчас нет временных приложений.',
+    'No games yet. They’ll appear here once they’re added.': 'Игр пока нет. Они появятся здесь после добавления.',
+    'No apps found.': 'Приложения не найдены.',
+    'Queued · Cancel': 'В очереди · Отмена',
+    'Stopping…': 'Остановка…',
+    'Stop': 'Стоп',
+    'Ask {name} to quit': 'Запросить выход из {name}',
+    'Open': 'Открыть',
+    'Update {name} to v{version}': 'Обновить {name} до v{version}',
+    'Starting…': 'Запуск…',
+    '{platforms} only': 'Только {platforms}',
+    'Not on {os}': 'Нет для {os}',
+    'Install': 'Установить',
+    'Queued': 'В очереди',
+    'Installing…': 'Установка…',
+    'Verifying…': 'Проверка…',
+    'Repairing…': 'Восстановление…',
+    'Error': 'Ошибка',
+    'Running': 'Запущено',
+    'Available to install': 'Доступно для установки',
+    'No release yet': 'Релизов пока нет',
+    'No release': 'Нет релиза',
+    'Unavailable': 'Недоступно',
+    'Downloading {done} of {total} · {pct}%': 'Скачивание {done} из {total} · {pct}%',
+    'Verifying files and installing…': 'Проверка файлов и установка…',
+    'Waiting for another download to finish…': 'Ожидание завершения другой загрузки…',
+    'Verifying {done} of {total} files': 'Проверка {done} из {total} файлов',
+    'Repairing {pct}% of {total}': 'Восстановление {pct}% из {total}',
+    'Reading package index…': 'Чтение индекса пакета…',
+    'Log': 'Журнал',
+    'Hide log': 'Скрыть журнал',
+    'Show log': 'Показать журнал',
+    'by {name}': 'от {name}',
+    'Not portable': 'Не портативно',
+    'Keeps its settings and data in {folder}Data, inside its own folder.': 'Хранит настройки и данные в {folder}Data внутри собственной папки.',
+    'Keeps its settings in ~/Library/Application Support/{name}, outside its own folder.': 'Хранит настройки в ~/Library/Application Support/{name}, вне собственной папки.',
+    'Download size: {size}': 'Размер загрузки: {size}',
+    'Last updated: {date}': 'Обновлено: {date}',
+    'Unpin {name}': 'Открепить {name}',
+    'Pin {name} to top': 'Закрепить {name} сверху',
+    'More actions for {name}': 'Другие действия для {name}',
+    'App': 'Приложение',
+    'Version': 'Версия',
+    'Released': 'Дата релиза',
+    'Author': 'Автор',
+    'Launch with .bat': 'Запустить через .bat',
+    'Open install folder': 'Открыть папку установки',
+    'Verify & repair files': 'Проверить и восстановить файлы',
+    'Release notes ↗': 'Заметки к релизу ↗',
+    'View on GitHub ↗': 'Открыть на GitHub ↗',
+    'Hide activity log': 'Скрыть журнал действий',
+    'Show activity log': 'Показать журнал действий',
+    'Click again to move to Trash': 'Нажмите ещё раз, чтобы переместить в Корзину',
+    'Click again to delete app & data': 'Нажмите ещё раз, чтобы удалить приложение и данные',
+    'Uninstall': 'Удалить',
+    'A newer version of Launcher is ready to download and install.': 'Новая версия Launcher готова к скачиванию и установке.',
+    'Downloading update': 'Скачивание обновления',
+    '{pct}% of {total}': '{pct}% из {total}',
+    'Starting download…': 'Запуск скачивания…',
+    'Update ready to install': 'Обновление готово к установке',
+    'Restart now to finish updating, or it will install when you close Launcher.': 'Перезапустите сейчас или обновление установится при закрытии Launcher.',
+    'Later': 'Позже',
+    'Update available: {name}': 'Доступно обновление: {name}',
+    'v{version} is ready to install.': 'Версия v{version} готова к установке.',
+    '{names} can be updated.': 'Можно обновить: {names}.',
+    'View': 'Показать',
+    'Press Update on each one to install it.': 'Нажмите «Обновить» на каждом, чтобы установить.',
+    'Your apps are up to date': 'Все приложения актуальны',
+    'Everything installed is on its newest release.': 'Все установленные приложения обновлены до последних версий.',
+    'Launcher updated': 'Launcher обновлён',
+    'You’re running the newest release.': 'У вас установлена новейшая версия.',
+  },
+  es: {
+    'Checking for updates…': 'Buscando actualizaciones…',
+    'Skip for now': 'Omitir por ahora',
+    'Update found — starting download…': 'Actualización encontrada — iniciando descarga…',
+    'Downloading update — {pct}% ({done} of {total})': 'Descargando actualización — {pct}% ({done} de {total})',
+    'Downloading update…': 'Descargando actualización…',
+    'Installing update & restarting…': 'Instalando actualización y reiniciando…',
+    'Javacrafter App Suite': 'Suite de aplicaciones Javacrafter',
+    'Your apps': 'Tus aplicaciones',
+    'Apps': 'Aplicaciones',
+    'App updates available': 'Actualizaciones de aplicaciones disponibles',
+    'Short-lived tools': 'Herramientas temporales',
+    'Temporary Apps': 'Temporales',
+    'Your games': 'Tus juegos',
+    'Games': 'Juegos',
+    'Game updates available': 'Actualizaciones de juegos disponibles',
+    'Settings (Ctrl+,)': 'Ajustes (Ctrl+,)',
+    'Settings': 'Ajustes',
+    'Updates & notices': 'Actualizaciones y avisos',
+    'Updates': 'Actualizaciones',
+    'Available updates': 'Actualizaciones disponibles',
+    'Close': 'Cerrar',
+    'Minimize': 'Minimizar',
+    'Maximize': 'Maximizar',
+    'UPDATE': 'ACTUALIZACIÓN',
+    'Update & restart': 'Actualizar y reiniciar',
+    'Dismiss': 'Descartar',
+    'Check for updates': 'Buscar actualizaciones',
+    'Update all': 'Actualizar todas',
+    'Update 1 app': 'Actualizar 1 aplicación',
+    'Update all ({count})': 'Actualizar todas ({count})',
+    'Sort': 'Ordenar',
+    'Sort apps': 'Ordenar aplicaciones',
+    'Name (A–Z)': 'Nombre (A–Z)',
+    'Name (Z–A)': 'Nombre (Z–A)',
+    'Status': 'Estado',
+    'Recently updated': 'Actualizadas recientemente',
+    'Search apps': 'Buscar aplicaciones',
+    'Clear search': 'Borrar búsqueda',
+    'Show apps as cards': 'Mostrar las aplicaciones como tarjetas',
+    'Grid': 'Cuadrícula',
+    'Show apps as a table': 'Mostrar las aplicaciones como tabla',
+    'Table': 'Tabla',
+    'Language': 'Idioma',
+    'Auto': 'Automático',
+    'Open the releases page on GitHub': 'Abrir la página de versiones en GitHub',
+    'Automatically': 'Automáticamente',
+    'Only when I ask': 'Solo cuando lo pida',
+    'Automatically download and install launcher updates': 'Descargar e instalar actualizaciones del lanzador automáticamente',
+    'Checks on startup while loading, and updates before the launcher opens.': 'Comprueba al iniciar mientras carga y actualiza antes de abrir el lanzador.',
+    'Simultaneous downloads': 'Descargas simultáneas',
+    'No limit': 'Sin límite',
+    'Downloads running together share your connection, so each one is slower.': 'Las descargas simultáneas comparten tu conexión, así que cada una es más lenta.',
+    'Notify me when an installed app has an update': 'Avisarme cuando una aplicación instalada tenga una actualización',
+    'Include pre-releases (betas and release candidates)': 'Incluir versiones preliminares (betas y versiones candidatas)',
+    'Betas and release candidates can replace your stable installation.': 'Las betas y versiones candidatas pueden reemplazar tu instalación estable.',
+    'Not checked': 'Sin comprobar',
+    'The launcher can check GitHub for a newer release.': 'El lanzador puede comprobar en GitHub si hay una versión más reciente.',
+    'View on GitHub': 'Ver en GitHub',
+    'Download & install': 'Descargar e instalar',
+    'Restart to update': 'Reiniciar para actualizar',
+    'Current Version': 'Versión actual',
+    'Portable': 'Portátil',
+    'Everything stays in this folder': 'Todo permanece en esta carpeta',
+    'Open folder': 'Abrir carpeta',
+    'Default Install Folder': 'Carpeta de instalación predeterminada',
+    'Install folder': 'Carpeta de instalación',
+    'Apps are placed inside this folder.': 'Las aplicaciones se guardan dentro de esta carpeta.',
+    'Browse…': 'Examinar…',
+    'Use default': 'Usar predeterminada',
+    'New installs use this folder. Updates stay in their current location.': 'Las instalaciones nuevas usan esta carpeta. Las actualizaciones se mantienen en su ubicación actual.',
+    'Appearance': 'Apariencia',
+    'Theme': 'Estilo',
+    'Switch between the crisp Modern layout and the classic Legacy look.': 'Cambia entre el diseño moderno y el aspecto clásico.',
+    'Modern': 'Moderno',
+    'Legacy': 'Clásico',
+    'Color mode': 'Modo de color',
+    'Follow your operating system, or pick Light or Dark.': 'Sigue el tema de tu sistema operativo o elige Claro u Oscuro.',
+    'Match system': 'Igual que el sistema',
+    'Light': 'Claro',
+    'Dark': 'Oscuro',
+    'Light mode colours': 'Colores del modo claro',
+    'Used in Legacy look while light mode is active.': 'Usados en el aspecto clásico cuando el modo claro está activo.',
+    'Dark mode colours': 'Colores del modo oscuro',
+    'Used in Legacy look while dark mode is active.': 'Usados en el aspecto clásico cuando el modo oscuro está activo.',
+    'Walnut & Gilt': 'Nogal y dorado',
+    'Sage': 'Salvia',
+    'Slate': 'Pizarra',
+    'Rose': 'Rosa',
+    'Charcoal & Gold': 'Carbón y oro',
+    'Ocean': 'Océano',
+    'Forest': 'Bosque',
+    'Plum': 'Ciruela',
+    'Default': 'Predeterminado',
+    '{name} (default)': '{name} (predeterminado)',
+    'Quit Launcher': 'Salir de Launcher',
+    'Done': 'Listo',
+    'Update settings': 'Ajustes de actualizaciones',
+    'Update': 'Actualizar',
+    'Restart': 'Reiniciar',
+    'Details': 'Detalles',
+    'JavacrafterDevelopment on GitHub': 'JavacrafterDevelopment en GitHub',
+    'Update now': 'Actualizar ahora',
+    'just now': 'ahora mismo',
+    'yesterday': 'ayer',
+    '{n} min ago': 'hace {n} min',
+    '{n} h ago': 'hace {n} h',
+    'Checked {ago}': 'Comprobado {ago}',
+    'Checking…': 'Comprobando…',
+    'Asking GitHub for the latest release of {repo}.': 'Consultando en GitHub la última versión de {repo}.',
+    'Up to date': 'Al día',
+    'You are running the newest release on GitHub.': 'Tienes la versión más reciente de GitHub.',
+    'Launcher update available': 'Actualización de Launcher disponible',
+    'Update available': 'Actualización disponible',
+    'A newer Launcher release is out ({size}).': 'Hay una nueva versión de Launcher ({size}).',
+    'Downloading update — {pct}%': 'Descargando actualización — {pct}%',
+    'Downloading…': 'Descargando…',
+    '{done} of {total}': '{done} de {total}',
+    'Starting the download…': 'Iniciando descarga…',
+    'Update installs when you close the launcher': 'La actualización se instalará al cerrar el lanzador',
+    'Update is ready to install': 'Actualización lista para instalar',
+    'Ready to restart': 'Listo para reiniciar',
+    'Downloaded and verified. Restart to switch over, or it installs itself when you close the launcher.': 'Descargada y verificada. Reinicia ahora o se instalará al cerrar el lanzador.',
+    'Update failed': 'Error de actualización',
+    'Queued: {name}': 'En cola: {name}',
+    'Updating {name} — {pct}%': 'Actualizando {name} — {pct}%',
+    'Updating {name}…': 'Actualizando {name}…',
+    'Downloading {name} — {pct}%': 'Descargando {name} — {pct}%',
+    'Downloading {name}…': 'Descargando {name}…',
+    'Installing {name}…': 'Instalando {name}…',
+    'Verifying {name} — {done} of {total} files': 'Verificando {name} — {done} de {total} archivos',
+    'Verifying {name}…': 'Verificando {name}…',
+    'Repairing {name} — {pct}%': 'Reparando {name} — {pct}%',
+    'Repairing {name}…': 'Reparando {name}…',
+    'Downloading Launcher update — {pct}%': 'Descargando actualización de Launcher — {pct}%',
+    '+{n} more': '+{n} más',
+    'Checked {ago} · using GitHub': 'Comprobado {ago} · con GitHub',
+    'Using GitHub': 'Con GitHub',
+    'Downloading Launcher update…': 'Descargando actualización de Launcher…',
+    '{done} of {total} · {pct}%': '{done} de {total} · {pct}%',
+    'Launcher update is ready to install.': 'La actualización de Launcher está lista para instalar.',
+    'Restart now': 'Reiniciar ahora',
+    'A newer Launcher update is available.': 'Hay una actualización más reciente de Launcher.',
+    'Pre-release notes': 'Notas de la versión preliminar',
+    'Release notes': 'Notas de la versión',
+    'No release notes.': 'Sin notas de la versión.',
+    'Everything is up to date.': 'Todo está actualizado.',
+    '{n} installed': '{n} inst.',
+    'Pinned': 'Fijadas',
+    'Installed': 'Instaladas',
+    'status.Installed': 'Instalada',
+    'Not installed': 'No instaladas',
+    'No matches for “{q}”.': 'No hay resultados para «{q}».',
+    'No temporary apps right now.': 'No hay aplicaciones temporales ahora mismo.',
+    'No games yet. They’ll appear here once they’re added.': 'Aún no hay juegos. Aparecerán aquí cuando se añadan.',
+    'No apps found.': 'No se encontraron aplicaciones.',
+    'Queued · Cancel': 'En cola · Cancelar',
+    'Stopping…': 'Deteniendo…',
+    'Stop': 'Detener',
+    'Ask {name} to quit': 'Pedir a {name} que se cierre',
+    'Open': 'Abrir',
+    'Update {name} to v{version}': 'Actualizar {name} a v{version}',
+    'Starting…': 'Iniciando…',
+    '{platforms} only': 'Solo {platforms}',
+    'Not on {os}': 'No en {os}',
+    'Install': 'Instalar',
+    'Queued': 'En cola',
+    'Installing…': 'Instalando…',
+    'Verifying…': 'Verificando…',
+    'Repairing…': 'Reparando…',
+    'Error': 'Error',
+    'Running': 'En ejecución',
+    'Available to install': 'Disponible para instalar',
+    'No release yet': 'Aún sin versión',
+    'No release': 'Sin versión',
+    'Unavailable': 'No disponible',
+    'Downloading {done} of {total} · {pct}%': 'Descargando {done} de {total} · {pct}%',
+    'Verifying files and installing…': 'Verificando archivos e instalando…',
+    'Waiting for another download to finish…': 'Esperando a que termine otra descarga…',
+    'Verifying {done} of {total} files': 'Verificando {done} de {total} archivos',
+    'Repairing {pct}% of {total}': 'Reparando {pct}% de {total}',
+    'Reading package index…': 'Leyendo el índice del paquete…',
+    'Log': 'Registro',
+    'Hide log': 'Ocultar registro',
+    'Show log': 'Mostrar registro',
+    'by {name}': 'por {name}',
+    'Not portable': 'No portátil',
+    'Keeps its settings and data in {folder}Data, inside its own folder.': 'Guarda sus ajustes y datos en {folder}Data, dentro de su propia carpeta.',
+    'Keeps its settings in ~/Library/Application Support/{name}, outside its own folder.': 'Guarda sus ajustes en ~/Library/Application Support/{name}, fuera de su propia carpeta.',
+    'Download size: {size}': 'Tamaño de descarga: {size}',
+    'Last updated: {date}': 'Última actualización: {date}',
+    'Unpin {name}': 'Quitar fijación de {name}',
+    'Pin {name} to top': 'Fijar {name} arriba',
+    'More actions for {name}': 'Más acciones para {name}',
+    'App': 'Aplicación',
+    'Version': 'Versión',
+    'Released': 'Publicada',
+    'Author': 'Autor',
+    'Launch with .bat': 'Iniciar con .bat',
+    'Open install folder': 'Abrir carpeta de instalación',
+    'Verify & repair files': 'Verificar y reparar archivos',
+    'Release notes ↗': 'Notas de la versión ↗',
+    'View on GitHub ↗': 'Ver en GitHub ↗',
+    'Hide activity log': 'Ocultar registro de actividad',
+    'Show activity log': 'Mostrar registro de actividad',
+    'Click again to move to Trash': 'Haz clic de nuevo para mover a la Papelera',
+    'Click again to delete app & data': 'Haz clic de nuevo para eliminar la app y sus datos',
+    'Uninstall': 'Desinstalar',
+    'A newer version of Launcher is ready to download and install.': 'Hay una versión más reciente de Launcher lista para descargar e instalar.',
+    'Downloading update': 'Descargando actualización',
+    '{pct}% of {total}': '{pct}% de {total}',
+    'Starting download…': 'Iniciando descarga…',
+    'Update ready to install': 'Actualización lista para instalar',
+    'Restart now to finish updating, or it will install when you close Launcher.': 'Reinicia ahora para terminar, o se instalará al cerrar Launcher.',
+    'Later': 'Más tarde',
+    'Update available: {name}': 'Actualización disponible: {name}',
+    'v{version} is ready to install.': 'v{version} está lista para instalar.',
+    '{names} can be updated.': '{names} se pueden actualizar.',
+    'View': 'Ver',
+    'Press Update on each one to install it.': 'Pulsa Actualizar en cada una para instalarla.',
+    'Your apps are up to date': 'Tus aplicaciones están al día',
+    'Everything installed is on its newest release.': 'Todo lo instalado está en su versión más reciente.',
+    'Launcher updated': 'Launcher actualizado',
+    'You’re running the newest release.': 'Estás usando la versión más reciente.',
+  },
+};
+
+const PLURALS = {
+  daysAgo: {
+    en: ['{n} day ago', '{n} days ago'],
+    es: ['hace {n} día', 'hace {n} días'],
+    ru: ['{n} день назад', '{n} дня назад', '{n} дней назад'],
+  },
+  appCount: {
+    en: ['{n} app', '{n} apps'],
+    es: ['{n} aplicación', '{n} aplicaciones'],
+    ru: ['{n} приложение', '{n} приложения', '{n} приложений'],
+  },
+  gameCount: {
+    en: ['{n} game', '{n} games'],
+    es: ['{n} juego', '{n} juegos'],
+    ru: ['{n} игра', '{n} игры', '{n} игр'],
+  },
+  updateCount: {
+    en: ['{n} update', '{n} updates'],
+    es: ['{n} actualización', '{n} actualizaciones'],
+    ru: ['{n} обновление', '{n} обновления', '{n} обновлений'],
+  },
+  appUpdatesAvailable: {
+    en: ['{n} app update available', '{n} app updates available'],
+    es: ['{n} actualización de aplicación disponible', '{n} actualizaciones de aplicaciones disponibles'],
+    ru: ['Доступно {n} обновление', 'Доступно {n} обновления', 'Доступно {n} обновлений'],
+  },
+  repairFiles: {
+    en: ['Repair {n} file', 'Repair {n} files'],
+    es: ['Reparar {n} archivo', 'Reparar {n} archivos'],
+    ru: ['Восстановить {n} файл', 'Восстановить {n} файла', 'Восстановить {n} файлов'],
+  },
+  damagedFiles: {
+    en: ['{n} file damaged or missing. Press Repair to fix.', '{n} files damaged or missing. Press Repair to fix.'],
+    es: ['{n} archivo dañado o faltante. Pulsa Reparar para corregirlo.', '{n} archivos dañados o faltantes. Pulsa Reparar para corregirlos.'],
+    ru: ['{n} файл повреждён или отсутствует. Нажмите «Восстановить».', '{n} файла повреждены или отсутствуют. Нажмите «Восстановить».', '{n} файлов повреждены или отсутствуют. Нажмите «Восстановить».'],
+  },
+  logLines: {
+    en: ['{n} line', '{n} lines'],
+    es: ['{n} línea', '{n} líneas'],
+    ru: ['{n} строка', '{n} строки', '{n} строк'],
+  },
+};
+
+const TAGLINES = {
+  ru: {
+    lighthouse: 'Мгновенный поиск по всем файлам и папкам на всех дисках со значками Проводника.',
+    screenshotapp: 'Скриншоты по таймеру и горячим клавишам, с нумерацией и сохранением куда угодно.',
+    rustwinutil: 'WinUtil от Chris Titus Tech, переписанный на Rust: установка программ, твики и исправление Windows.',
+    kittyconnect: 'Хабы, голосовые комнаты, обмен файлами и хостинг игр с друзьями через зашифрованные туннели TailCat. Без аккаунта и настройки роутера.',
+    inkcognito: '3D-мультиплеерная игра: создайте мир, поделитесь адресом TailCat и играйте с друзьями.',
+    photocraft: 'Растровый фоторедактор с открытым исходным кодом, написанный с нуля на чистом Rust.',
+    vectorcraft: 'Векторный редактор и инструмент иллюстрации с открытым кодом на чистом Rust.',
+    filmcraft: 'Нелинейный видеоредактор с открытым исходным кодом, написанный с нуля на чистом Rust.',
+    effectcraft: 'Инструмент моушн-графики и композитинга с открытым кодом на чистом Rust.',
+    lightcraft: 'Неразрушающий редактор RAW и фотопроцесса с открытым кодом на чистом Rust.',
+    designcraft: 'Редактор вёрстки и публикаций с открытым исходным кодом на чистом Rust.',
+    pdfcraft: 'Чтение и редактирование PDF с открытым исходным кодом на чистом Rust.',
+    figcraft: 'Инструмент дизайна интерфейсов и прототипирования с открытым кодом на чистом Rust.',
+    soundcraft: 'Цифровая аудиостанция с открытым исходным кодом, написанная с нуля на чистом Rust.',
+    cadcraft: 'Инструмент САПР и черчения с открытым исходным кодом на чистом Rust.',
+    deckcraft: 'Редактор презентаций и слайд-шоу с открытым исходным кодом на чистом Rust.',
+    gridcraft: 'Редактор электронных таблиц с открытым исходным кодом на чистом Rust.',
+    wordcraft: 'Текстовый процессор с открытым исходным кодом, написанный с нуля на чистом Rust.',
+    tempcraftbackup: 'Сохраняет исходный код всех приложений Craft в один архив 7z.',
+  },
+  es: {
+    lighthouse: 'Búsqueda instantánea en todos los archivos y carpetas de cada unidad, con los iconos del Explorador.',
+    screenshotapp: 'Capturas de pantalla con temporizador y atajos, numeradas y guardadas donde prefieras.',
+    rustwinutil: 'WinUtil de Chris Titus Tech reescrito en Rust: instala aplicaciones, aplica ajustes y repara Windows.',
+    kittyconnect: 'Salas, voz, intercambio de archivos y partidas con amigos mediante túneles TailCat cifrados. Sin cuenta ni configurar el router.',
+    inkcognito: 'Juego multijugador 3D: crea un mundo, comparte tu dirección TailCat y juega con amigos.',
+    photocraft: 'Editor de fotos rasterizadas de código abierto escrito desde cero en Rust puro.',
+    vectorcraft: 'Herramienta de arte vectorial e ilustración de código abierto escrita desde cero en Rust puro.',
+    filmcraft: 'Editor de vídeo no lineal de código abierto escrito desde cero en Rust puro.',
+    effectcraft: 'Herramienta de gráficos en movimiento y composición de código abierto en Rust puro.',
+    lightcraft: 'Editor no destructivo de fotos y RAW de código abierto escrito desde cero en Rust puro.',
+    designcraft: 'Editor de maquetación y publicación de código abierto escrito desde cero en Rust puro.',
+    pdfcraft: 'Lector y editor de PDF de código abierto escrito desde cero en Rust puro.',
+    figcraft: 'Herramienta de diseño de interfaces y prototipado interactivo de código abierto en Rust puro.',
+    soundcraft: 'Estación de audio digital de código abierto escrita desde cero en Rust puro.',
+    cadcraft: 'Herramienta de diseño asistido por ordenador y dibujo técnico en Rust puro.',
+    deckcraft: 'Editor de presentaciones y diapositivas de código abierto escrito desde cero en Rust puro.',
+    gridcraft: 'Editor de hojas de cálculo de código abierto escrito desde cero en Rust puro.',
+    wordcraft: 'Procesador de textos de código abierto escrito desde cero en Rust puro.',
+    tempcraftbackup: 'Guarda una copia del código fuente actual de todas las aplicaciones Craft en un archivo 7z.',
+  },
+};
+
+function detectSystemLang() {
+  const langs = Array.isArray(navigator.languages) && navigator.languages.length
+    ? navigator.languages
+    : [navigator.language || 'en'];
+  for (const raw of langs) {
+    const base = String(raw || '').toLowerCase().split(/[-_]/)[0];
+    if (SUPPORTED_LANGS.includes(base)) return base;
+  }
+  return 'en';
+}
+
+function activeLang() {
+  const pref = state.settings.language || 'auto';
+  if (SUPPORTED_LANGS.includes(pref)) return pref;
+  return detectSystemLang();
+}
+
+function localeTag() {
+  const lang = activeLang();
+  return lang === 'ru' ? 'ru-RU' : lang === 'es' ? 'es-ES' : 'en-US';
+}
+
+function fmtVars(str, vars) {
+  if (!vars) return str;
+  return str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
+}
+
+function t(key, vars) {
+  const lang = activeLang();
+  const str = (lang !== 'en' && I18N[lang] && I18N[lang][key]) || key;
+  return fmtVars(str, vars);
+}
+
+function pluralIndex(lang, n) {
+  const abs = Math.abs(Math.trunc(n));
+  if (lang === 'ru') {
+    const mod100 = abs % 100;
+    if (mod100 >= 11 && mod100 <= 14) return 2;
+    const mod10 = abs % 10;
+    if (mod10 === 1) return 0;
+    if (mod10 >= 2 && mod10 <= 4) return 1;
+    return 2;
+  }
+  return abs === 1 ? 0 : 1;
+}
+
+function tPlural(key, n, vars) {
+  const lang = activeLang();
+  const entry = PLURALS[key];
+  const forms = (entry && (entry[lang] || entry.en)) || ['{n}', '{n}'];
+  const form = forms[Math.min(pluralIndex(lang, n), forms.length - 1)];
+  return fmtVars(form, Object.assign({ n }, vars));
+}
+
+function tTagline(app) {
+  const lang = activeLang();
+  return (lang !== 'en' && TAGLINES[lang] && TAGLINES[lang][app.id]) || app.tagline || '';
+}
+
+function renderPortableDesc() {
+  if (!el.portableDesc) return;
+  const lang = activeLang();
+  const code = (txt) => {
+    const c = document.createElement('code');
+    c.textContent = txt;
+    return c;
+  };
+  el.portableDesc.replaceChildren();
+  if (lang === 'ru') {
+    el.portableDesc.append(
+      'Настройки и профиль браузера хранятся в папке ',
+      code('data\\'),
+      ' рядом с ',
+      code('Launcher.exe'),
+      '. Скопируйте папку на флешку или другой ПК — всё перенесётся вместе с вами.',
+    );
+  } else if (lang === 'es') {
+    el.portableDesc.append(
+      'Los ajustes y el perfil del navegador se guardan en ',
+      code('data\\'),
+      ' junto a ',
+      code('Launcher.exe'),
+      '. Copia la carpeta a una memoria USB o a otro equipo y todo irá contigo.',
+    );
+  } else {
+    el.portableDesc.append(
+      'Settings and the browser profile live in ',
+      code('data\\'),
+      ' beside ',
+      code('Launcher.exe'),
+      '. Copy the folder to a stick or another PC and it comes with you.',
+    );
+  }
+}
+
+function applyLanguage() {
+  el.root.lang = activeLang();
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((node) => {
+    node.setAttribute('aria-label', t(node.dataset.i18nAria));
+  });
+  if (el.currentVersion) {
+    el.currentVersion.textContent = `${t('Current Version')} : ${BOOT.version}`;
+  }
+  renderPortableDesc();
+}
+
 /* ----------------------------------------------------------- helpers */
 
 const fmtMB = (b) => `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
@@ -185,28 +850,28 @@ function h(tag, cls, text) {
 
 function ago(secs) {
   const d = Math.max(0, Date.now() / 1000 - secs);
-  if (d < 45) return 'just now';
-  if (d < 3600) return `${Math.round(d / 60)} min ago`;
-  if (d < 86400) return `${Math.round(d / 3600)} h ago`;
+  if (d < 45) return t('just now');
+  if (d < 3600) return t('{n} min ago', { n: Math.round(d / 60) });
+  if (d < 86400) return t('{n} h ago', { n: Math.round(d / 3600) });
   const days = Math.round(d / 86400);
-  return days === 1 ? 'yesterday' : `${days} days ago`;
+  return days === 1 ? t('yesterday') : tPlural('daysAgo', days);
 }
 
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(localeTag(), { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const timeOf = (ms) => new Date(ms).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 /* --------------------------------------------------- startup splash */
 
 function startSplash() {
   if (!state.splashActive) return;
   el.splash.classList.add('on');
-  el.splashStatus.textContent = 'Checking for updates…';
+  el.splashStatus.textContent = t('Checking for updates…');
   el.splashBar.classList.add('indeterminate');
   el.splashBar.style.width = '';
   el.splashSkip.classList.remove('on');
@@ -240,26 +905,26 @@ function updateSplash() {
     return;
   }
   if (u.state === 'checking' || u.state === 'idle') {
-    el.splashStatus.textContent = 'Checking for updates…';
+    el.splashStatus.textContent = t('Checking for updates…');
     el.splashBar.classList.add('indeterminate');
     el.splashSkip.classList.remove('on');
   } else if (u.state === 'available') {
     clearTimeout(state.splashTimeout);
-    el.splashStatus.textContent = 'Update found — starting download…';
+    el.splashStatus.textContent = t('Update found — starting download…');
     el.splashBar.classList.add('indeterminate');
     el.splashSkip.classList.add('on');
   } else if (u.state === 'downloading') {
     clearTimeout(state.splashTimeout);
     const p = pct(u);
     el.splashStatus.textContent = u.total
-      ? `Downloading update — ${p}% (${fmtMB(u.done)} of ${fmtMB(u.total)})`
-      : 'Downloading update…';
+      ? t('Downloading update — {pct}% ({done} of {total})', { pct: p, done: fmtMB(u.done), total: fmtMB(u.total) })
+      : t('Downloading update…');
     el.splashBar.classList.remove('indeterminate');
     el.splashBar.style.width = `${p}%`;
     el.splashSkip.classList.add('on');
   } else if (u.state === 'ready') {
     clearTimeout(state.splashTimeout);
-    el.splashStatus.textContent = 'Installing update & restarting…';
+    el.splashStatus.textContent = t('Installing update & restarting…');
     el.splashBar.classList.remove('indeterminate');
     el.splashBar.style.width = '100%';
     el.splashSkip.classList.remove('on');
@@ -390,7 +1055,8 @@ function renderSchemes() {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `scheme${s.id === current ? ' on' : ''}`;
-      b.title = `${s.name}${i === 0 ? ' (default)' : ''}`;
+      const localizedName = t(s.name);
+      b.title = i === 0 ? t('{name} (default)', { name: localizedName }) : localizedName;
       b.innerHTML = `<span class="sw" style="background:${s.paper}">
           <span class="sw-card" style="background:${s.card}">
             <span class="sw-line" style="background:${s.ink}"></span>
@@ -400,11 +1066,11 @@ function renderSchemes() {
         </span>`;
       const label = document.createElement('span');
       label.className = 'sw-name';
-      label.textContent = s.name;
+      label.textContent = localizedName;
       if (i === 0) {
         const tag = document.createElement('span');
         tag.className = 'sw-default';
-        tag.textContent = 'Default';
+        tag.textContent = t('Default');
         label.append(tag);
       }
       b.append(label);
@@ -422,6 +1088,9 @@ function renderSchemes() {
 
 function renderSettings() {
   const s = state.settings;
+  if (el.setLanguage) {
+    el.setLanguage.value = ['auto', 'en', 'es', 'ru'].includes(s.language) ? s.language : 'auto';
+  }
   el.setCheckEvery.value = s.checkEvery === 'manual' ? 'manual' : 'auto';
   el.setAuto.checked = !!s.autoUpdate;
   el.setSimDl.value = String(s.simultaneousDownloads ?? 1);
@@ -445,6 +1114,7 @@ function renderSettings() {
   el.sortWrap.style.display = view === 'grid' ? 'inline-flex' : 'none';
 
   applyLook();
+  applyLanguage();
   renderSchemes();
   renderLastCheck();
   renderActivity();
@@ -456,6 +1126,13 @@ function patchSettings(patch) {
   post({ cmd: 'settings', ...patch });
 }
 
+if (el.setLanguage) {
+  el.setLanguage.addEventListener('change', () => {
+    patchSettings({ language: el.setLanguage.value });
+    renderUpdate();
+    renderLibrary();
+  });
+}
 el.setCheckEvery.addEventListener('change', () => patchSettings({ checkEvery: el.setCheckEvery.value }));
 el.setAuto.addEventListener('change', () => patchSettings({ autoUpdate: el.setAuto.checked }));
 el.setSimDl.addEventListener('change', () => patchSettings({ simultaneousDownloads: Number(el.setSimDl.value) }));
@@ -477,8 +1154,8 @@ el.btnDefaultInst.addEventListener('click', () => post({ cmd: 'resetInstallDir' 
 el.btnData.addEventListener('click', () => post({ cmd: 'openDataDir' }));
 
 function renderLastCheck() {
-  const t = state.settings.lastCheck;
-  el.last.textContent = t ? `Checked ${ago(t)}` : '';
+  const ts = state.settings.lastCheck;
+  el.last.textContent = ts ? t('Checked {ago}', { ago: ago(ts) }) : '';
 }
 
 setInterval(() => {
@@ -491,40 +1168,50 @@ setInterval(() => {
 function describe(u) {
   switch (u.state) {
     case 'checking':
-      return { pill: 'busy', short: 'Checking for updates…',
-               title: 'Checking…', detail: `Asking GitHub for the latest release of ${BOOT.repo}.` };
+      return { pill: 'busy', short: t('Checking for updates…'),
+               title: t('Checking…'), detail: t('Asking GitHub for the latest release of {repo}.', { repo: BOOT.repo }) };
     case 'upToDate':
-      return { pill: 'ok', short: 'Up to date',
-               title: 'Up to date', detail: 'You are running the newest release on GitHub.' };
+      return { pill: 'ok', short: t('Up to date'),
+               title: t('Up to date'), detail: t('You are running the newest release on GitHub.') };
     case 'available':
-      return { pill: 'gilt', short: 'Launcher update available',
-               title: 'Update available', detail: `A newer Launcher release is out (${fmtMB(u.release.size)}).` };
+      return { pill: 'gilt', short: t('Launcher update available'),
+               title: t('Update available'), detail: t('A newer Launcher release is out ({size}).', { size: fmtMB(u.release.size) }) };
     case 'downloading':
-      return { pill: 'busy', short: `Downloading update — ${pct(u)}%`,
-               title: 'Downloading…',
-               detail: u.total ? `${fmtMB(u.done)} of ${fmtMB(u.total)}` : 'Starting the download…' };
+      return { pill: 'busy', short: t('Downloading update — {pct}%', { pct: pct(u) }),
+               title: t('Downloading…'),
+               detail: u.total ? t('{done} of {total}', { done: fmtMB(u.done), total: fmtMB(u.total) }) : t('Starting the download…') };
     case 'ready':
       return { pill: 'gilt',
-               short: state.deferred ? 'Update installs when you close the launcher' : 'Update is ready to install',
-               title: 'Ready to restart',
-               detail: 'Downloaded and verified. Restart to switch over, or it installs itself when you close the launcher.' };
+               short: state.deferred ? t('Update installs when you close the launcher') : t('Update is ready to install'),
+               title: t('Ready to restart'),
+               detail: t('Downloaded and verified. Restart to switch over, or it installs itself when you close the launcher.') };
     case 'error':
-      return { pill: 'bad', short: u.message, title: 'Update failed', detail: u.message };
+      return { pill: 'bad', short: u.message, title: t('Update failed'), detail: u.message };
     default:
-      return { pill: '', short: 'Not checked',
-               title: 'Not checked', detail: 'The launcher can check GitHub for a newer release.' };
+      return { pill: '', short: t('Not checked'),
+               title: t('Not checked'), detail: t('The launcher can check GitHub for a newer release.') };
   }
 }
 
 function activityText(a) {
-  const t = a.task;
-  const p = t.total ? Math.floor((t.done / t.total) * 100) : 0;
-  switch (t.state) {
-    case 'queued':      return `Queued: ${a.name}`;
-    case 'downloading': return `${a.installed ? 'Updating' : 'Downloading'} ${a.name}` + (t.total ? ` — ${p}%` : '…');
-    case 'installing':  return `Installing ${a.name}…`;
-    case 'verifying':   return `Verifying ${a.name}` + (t.total ? ` — ${t.done} of ${t.total} files` : '…');
-    case 'repairing':   return `Repairing ${a.name}` + (t.total ? ` — ${p}%` : '…');
+  const task = a.task;
+  const p = task.total ? Math.floor((task.done / task.total) * 100) : 0;
+  switch (task.state) {
+    case 'queued':      return t('Queued: {name}', { name: a.name });
+    case 'downloading':
+      if (a.installed) {
+        return task.total ? t('Updating {name} — {pct}%', { name: a.name, pct: p }) : t('Updating {name}…', { name: a.name });
+      }
+      return task.total ? t('Downloading {name} — {pct}%', { name: a.name, pct: p }) : t('Downloading {name}…', { name: a.name });
+    case 'installing':  return t('Installing {name}…', { name: a.name });
+    case 'verifying':
+      return task.total
+        ? t('Verifying {name} — {done} of {total} files', { name: a.name, done: task.done, total: task.total })
+        : t('Verifying {name}…', { name: a.name });
+    case 'repairing':
+      return task.total
+        ? t('Repairing {name} — {pct}%', { name: a.name, pct: p })
+        : t('Repairing {name}…', { name: a.name });
     default:            return null;
   }
 }
@@ -532,7 +1219,7 @@ function activityText(a) {
 function renderActivity() {
   const jobs = [];
   const u = state.update;
-  if (u.state === 'downloading') jobs.push(`Downloading Launcher update — ${pct(u)}%`);
+  if (u.state === 'downloading') jobs.push(t('Downloading Launcher update — {pct}%', { pct: pct(u) }));
   for (const a of library.apps) {
     const text = activityText(a);
     if (text) jobs.push(text);
@@ -542,16 +1229,16 @@ function renderActivity() {
 
   el.lamp.className = active || checkingAny ? 'busy' : '';
   if (active) {
-    el.statusText.textContent = jobs[0] + (jobs.length > 1 ? ` · +${jobs.length - 1} more` : '');
+    el.statusText.textContent = jobs[0] + (jobs.length > 1 ? ` · ${t('+{n} more', { n: jobs.length - 1 })}` : '');
     el.statusText.title = jobs.join('\n');
   } else if (checkingAny) {
-    el.statusText.textContent = 'Checking for updates…';
+    el.statusText.textContent = t('Checking for updates…');
     el.statusText.title = '';
   } else if (state.settings.lastCheck) {
-    el.statusText.textContent = `Checked ${ago(state.settings.lastCheck)} · using GitHub`;
+    el.statusText.textContent = t('Checked {ago} · using GitHub', { ago: ago(state.settings.lastCheck) });
     el.statusText.title = '';
   } else {
-    el.statusText.textContent = 'Using GitHub';
+    el.statusText.textContent = t('Using GitHub');
     el.statusText.title = '';
   }
 }
@@ -568,8 +1255,8 @@ function renderUpdate() {
   // Footer update shortcut button
   const nudge = { available: 'Update', ready: 'Restart', error: 'Details' }[u.state];
   el.statusUpd.classList.toggle('on', !!nudge);
-  el.statusUpd.title = nudge ? d.short : 'Update settings';
-  if (nudge) el.statusUpdT.textContent = nudge;
+  el.statusUpd.title = nudge ? d.short : t('Update settings');
+  if (nudge) el.statusUpdT.textContent = t(nudge);
 
   // Settings panel manual update section
   el.pill.className = `pill ${d.pill}`;
@@ -602,21 +1289,23 @@ function renderBanner() {
   if (!show || !dismissedPopup) return;
 
   if (u.state === 'downloading') {
-    el.bannerText.textContent = 'Downloading Launcher update…';
+    el.bannerText.textContent = t('Downloading Launcher update…');
     el.bannerProgress.classList.add('on');
-    el.bannerProgLabel.textContent = u.total ? `${fmtMB(u.done)} of ${fmtMB(u.total)} · ${pct(u)}%` : 'Downloading…';
+    el.bannerProgLabel.textContent = u.total
+      ? t('{done} of {total} · {pct}%', { done: fmtMB(u.done), total: fmtMB(u.total), pct: pct(u) })
+      : t('Downloading…');
     el.bannerBar.style.width = `${pct(u)}%`;
     el.bannerAction.style.display = 'none';
   } else if (u.state === 'ready') {
-    el.bannerText.textContent = 'Launcher update is ready to install.';
+    el.bannerText.textContent = t('Launcher update is ready to install.');
     el.bannerProgress.classList.remove('on');
     el.bannerAction.style.display = 'inline-flex';
-    el.bannerAction.textContent = 'Restart now';
+    el.bannerAction.textContent = t('Restart now');
   } else {
-    el.bannerText.textContent = 'A newer Launcher update is available.';
+    el.bannerText.textContent = t('A newer Launcher update is available.');
     el.bannerProgress.classList.remove('on');
     el.bannerAction.style.display = 'inline-flex';
-    el.bannerAction.textContent = 'Update & restart';
+    el.bannerAction.textContent = t('Update & restart');
   }
 }
 
@@ -632,14 +1321,14 @@ el.bannerDismiss.addEventListener('click', () => {
 function renderNotes(rel) {
   el.notes.classList.toggle('on', !!rel);
   if (!rel) return;
-  el.notesTitle.textContent = (rel.prerelease ? 'Pre-release notes' : 'Release notes');
+  el.notesTitle.textContent = rel.prerelease ? t('Pre-release notes') : t('Release notes');
   el.notesLink.dataset.url = rel.page;
   const body = (rel.notes || '').trim();
   el.notesBody.replaceChildren();
   if (body) {
     el.notesBody.textContent = body;
   } else {
-    const m = h('span', 'muted', 'No release notes.');
+    const m = h('span', 'muted', t('No release notes.'));
     el.notesBody.append(m);
   }
 }
@@ -677,7 +1366,7 @@ function renderBell() {
 
   el.bellBody.replaceChildren();
   if (total === 0) {
-    el.bellBody.append(h('div', 'popover-empty', 'Everything is up to date.'));
+    el.bellBody.append(h('div', 'popover-empty', t('Everything is up to date.')));
     return;
   }
 
@@ -686,9 +1375,9 @@ function renderBell() {
     const info = h('div', 'popover-item-info');
     info.append(
       h('div', 'popover-item-name', 'Launcher'),
-      h('div', 'popover-item-meta', state.update.state === 'ready' ? 'Ready to restart' : 'Update available'),
+      h('div', 'popover-item-meta', state.update.state === 'ready' ? t('Ready to restart') : t('Update available')),
     );
-    const act = h('button', 'btn primary compact', state.update.state === 'ready' ? 'Restart' : 'Update');
+    const act = h('button', 'btn primary compact', state.update.state === 'ready' ? t('Restart') : t('Update'));
     act.type = 'button';
     act.addEventListener('click', () => {
       closeBell();
@@ -705,7 +1394,7 @@ function renderBell() {
       h('div', 'popover-item-name', a.name),
       h('div', 'popover-item-meta', `v${a.installed} → v${a.latest.version}`),
     );
-    const act = h('button', 'btn primary compact', 'Update');
+    const act = h('button', 'btn primary compact', t('Update'));
     act.type = 'button';
     act.addEventListener('click', () => {
       closeBell();
@@ -750,8 +1439,9 @@ function tabOf(a) {
 function summarizeApps(list, noun = 'app') {
   const updates = list.filter((a) => a.updateAvailable).length;
   const installed = list.filter((a) => a.installed).length;
-  return `${list.length} ${noun}${list.length === 1 ? '' : 's'} · ${installed} installed`
-    + (updates ? ` · ${updates} update${updates > 1 ? 's' : ''}` : '');
+  const countStr = tPlural(noun === 'game' ? 'gameCount' : 'appCount', list.length);
+  return `${countStr} · ${t('{n} installed', { n: installed })}`
+    + (updates ? ` · ${tPlural('updateCount', updates)}` : '');
 }
 
 function setBadge(id, list) {
@@ -812,7 +1502,7 @@ function sortApps(list) {
 
 function matchesSearch(a, q) {
   if (!q) return true;
-  const hay = `${a.name} ${a.tagline || ''} ${a.repo || ''} ${a.publisher || ''}`.toLowerCase();
+  const hay = `${a.name} ${a.tagline || ''} ${tTagline(a)} ${a.repo || ''} ${a.publisher || ''}`.toLowerCase();
   return hay.includes(q);
 }
 
@@ -842,15 +1532,15 @@ function appStyleVars(a) {
 }
 
 function buildPrimaryActions(a, compact = false) {
-  const t = a.task;
-  const busy = ['checking', 'queued', 'downloading', 'installing', 'verifying', 'repairing', 'stopping'].includes(t.state);
+  const task = a.task;
+  const busy = ['checking', 'queued', 'downloading', 'installing', 'verifying', 'repairing', 'stopping'].includes(task.state);
   const supported = isSupported(a);
   const latest = a.latest;
   const damaged = (a.damaged || []).length;
   const szCls = compact ? 'compact' : 'small';
 
-  if (t.state === 'queued') {
-    const b = h('button', `btn ${szCls} main-btn`, 'Queued · Cancel');
+  if (task.state === 'queued') {
+    const b = h('button', `btn ${szCls} main-btn`, t('Queued · Cancel'));
     b.type = 'button';
     b.addEventListener('click', () => post({ cmd: 'appCancelQueue', id: a.id }));
     return b;
@@ -858,40 +1548,39 @@ function buildPrimaryActions(a, compact = false) {
 
   if (a.installed) {
     if (damaged) {
-      const fix = h('button', `btn ${szCls} gilt main-btn`, `Repair ${damaged} file${damaged > 1 ? 's' : ''}`);
+      const fix = h('button', `btn ${szCls} gilt main-btn`, tPlural('repairFiles', damaged));
       fix.type = 'button';
       fix.disabled = busy;
       fix.addEventListener('click', () => post({ cmd: 'appRepair', id: a.id }));
       return fix;
     }
 
-    if (t.state === 'stopping') {
-      const b = h('button', `btn ${szCls} danger main-btn`, 'Stopping…');
+    if (task.state === 'stopping') {
+      const b = h('button', `btn ${szCls} danger main-btn`, t('Stopping…'));
       b.type = 'button';
       b.disabled = true;
       return b;
     }
 
     if (a.running) {
-      const stop = h('button', `btn ${szCls} danger main-btn`, 'Stop');
+      const stop = h('button', `btn ${szCls} danger main-btn`, t('Stop'));
       stop.type = 'button';
       stop.disabled = busy;
-      stop.title = `Ask ${a.name} to quit`;
+      stop.title = t('Ask {name} to quit', { name: a.name });
       stop.addEventListener('click', () => post({ cmd: 'appStop', id: a.id }));
       return stop;
     }
 
     if (a.updateAvailable && supported) {
       const split = h('div', 'split-btns');
-      const open = h('button', `btn ${szCls}`, 'Open');
+      const open = h('button', `btn ${szCls}`, t('Open'));
       open.type = 'button';
       open.disabled = busy;
       open.addEventListener('click', () => post({ cmd: 'appLaunch', id: a.id }));
 
-      const updLabel = compact ? 'Update' : `Update`;
-      const up = h('button', `btn ${szCls} primary`, updLabel);
+      const up = h('button', `btn ${szCls} primary`, t('Update'));
       up.type = 'button';
-      up.title = `Update ${a.name} to v${latest.version}`;
+      up.title = t('Update {name} to v{version}', { name: a.name, version: latest.version });
       up.disabled = busy;
       up.addEventListener('click', () => post({ cmd: 'appInstall', id: a.id }));
       split.append(open, up);
@@ -899,13 +1588,13 @@ function buildPrimaryActions(a, compact = false) {
     }
 
     if (a.starting) {
-      const b = h('button', `btn ${szCls} main-btn`, 'Starting…');
+      const b = h('button', `btn ${szCls} main-btn`, t('Starting…'));
       b.type = 'button';
       b.disabled = true;
       return b;
     }
 
-    const open = h('button', `btn ${szCls} main-btn`, 'Open');
+    const open = h('button', `btn ${szCls} main-btn`, t('Open'));
     open.type = 'button';
     open.disabled = busy || !supported;
     open.addEventListener('click', () => post({ cmd: 'appLaunch', id: a.id }));
@@ -913,14 +1602,16 @@ function buildPrimaryActions(a, compact = false) {
   }
 
   if (!supported) {
-    const plat = Array.isArray(a.platforms) && a.platforms.length ? `${a.platforms.join(' / ')} only` : `Not on ${CURRENT_OS}`;
+    const plat = Array.isArray(a.platforms) && a.platforms.length
+      ? t('{platforms} only', { platforms: a.platforms.join(' / ') })
+      : t('Not on {os}', { os: CURRENT_OS });
     const b = h('button', `btn ${szCls} main-btn`, plat);
     b.type = 'button';
     b.disabled = true;
     return b;
   }
 
-  const label = !latest && t.state === 'checking' ? 'Checking…' : 'Install';
+  const label = !latest && task.state === 'checking' ? t('Checking…') : t('Install');
   const inst = h('button', `btn ${szCls} primary main-btn`, label);
   inst.type = 'button';
   inst.disabled = busy || !latest;
@@ -929,60 +1620,64 @@ function buildPrimaryActions(a, compact = false) {
 }
 
 function statusBadgeInfo(a) {
-  const t = a.task;
+  const task = a.task;
   const supported = isSupported(a);
-  if (t.state === 'queued') return { text: 'Queued', tone: 'info' };
-  if (t.state === 'downloading') return { text: 'Downloading…', tone: 'info' };
-  if (t.state === 'installing') return { text: 'Installing…', tone: 'info' };
-  if (t.state === 'verifying') return { text: 'Verifying…', tone: 'info' };
-  if (t.state === 'repairing') return { text: 'Repairing…', tone: 'warn' };
-  if (t.state === 'error') return { text: 'Error', tone: 'bad' };
-  if (a.running) return { text: 'Running', tone: 'good', dot: true };
+  if (task.state === 'queued') return { text: t('Queued'), tone: 'info' };
+  if (task.state === 'downloading') return { text: t('Downloading…'), tone: 'info' };
+  if (task.state === 'installing') return { text: t('Installing…'), tone: 'info' };
+  if (task.state === 'verifying') return { text: t('Verifying…'), tone: 'info' };
+  if (task.state === 'repairing') return { text: t('Repairing…'), tone: 'warn' };
+  if (task.state === 'error') return { text: t('Error'), tone: 'bad' };
+  if (a.running) return { text: t('Running'), tone: 'good', dot: true };
   if (a.installed) {
-    if (a.updateAvailable) return { text: 'Update available', tone: 'warn' };
+    if (a.updateAvailable) return { text: t('Update available'), tone: 'warn' };
     return null; // Installed & up to date: keep clean just like ArtCraft Launcher!
   }
   if (!supported) {
-    const p = Array.isArray(a.platforms) && a.platforms.length ? `${a.platforms.join(' / ')} only` : `Not on ${CURRENT_OS}`;
+    const p = Array.isArray(a.platforms) && a.platforms.length
+      ? t('{platforms} only', { platforms: a.platforms.join(' / ') })
+      : t('Not on {os}', { os: CURRENT_OS });
     return { text: p, tone: '' };
   }
-  if (a.latest) return { text: 'Available to install', tone: 'info' };
-  if (a.checked) return { text: 'No release yet', tone: '' };
-  return { text: 'Checking…', tone: '' };
+  if (a.latest) return { text: t('Available to install'), tone: 'info' };
+  if (a.checked) return { text: t('No release yet'), tone: '' };
+  return { text: t('Checking…'), tone: '' };
 }
 
 function fillAppStatus(status, a) {
-  const t = a.task;
+  const task = a.task;
   const damaged = (a.damaged || []).length;
   status.className = 'app-status';
   status.replaceChildren();
 
-  if (t.state === 'downloading') {
-    const p = t.total ? Math.floor((t.done / t.total) * 100) : 0;
+  if (task.state === 'downloading') {
+    const p = task.total ? Math.floor((task.done / task.total) * 100) : 0;
     const bar = h('div', 'progress on');
     const fill = h('div', 'bar');
     fill.style.width = `${p}%`;
     bar.append(fill);
-    status.append(bar, t.total ? `Downloading ${fmtMB(t.done)} of ${fmtMB(t.total)} · ${p}%` : 'Downloading…');
-  } else if (t.state === 'installing') {
-    status.append('Verifying files and installing…');
-  } else if (t.state === 'queued') {
-    status.append('Waiting for another download to finish…');
-  } else if (t.state === 'verifying' || t.state === 'repairing') {
-    const frac = t.total ? t.done / t.total : 0;
+    status.append(bar, task.total
+      ? t('Downloading {done} of {total} · {pct}%', { done: fmtMB(task.done), total: fmtMB(task.total), pct: p })
+      : t('Downloading…'));
+  } else if (task.state === 'installing') {
+    status.append(t('Verifying files and installing…'));
+  } else if (task.state === 'queued') {
+    status.append(t('Waiting for another download to finish…'));
+  } else if (task.state === 'verifying' || task.state === 'repairing') {
+    const frac = task.total ? task.done / task.total : 0;
     const bar = h('div', 'progress on');
     const fill = h('div', 'bar');
     fill.style.width = `${Math.floor(frac * 100)}%`;
     bar.append(fill);
-    status.append(bar, t.state === 'verifying'
-      ? (t.total ? `Verifying ${t.done} of ${t.total} files` : 'Verifying…')
-      : (t.total ? `Repairing ${Math.floor(frac * 100)}% of ${fmtMB(t.total)}` : 'Reading package index…'));
-  } else if (damaged && t.state !== 'error') {
+    status.append(bar, task.state === 'verifying'
+      ? (task.total ? t('Verifying {done} of {total} files', { done: task.done, total: task.total }) : t('Verifying…'))
+      : (task.total ? t('Repairing {pct}% of {total}', { pct: Math.floor(frac * 100), total: fmtMB(task.total) }) : t('Reading package index…')));
+  } else if (damaged && task.state !== 'error') {
     status.classList.add('bad');
-    status.append(`${damaged} file${damaged > 1 ? 's' : ''} damaged or missing. Press Repair to fix.`);
-  } else if (t.state === 'error') {
+    status.append(tPlural('damagedFiles', damaged));
+  } else if (task.state === 'error') {
     status.classList.add('bad');
-    status.append(t.message);
+    status.append(task.message);
   }
 }
 
@@ -998,11 +1693,11 @@ function appLog(a) {
   const drawer = h('div', `app-log${open ? ' open' : ''}`);
   const toggle = h('button', 'log-toggle');
   toggle.type = 'button';
-  toggle.title = open ? 'Hide log' : 'Show log';
+  toggle.title = open ? t('Hide log') : t('Show log');
   toggle.innerHTML = '<svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">'
     + '<path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  toggle.append(h('span', 'log-label', 'Log'));
-  toggle.append(h('span', `log-last ${last.kind}`, open ? `${a.log.length} lines` : last.text));
+  toggle.append(h('span', 'log-label', t('Log')));
+  toggle.append(h('span', `log-last ${last.kind}`, open ? tPlural('logLines', a.log.length) : last.text));
   toggle.addEventListener('click', () => {
     library.logOpen[a.id] = !open;
     renderLibrary();
@@ -1044,9 +1739,11 @@ function buildAppCard(a) {
   } else if (latest) {
     ver.textContent = `v${latest.version}`;
   } else if (!supported) {
-    ver.textContent = Array.isArray(a.platforms) ? `${a.platforms.join(' / ')} only` : 'Unavailable';
+    ver.textContent = Array.isArray(a.platforms)
+      ? t('{platforms} only', { platforms: a.platforms.join(' / ') })
+      : t('Unavailable');
   } else {
-    ver.textContent = a.checked ? 'No release' : 'Checking…';
+    ver.textContent = a.checked ? t('No release') : t('Checking…');
   }
 
   const ghLink = h('a', 'strip-link', 'GitHub ↗');
@@ -1082,7 +1779,7 @@ function buildAppCard(a) {
   nameRow.append(nameEl);
 
   const pub = a.publisher || (a.thirdParty ? 'ArtCraft' : 'Javacrafter');
-  const pubBadge = h('span', `hud-badge${pub === 'Javacrafter' || pub === 'ArtCraft' ? ' info' : ''}`, `by ${pub}`);
+  const pubBadge = h('span', `hud-badge${pub === 'Javacrafter' || pub === 'ArtCraft' ? ' info' : ''}`, t('by {name}', { name: pub }));
   nameRow.append(pubBadge);
 
   const subText = Array.isArray(a.platforms) && a.platforms.length ? a.platforms.join(' · ') : '';
@@ -1101,10 +1798,10 @@ function buildAppCard(a) {
     badges.append(b);
   }
   if (a.portable != null) {
-    const pTag = h('span', `hud-badge${a.portable ? ' good' : ''}`, a.portable ? 'Portable' : 'Not portable');
+    const pTag = h('span', `hud-badge${a.portable ? ' good' : ''}`, a.portable ? t('Portable') : t('Not portable'));
     pTag.title = a.portable
-      ? `Keeps its settings and data in ${a.folder}Data, inside its own folder.`
-      : `Keeps its settings in ~/Library/Application Support/${a.name}, outside its own folder.`;
+      ? t('Keeps its settings and data in {folder}Data, inside its own folder.', { folder: a.folder })
+      : t('Keeps its settings in ~/Library/Application Support/{name}, outside its own folder.', { name: a.name });
     badges.append(pTag);
   }
   body.append(badges);
@@ -1112,16 +1809,17 @@ function buildAppCard(a) {
   // Copy block: Download size (when install/update), tagline, last updated date
   const copy = h('div', 'app-copy');
   if ((!a.installed || a.updateAvailable) && supported && latest && latest.size > 0 && a.task.state === 'idle') {
-    copy.append(h('div', 'app-size', `Download size: ${fmtMB(latest.size)}`));
+    copy.append(h('div', 'app-size', t('Download size: {size}', { size: fmtMB(latest.size) })));
   }
-  if (a.tagline) {
-    const tag = h('div', 'app-tagline', a.tagline);
-    tag.title = a.tagline;
+  const tagline = tTagline(a);
+  if (tagline) {
+    const tag = h('div', 'app-tagline', tagline);
+    tag.title = tagline;
     copy.append(tag);
   }
   const pubDate = latest && latest.published ? fmtDate(latest.published) : '';
   if (pubDate) {
-    copy.append(h('div', 'app-updated', `Last updated: ${pubDate}`));
+    copy.append(h('div', 'app-updated', t('Last updated: {date}', { date: pubDate })));
   }
   body.append(copy);
 
@@ -1136,14 +1834,14 @@ function buildAppCard(a) {
 
   const pinBtn = h('button', `sq-btn pin-btn${pinned ? ' pinned' : ''}`);
   pinBtn.type = 'button';
-  pinBtn.title = pinned ? `Unpin ${a.name}` : `Pin ${a.name} to top`;
+  pinBtn.title = pinned ? t('Unpin {name}', { name: a.name }) : t('Pin {name} to top', { name: a.name });
   pinBtn.innerHTML = pinSvg(pinned);
   pinBtn.addEventListener('click', () => togglePin(a.id));
   actions.append(pinBtn);
 
   const menuBtn = h('button', 'sq-btn menu-btn');
   menuBtn.type = 'button';
-  menuBtn.title = `More actions for ${a.name}`;
+  menuBtn.title = t('More actions for {name}', { name: a.name });
   menuBtn.innerHTML = dotsSvg();
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1191,11 +1889,11 @@ function buildTableView(list) {
   };
 
   hrow.append(
-    makeTh('App', 'name'),
-    makeTh('Status', 'status'),
-    makeTh('Version', null),
-    makeTh('Released', 'updated'),
-    makeTh('Author', null),
+    makeTh(t('App'), 'name'),
+    makeTh(t('Status'), 'status'),
+    makeTh(t('Version'), null),
+    makeTh(t('Released'), 'updated'),
+    makeTh(t('Author'), null),
     makeTh('', null),
   );
   thead.append(hrow);
@@ -1223,13 +1921,13 @@ function buildTableView(list) {
     const tx = h('div');
     const nm = h('div', 'tbl-name');
     renderWordmark(a.name, nm);
-    tx.append(nm, h('div', 'tbl-tag', a.tagline || ''));
+    tx.append(nm, h('div', 'tbl-tag', tTagline(a)));
     appBox.append(ic, tx);
     tdApp.append(appBox);
 
     // Status cell
     const tdStatus = h('td');
-    const bi = statusBadgeInfo(a) || { text: 'Installed', tone: 'good' };
+    const bi = statusBadgeInfo(a) || { text: activeLang() === 'en' ? 'Installed' : t('status.Installed'), tone: 'good' };
     const badge = h('span', `hud-badge ${bi.tone || ''}`);
     if (bi.dot) badge.append(h('span', 'running-dot'));
     badge.append(bi.text);
@@ -1261,14 +1959,14 @@ function buildTableView(list) {
     const pinned = isPinned(a.id);
     const pinBtn = h('button', `sq-btn pin-btn${pinned ? ' pinned' : ''}`);
     pinBtn.type = 'button';
-    pinBtn.title = pinned ? `Unpin ${a.name}` : `Pin ${a.name} to top`;
+    pinBtn.title = pinned ? t('Unpin {name}', { name: a.name }) : t('Pin {name} to top', { name: a.name });
     pinBtn.innerHTML = pinSvg(pinned);
     pinBtn.addEventListener('click', () => togglePin(a.id));
     acts.append(pinBtn);
 
     const menuBtn = h('button', 'sq-btn menu-btn');
     menuBtn.type = 'button';
-    menuBtn.title = `More actions for ${a.name}`;
+    menuBtn.title = t('More actions for {name}', { name: a.name });
     menuBtn.innerHTML = dotsSvg();
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1324,7 +2022,9 @@ function renderLibrary() {
   const updatable = all.filter((a) => a.installed && a.updateAvailable && isSupported(a) && !a.running
     && !['downloading', 'installing', 'queued'].includes(a.task.state));
   el.btnUpdateAll.classList.toggle('on', updatable.length > 0);
-  el.btnUpdateAll.textContent = updatable.length === 1 ? 'Update 1 app' : `Update all (${updatable.length})`;
+  el.btnUpdateAll.textContent = updatable.length === 1
+    ? t('Update 1 app')
+    : t('Update all ({count})', { count: updatable.length });
 
   // Active tab list + search filter
   const tabList = state.tab === 'temporary' ? tempApps : state.tab === 'games' ? gameApps : libApps;
@@ -1343,12 +2043,12 @@ function renderLibrary() {
 
   if (filtered.length === 0) {
     const emptyMsg = q
-      ? `No matches for “${state.search.trim()}”.`
+      ? t('No matches for “{q}”.', { q: state.search.trim() })
       : state.tab === 'temporary'
-        ? 'No temporary apps right now.'
+        ? t('No temporary apps right now.')
         : state.tab === 'games'
-          ? 'No games yet. They’ll appear here once they’re added.'
-          : 'No apps found.';
+          ? t('No games yet. They’ll appear here once they’re added.')
+          : t('No apps found.');
     el.catalogContent.append(h('div', 'apps-empty', emptyMsg));
   } else if (state.settings.view === 'table') {
     const pinned = filtered.filter((a) => isPinned(a.id));
@@ -1361,14 +2061,14 @@ function renderLibrary() {
     const notInstalled = filtered.filter((a) => !isPinned(a.id) && !a.installed);
 
     if (pinned.length) {
-      el.catalogContent.append(renderGridSection('Pinned', pinned));
+      el.catalogContent.append(renderGridSection(t('Pinned'), pinned));
     }
     if (installed.length) {
-      el.catalogContent.append(renderGridSection(pinned.length ? 'Installed' : '', installed));
+      el.catalogContent.append(renderGridSection(pinned.length ? t('Installed') : '', installed));
     }
     if (notInstalled.length) {
       const showHeader = pinned.length > 0 || installed.length > 0;
-      el.catalogContent.append(renderGridSection(showHeader ? 'Not installed' : '', notInstalled));
+      el.catalogContent.append(renderGridSection(showHeader ? t('Not installed') : '', notInstalled));
     }
   }
 
@@ -1433,20 +2133,20 @@ function fillCardMenu(a) {
 
   if (a.installed) {
     if (a.bat && !a.running && !a.starting && a.task.state !== 'stopping') {
-      addItem('Launch with .bat', () => post({ cmd: 'appLaunchBat', id: a.id }), { disabled: busy });
+      addItem(t('Launch with .bat'), () => post({ cmd: 'appLaunchBat', id: a.id }), { disabled: busy });
     }
-    addItem('Open install folder', () => post({ cmd: 'appFolder', id: a.id }));
-    addItem('Verify & repair files', () => post({ cmd: 'appVerify', id: a.id }), { disabled: busy });
+    addItem(t('Open install folder'), () => post({ cmd: 'appFolder', id: a.id }));
+    addItem(t('Verify & repair files'), () => post({ cmd: 'appVerify', id: a.id }), { disabled: busy });
   }
 
   if (a.latest && a.latest.page) {
-    addItem('Release notes ↗', () => post({ cmd: 'openUrl', url: a.latest.page }));
+    addItem(t('Release notes ↗'), () => post({ cmd: 'openUrl', url: a.latest.page }));
   }
-  addItem('View on GitHub ↗', () => post({ cmd: 'openUrl', url: `https://github.com/${a.repo}` }));
+  addItem(t('View on GitHub ↗'), () => post({ cmd: 'openUrl', url: `https://github.com/${a.repo}` }));
 
   if (a.log && a.log.length) {
     const isOpen = !!library.logOpen[a.id];
-    addItem(isOpen ? 'Hide activity log' : 'Show activity log', () => {
+    addItem(isOpen ? t('Hide activity log') : t('Show activity log'), () => {
       library.logOpen[a.id] = !isOpen;
       renderLibrary();
     });
@@ -1456,8 +2156,8 @@ function fillCardMenu(a) {
     el.cardMenu.append(h('div', 'cm-sep'));
     const armed = library.armed === a.id;
     const label = armed
-      ? (CURRENT_OS === 'MacOS' ? 'Click again to move to Trash' : 'Click again to delete app & data')
-      : 'Uninstall';
+      ? (CURRENT_OS === 'MacOS' ? t('Click again to move to Trash') : t('Click again to delete app & data'))
+      : t('Uninstall');
     addItem(label, () => uninstallClick(a.id), {
       cls: armed ? 'danger armed' : 'danger',
       disabled: busy,
@@ -1534,12 +2234,12 @@ function renderUpdateToast() {
     state.toastMode = 'launcher-bg';
     el.toast.classList.remove('done');
     el.toast.classList.add('on');
-    el.toastTitle.textContent = 'Launcher update available';
-    el.toastDesc.textContent = 'A newer version of Launcher is ready to download and install.';
+    el.toastTitle.textContent = t('Launcher update available');
+    el.toastDesc.textContent = t('A newer version of Launcher is ready to download and install.');
     el.toastProg.classList.remove('on');
     el.toastActs.classList.add('on');
-    el.toastLater.textContent = 'Dismiss';
-    el.toastNow.textContent = 'Update now';
+    el.toastLater.textContent = t('Dismiss');
+    el.toastNow.textContent = t('Update now');
     return;
   }
 
@@ -1549,8 +2249,8 @@ function renderUpdateToast() {
     state.toastMode = 'launcher-dl';
     el.toast.classList.remove('done');
     el.toast.classList.add('on');
-    el.toastTitle.textContent = 'Downloading update';
-    el.toastDesc.textContent = u.total ? `${pct(u)}% of ${fmtMB(u.total)}` : 'Starting download…';
+    el.toastTitle.textContent = t('Downloading update');
+    el.toastDesc.textContent = u.total ? t('{pct}% of {total}', { pct: pct(u), total: fmtMB(u.total) }) : t('Starting download…');
     el.toastProg.classList.add('on');
     el.toastBar.style.width = `${pct(u)}%`;
     el.toastActs.classList.remove('on');
@@ -1562,12 +2262,12 @@ function renderUpdateToast() {
     clearTimeout(state.toastTimer);
     state.toastMode = 'launcher-ready';
     el.toast.classList.add('on', 'done');
-    el.toastTitle.textContent = 'Update ready to install';
-    el.toastDesc.textContent = 'Restart now to finish updating, or it will install when you close Launcher.';
+    el.toastTitle.textContent = t('Update ready to install');
+    el.toastDesc.textContent = t('Restart now to finish updating, or it will install when you close Launcher.');
     el.toastProg.classList.remove('on');
     el.toastActs.classList.add('on');
-    el.toastLater.textContent = 'Later';
-    el.toastNow.textContent = 'Restart now';
+    el.toastLater.textContent = t('Later');
+    el.toastNow.textContent = t('Restart now');
     return;
   }
 
@@ -1588,16 +2288,16 @@ function showAppUpdateToast(newlyUpdated) {
   el.toast.classList.remove('done');
   el.toast.classList.add('on');
   if (newlyUpdated.length === 1) {
-    el.toastTitle.textContent = `Update available: ${first.name}`;
-    el.toastDesc.textContent = `v${first.latest.version} is ready to install.`;
+    el.toastTitle.textContent = t('Update available: {name}', { name: first.name });
+    el.toastDesc.textContent = t('v{version} is ready to install.', { version: first.latest.version });
   } else {
-    el.toastTitle.textContent = `${newlyUpdated.length} app updates available`;
-    el.toastDesc.textContent = `${newlyUpdated.map((a) => a.name).slice(0, 3).join(', ')} can be updated.`;
+    el.toastTitle.textContent = tPlural('appUpdatesAvailable', newlyUpdated.length);
+    el.toastDesc.textContent = t('{names} can be updated.', { names: newlyUpdated.map((a) => a.name).slice(0, 3).join(', ') });
   }
   el.toastProg.classList.remove('on');
   el.toastActs.classList.add('on');
-  el.toastLater.textContent = 'Dismiss';
-  el.toastNow.textContent = 'View';
+  el.toastLater.textContent = t('Dismiss');
+  el.toastNow.textContent = t('View');
 }
 
 function flashToast(title, desc) {
@@ -1684,8 +2384,8 @@ function reportMenuCheck() {
     if (library.apps.some((a) => a.task.state === 'checking')) return;
     menuCheck = null;
     const n = library.apps.filter((a) => a.updateAvailable).length;
-    if (n) flashToast(`${n} app update${n > 1 ? 's' : ''} available`, 'Press Update on each one to install it.');
-    else flashToast('Your apps are up to date', 'Everything installed is on its newest release.');
+    if (n) flashToast(tPlural('appUpdatesAvailable', n), t('Press Update on each one to install it.'));
+    else flashToast(t('Your apps are up to date'), t('Everything installed is on its newest release.'));
   }
 }
 
@@ -1694,6 +2394,7 @@ window.onHost = (msg) => {
     case 'settings':
       state.settings = Object.assign({}, state.settings, msg.settings);
       renderSettings();
+      renderUpdate();
       renderLibrary();
       break;
     case 'update':
@@ -1785,7 +2486,7 @@ renderUpdate();
 if (state.splashActive) startSplash();
 
 if (BOOT.justUpdated && !state.splashActive) {
-  flashToast('Launcher updated', 'You’re running the newest release.');
+  flashToast(t('Launcher updated'), t('You’re running the newest release.'));
 }
 
 let readySent = false;
