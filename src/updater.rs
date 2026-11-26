@@ -182,7 +182,13 @@ impl Target {
 
     /// An app published in `repo`, installed at `portableApplications/<name>`
     /// beside the launcher.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn app(repo: &str, name: &str) -> Self {
+        Self::app_in(repo, name, &app_dir().join(APPS_DIR))
+    }
+
+    /// An app published in `repo`, installed at `<root>/<name>`.
+    pub fn app_in(repo: &str, name: &str, root: &Path) -> Self {
         Self {
             repo: repo.into(),
             package: if cfg!(windows) {
@@ -190,7 +196,7 @@ impl Target {
             } else {
                 format!("{name}-macos.zip")
             },
-            dir: app_dir().join(APPS_DIR).join(name),
+            dir: root.join(name),
             self_exe: None,
             update_json: true,
             default_exe: None,
@@ -199,11 +205,17 @@ impl Target {
 
     /// A third-party app published on GitHub releases, installed at
     /// `portableApplications\<name>`. `package` may contain `{version}`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn third_party(repo: &str, name: &str, package: &str, exe: &str) -> Self {
+        Self::third_party_in(repo, name, package, exe, &app_dir().join(APPS_DIR))
+    }
+
+    /// A third-party app published on GitHub releases, installed at `<root>/<name>`.
+    pub fn third_party_in(repo: &str, name: &str, package: &str, exe: &str, root: &Path) -> Self {
         Self {
             repo: repo.into(),
             package: package.into(),
-            dir: app_dir().join(APPS_DIR).join(name),
+            dir: root.join(name),
             self_exe: None,
             update_json: false,
             default_exe: Some(exe.into()),

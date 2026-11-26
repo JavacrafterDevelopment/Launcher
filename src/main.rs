@@ -9,7 +9,7 @@ mod updater;
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
@@ -23,7 +23,7 @@ use wry::{WebContext, WebView, WebViewBuilder};
 use wry::WebViewBuilderExtWindows;
 
 use apps::{AppEvent, Library};
-use settings::{data_dir, Settings};
+use settings::{app_dir, data_dir, Settings};
 use updater::{Release, Target};
 
 const INDEX_HTML: &str = include_str!("../ui/index.html");
@@ -31,6 +31,20 @@ const APP_CSS: &str = include_str!("../ui/app.css");
 const APP_JS: &str = include_str!("../ui/app.js");
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon-64.rgba");
 
+/// How often background checks look for launcher and app updates while open.
+const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Why a self-update check was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum CheckMode {
+    /// Launch-time Discord-style loading splash: auto-downloads & restarts if an update is found.
+    Startup,
+    /// Periodic 5-minute background check: never auto-restarts; shows a bottom-right popup.
+    Background,
+    /// User clicked Check for updates manually.
+    Manual,
+}
 
 /// Where the self-update stands. Sent to the page whole on every change.
 #[derive(Clone, Serialize)]
@@ -53,12 +67,14 @@ impl Update {
 
 pub(crate) enum UserEvent {
     Ipc(String),
-    /// From the self-update worker. `auto` means this run was started on launch
-    /// and should carry straight through to downloading.
-    Update { update: Update, auto: bool },
+    /// From the self-update worker.
+    Update { update: Update, mode: CheckMode },
     /// From an app's check or install worker.
     App(&'static str, AppEvent),
-    /// Every couple of seconds: time to look at which apps are running.
+    /// Result from the off-thread native folder picker.
+    PickedInstallDir(Option<String>),
+    /// Every couple of seconds: time to look at which apps are running and whether
+    /// the 5-minute background update check is due.
     Tick,
     /// A few seconds after start: shows the window if the page never said it was
     /// ready, so a page that fails to boot doesn't leave an invisible process.
@@ -75,8 +91,12 @@ const MENU_QUIT: &str = "quit";
 struct App {
     settings: Settings,
     update: Update,
-    /// True when the current update run began automatically on launch.
-    auto_run: bool,
+    /// Why the current update state began.
+    check_mode: CheckMode,
+    /// True while the Discord-style startup loading splash is still waiting on the initial check.
+    splash_active: bool,
+    /// When the last automatic check (startup or 5-minute periodic) ran.
+    last_bg_check: Option<Instant>,
     library: Library,
     proxy: EventLoopProxy<UserEvent>,
 }
@@ -116,7 +136,7 @@ fn main() {
 
     let mut window_builder = WindowBuilder::new()
         .with_title("Launcher")
-        .with_inner_size(LogicalSize::new(1040.0, 680.0))
+        .with_inner_size(LogicalSize::new(1120.0, 720.0))
         .with_min_inner_size(LogicalSize::new(720.0, 480.0))
         .with_decorations(false)
         .with_visible(false)
@@ -137,7 +157,7 @@ fn main() {
             .with_titlebar_transparent(true)
             .with_title_hidden(true)
             .with_fullsize_content_view(true)
-            .with_traffic_light_inset(tao::dpi::LogicalPosition::new(18.0, 24.0));
+            .with_traffic_light_inset(tao::dpi::LogicalPosition::new(18.0, 20.0));
     }
     let window = window_builder.build(&event_loop).expect("create window");
 
@@ -165,7 +185,7 @@ fn main() {
         }
     };
 
-    let library = Library::new(proxy.clone());
+    let library = Library::new(proxy.clone(), settings.apps_root(), settings.simultaneous_downloads);
     let revealer = proxy.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(3));
@@ -179,7 +199,15 @@ fn main() {
     });
     #[cfg(target_os = "macos")]
     let menu = menu_bar(proxy.clone());
-    let mut app = App { settings, update: Update::Idle, auto_run: false, library, proxy };
+    let mut app = App {
+        settings,
+        update: Update::Idle,
+        check_mode: CheckMode::Manual,
+        splash_active: false,
+        last_bg_check: None,
+        library,
+        proxy,
+    };
 
     event_loop.run(move |event, _, flow| {
         *flow = ControlFlow::Wait;
@@ -199,7 +227,7 @@ fn main() {
                 match id.as_str() {
                     MENU_CHECK_LAUNCHER => {
                         send(&webview, json!({ "type": "menuCheck", "check": "launcher", "page": "settings" }));
-                        app.start_check(false);
+                        app.start_check(CheckMode::Manual);
                         // A check already under way, or an update already down,
                         // still gets reported to the page that's now waiting on it.
                         app.push_update(&webview);
@@ -231,12 +259,21 @@ fn main() {
                     }
                 }
             }
-            Event::UserEvent(UserEvent::Update { update, auto }) => {
-                app.on_update(update, auto, &webview);
+            Event::UserEvent(UserEvent::Update { update, mode }) => {
+                app.on_update(update, mode, &webview);
             }
             Event::UserEvent(UserEvent::App(id, event)) => {
                 app.library.on_event(id, event);
                 send(&webview, app.library.snapshot());
+            }
+            Event::UserEvent(UserEvent::PickedInstallDir(picked)) => {
+                if let Some(dir) = picked.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+                    app.settings.install_dir = Some(dir);
+                    let _ = app.settings.save();
+                    app.library.set_install_root(app.settings.apps_root());
+                    send(&webview, json!({ "type": "settings", "settings": app.settings }));
+                    send(&webview, app.library.snapshot());
+                }
             }
             Event::UserEvent(UserEvent::Reveal) => {
                 if !window.is_visible() {
@@ -246,6 +283,15 @@ fn main() {
             }
             Event::UserEvent(UserEvent::Tick) => {
                 if app.library.refresh_running() {
+                    send(&webview, app.library.snapshot());
+                }
+                if app.settings.checks_automatically()
+                    && app.last_bg_check.is_some_and(|t| t.elapsed() >= AUTO_CHECK_INTERVAL)
+                {
+                    app.last_bg_check = Some(Instant::now());
+                    app.start_check(CheckMode::Background);
+                    app.library.check_all(app.settings.prereleases);
+                    send(&webview, json!({ "type": "bgCheck" }));
                     send(&webview, app.library.snapshot());
                 }
             }
@@ -298,16 +344,21 @@ fn menu_bar(proxy: EventLoopProxy<UserEvent>) -> muda::Menu {
 /// The page is inlined into one document with the theme already stamped on, so a
 /// dark install never flashes light on the way in.
 fn page_html(settings: &Settings) -> String {
+    let default_apps_dir = app_dir().join(updater::APPS_DIR);
     let boot = json!({
         "version": updater::VERSION,
         "repo": updater::REPO,
+        "githubOrgUrl": "https://github.com/JavacrafterDevelopment",
         "os": apps::CURRENT_OS,
         "settings": settings,
         "dataDir": data_dir().display().to_string(),
+        "defaultAppsDir": default_apps_dir.display().to_string(),
+        "startupCheck": settings.auto_update && settings.checks_automatically(),
         "justUpdated": std::env::args().any(|a| a == "--updated"),
         "icons": apps::icons(),
     });
     INDEX_HTML
+        .replace("{{LOOK}}", settings.look_name())
         .replace("{{THEME}}", if settings.is_dark() { "dark" } else { "light" })
         .replace("{{PALETTE}}", settings.palette())
         .replace("{{OS}}", apps::CURRENT_OS)
@@ -332,21 +383,38 @@ impl App {
             "ready" => {
                 window.set_visible(true);
                 window.set_focus();
+                self.last_bg_check = Some(Instant::now());
                 self.push_update(webview);
-                if self.settings.auto_update {
-                    self.start_check(true);
+                if self.settings.auto_update && self.settings.checks_automatically() {
+                    self.splash_active = true;
+                    self.start_check(CheckMode::Startup);
+                } else {
+                    self.splash_active = false;
                 }
-                // App updates are always looked for, never installed unasked.
+                // App updates are always looked for when automatic checks are on, never installed unasked.
                 self.library.sweep();
-                self.library.check_all(self.settings.prereleases);
+                if self.settings.checks_automatically() {
+                    self.library.check_all(self.settings.prereleases);
+                }
                 send(webview, self.library.snapshot());
             }
-            "appCheck" | "appInstall" | "appLaunch" | "appLaunchBat" | "appFolder" | "appUninstall" | "appVerify" | "appRepair"
-            | "appStop" => {
+            "dismissSplash" => {
+                self.splash_active = false;
+            }
+            "appCheck" | "appInstall" | "appUpdateAll" | "appCancelQueue" | "appLaunch" | "appLaunchBat" | "appFolder"
+            | "appUninstall" | "appVerify" | "appRepair" | "appStop" => {
                 let id = msg["id"].as_str().unwrap_or_default();
                 match cmd {
-                    "appCheck" => self.library.check_all(self.settings.prereleases),
+                    "appCheck" => {
+                        self.last_bg_check = Some(Instant::now());
+                        self.library.check_all(self.settings.prereleases);
+                        self.settings.last_check = Some(now_secs());
+                        let _ = self.settings.save();
+                        send(webview, json!({ "type": "settings", "settings": self.settings }));
+                    }
                     "appInstall" => self.library.install(id),
+                    "appUpdateAll" => self.library.update_all(),
+                    "appCancelQueue" => self.library.cancel_queued(id),
                     "appLaunch" => self.library.launch(id),
                     "appLaunchBat" => self.library.launch_bat(id),
                     "appFolder" => self.library.open_folder(id),
@@ -384,10 +452,28 @@ impl App {
             }
             "settings" => {
                 if let Some(t) = msg["theme"].as_str() {
-                    self.settings.theme = if t == "dark" { "dark".into() } else { "light".into() };
+                    self.settings.theme = match t {
+                        "dark" => "dark".into(),
+                        "system" => "system".into(),
+                        _ => "light".into(),
+                    };
+                }
+                if let Some(l) = msg["look"].as_str().filter(|l| settings::LOOKS.contains(l)) {
+                    self.settings.look = l.into();
+                }
+                if let Some(c) = msg["checkEvery"].as_str() {
+                    self.settings.check_every = if c == "manual" { "manual".into() } else { "auto".into() };
                 }
                 if let Some(b) = msg["autoUpdate"].as_bool() {
                     self.settings.auto_update = b;
+                }
+                if let Some(n) = msg["simultaneousDownloads"].as_u64() {
+                    let clamped = if n == 0 { 0 } else { n.min(4) as u8 };
+                    self.settings.simultaneous_downloads = clamped;
+                    self.library.set_max_downloads(clamped);
+                }
+                if let Some(b) = msg["notifyAppUpdates"].as_bool() {
+                    self.settings.notify_app_updates = b;
                 }
                 if let Some(b) = msg["prereleases"].as_bool() {
                     self.settings.prereleases = b;
@@ -399,13 +485,41 @@ impl App {
                 if let Some(s) = msg["darkScheme"].as_str().filter(|s| settings::DARK_SCHEMES.contains(s)) {
                     self.settings.dark_scheme = s.into();
                 }
+                if let Some(v) = msg["view"].as_str().filter(|v| settings::VIEWS.contains(v)) {
+                    self.settings.view = v.into();
+                }
+                if let Some(s) = msg["sort"].as_str().filter(|s| settings::SORTS.contains(s)) {
+                    self.settings.sort = s.into();
+                }
+                if let Some(arr) = msg["pinned"].as_array() {
+                    self.settings.pinned = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect();
+                }
                 let _ = self.settings.save();
                 send(webview, json!({ "type": "settings", "settings": self.settings }));
+                send(webview, self.library.snapshot());
             }
-            "checkUpdate" => self.start_check(false),
+            "browseInstallDir" => {
+                let proxy = self.proxy.clone();
+                let initial = Some(self.settings.apps_root().display().to_string());
+                std::thread::spawn(move || {
+                    let picked = pick_folder(initial.as_deref());
+                    let _ = proxy.send_event(UserEvent::PickedInstallDir(picked));
+                });
+            }
+            "resetInstallDir" => {
+                self.settings.install_dir = None;
+                let _ = self.settings.save();
+                self.library.set_install_root(self.settings.apps_root());
+                send(webview, json!({ "type": "settings", "settings": self.settings }));
+                send(webview, self.library.snapshot());
+            }
+            "checkUpdate" => self.start_check(CheckMode::Manual),
             "downloadUpdate" => {
                 if let Update::Available { release } = &self.update {
-                    self.start_download(release.clone(), false);
+                    self.start_download(release.clone(), self.check_mode);
                 }
             }
             "restartNow" => {
@@ -430,37 +544,55 @@ impl App {
         false
     }
 
-    fn on_update(&mut self, update: Update, auto: bool, webview: &WebView) {
+    fn on_update(&mut self, update: Update, mut mode: CheckMode, webview: &WebView) {
         if matches!(update, Update::UpToDate | Update::Available { .. }) {
             self.settings.last_check = Some(now_secs());
             let _ = self.settings.save();
             send(webview, json!({ "type": "settings", "settings": self.settings }));
         }
-        // On launch, a found update downloads without being asked.
-        let carry_on = match (&update, auto) {
-            (Update::Available { release }, true) => Some(release.clone()),
+        // If the startup splash already closed (slow network / user skipped), downgrade a
+        // late startup check to a non-intrusive background notification rather than rebooting.
+        if mode == CheckMode::Startup && !self.splash_active && matches!(update, Update::Available { .. }) {
+            mode = CheckMode::Background;
+        }
+        // Only a live startup splash automatically downloads & restarts; background 5-minute
+        // checks notify via bottom-right popup instead.
+        let carry_on = match (&update, mode, self.splash_active) {
+            (Update::Available { release }, CheckMode::Startup, true) => Some(release.clone()),
             _ => None,
         };
+        if matches!(update, Update::UpToDate | Update::Error { .. }) && mode == CheckMode::Startup {
+            self.splash_active = false;
+        }
         self.update = update;
-        self.auto_run = auto;
+        self.check_mode = mode;
         self.push_update(webview);
         if let Some(release) = carry_on {
-            self.start_download(release, true);
+            self.start_download(release, CheckMode::Startup);
         }
     }
 
     fn push_update(&self, webview: &WebView) {
-        send(webview, json!({ "type": "update", "update": self.update, "auto": self.auto_run }));
+        send(
+            webview,
+            json!({
+                "type": "update",
+                "update": self.update,
+                "mode": self.check_mode,
+                "auto": self.check_mode == CheckMode::Startup,
+            }),
+        );
     }
 
-    fn start_check(&mut self, auto: bool) {
+    fn start_check(&mut self, mode: CheckMode) {
         if self.update.busy() || matches!(self.update, Update::Ready { .. }) {
             return;
         }
         let prereleases = self.settings.prereleases;
         let proxy = self.proxy.clone();
         self.update = Update::Checking;
-        let _ = proxy.send_event(UserEvent::Update { update: Update::Checking, auto });
+        self.check_mode = mode;
+        let _ = proxy.send_event(UserEvent::Update { update: Update::Checking, mode });
         std::thread::spawn(move || {
             let current = updater::current_version();
             let update = match Target::launcher().latest(prereleases) {
@@ -470,17 +602,18 @@ impl App {
                 Ok(_) => Update::UpToDate,
                 Err(message) => Update::Error { message },
             };
-            let _ = proxy.send_event(UserEvent::Update { update, auto });
+            let _ = proxy.send_event(UserEvent::Update { update, mode });
         });
     }
 
-    fn start_download(&mut self, release: Release, auto: bool) {
+    fn start_download(&mut self, release: Release, mode: CheckMode) {
         if self.update.busy() {
             return;
         }
         let proxy = self.proxy.clone();
         let total = release.size;
         self.update = Update::Downloading { release: release.clone(), done: 0, total };
+        self.check_mode = mode;
         std::thread::spawn(move || {
             let mut last_pct = u64::MAX;
             let progress = |done, total| {
@@ -490,7 +623,7 @@ impl App {
                     last_pct = pct;
                     let _ = proxy.send_event(UserEvent::Update {
                         update: Update::Downloading { release: release.clone(), done, total },
-                        auto,
+                        mode,
                     });
                 }
             };
@@ -499,7 +632,7 @@ impl App {
                 Ok(_) => Update::Ready { release },
                 Err(message) => Update::Error { message },
             };
-            let _ = proxy.send_event(UserEvent::Update { update, auto });
+            let _ = proxy.send_event(UserEvent::Update { update, mode });
         });
     }
 
@@ -534,6 +667,50 @@ impl App {
             }
         }
     }
+}
+
+/// Opens the native OS folder picker without adding extra crate dependencies.
+#[cfg(windows)]
+fn pick_folder(initial: Option<&str>) -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let init = initial.unwrap_or("").replace('\'', "''");
+    let script = format!(
+        "Add-Type -AssemblyName System.Windows.Forms; \
+         $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
+         $d.Description = 'Choose default install folder for apps'; \
+         $d.UseDescriptionForTitle = $true; \
+         if ('{init}' -and (Test-Path -LiteralPath '{init}')) {{ $d.SelectedPath = '{init}' }}; \
+         if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{ [Console]::Out.Write($d.SelectedPath) }}"
+    );
+    let out = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+#[cfg(target_os = "macos")]
+fn pick_folder(_initial: Option<&str>) -> Option<String> {
+    let out = std::process::Command::new("osascript")
+        .args(["-e", "POSIX path of (choose folder with prompt \"Choose default install folder\")"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().trim_end_matches('/').to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn pick_folder(_initial: Option<&str>) -> Option<String> {
+    None
 }
 
 pub(crate) fn open_in_shell(target: impl AsRef<std::ffi::OsStr>) {

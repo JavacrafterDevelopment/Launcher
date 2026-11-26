@@ -471,6 +471,7 @@ const START_GRACE: Duration = Duration::from_secs(45);
 pub enum Task {
     Idle,
     Checking,
+    Queued,
     Downloading { done: u64, total: u64 },
     Installing,
     Verifying { done: usize, total: usize },
@@ -538,29 +539,82 @@ pub fn icons() -> Value {
     Value::Object(map)
 }
 
+/// Brand colours `(accent, ink_light, ink_dark)` for the Modern theme: matches the Craft suite
+/// colours for ArtCraft apps and gives Javacrafter apps distinct accents.
+fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
+    match id {
+        "lighthouse" => ("#d99326", "#9a630a", "#f2bc5a"),
+        "screenshotapp" => ("#1fa5c9", "#0e7290", "#5fd0ee"),
+        "rustwinutil" => ("#e0622d", "#a83e12", "#ff9668"),
+        "kittyconnect" => ("#2d81ff", "#1659c4", "#74aaff"),
+        "inkcognito" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
+        "tempcraftbackup" => ("#64748b", "#475569", "#94a3b8"),
+        "photocraft" => ("#2f7bf5", "#1a5bc4", "#7fb0ff"),
+        "vectorcraft" => ("#e8573f", "#b83a24", "#ff8a70"),
+        "filmcraft" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
+        "effectcraft" => ("#e0368f", "#b0206c", "#ff7ab8"),
+        "lightcraft" => ("#f2a516", "#8a5800", "#ffc14d"),
+        "designcraft" => ("#7bb51c", "#457008", "#a6e04a"),
+        "pdfcraft" => ("#e8204f", "#b70228", "#f23a62"),
+        "figcraft" => ("#02da96", "#047a56", "#4fe8b6"),
+        "soundcraft" => ("#1fa5c9", "#0e7290", "#5fd0ee"),
+        "cadcraft" => ("#3ea6e8", "#1a6fa8", "#7cc8ff"),
+        "deckcraft" => ("#f07a1e", "#a84f0a", "#ffa060"),
+        "gridcraft" => ("#1f9d55", "#12703a", "#4fd68a"),
+        "wordcraft" => ("#3f5fe0", "#2a44b8", "#8ea2ff"),
+        _ => ("#2d81ff", "#1659c4", "#74aaff"),
+    }
+}
+
+fn publisher_of(info: &AppInfo) -> &'static str {
+    match info.source {
+        Source::Own => "Javacrafter",
+        Source::ThirdParty { .. } if info.repo.starts_with("storytold/") => "ArtCraft",
+        Source::ThirdParty { .. } => "Community",
+    }
+}
+
 impl AppState {
-    fn target(&self) -> Target {
+    fn target_in(&self, root: &std::path::Path) -> Target {
         match self.info.source {
-            Source::Own => Target::app(self.info.repo, self.info.folder()),
+            Source::Own => Target::app_in(self.info.repo, self.info.folder(), root),
             Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
                 let (package, exe) = if cfg!(target_os = "macos") {
                     (mac_package, mac_exe)
                 } else {
                     (win_package, win_exe)
                 };
-                Target::third_party(self.info.repo, self.info.folder(), package, exe)
+                Target::third_party_in(self.info.repo, self.info.folder(), package, exe, root)
             }
         }
     }
 
-    fn refresh_installed(&mut self) {
-        self.installed = self.target().installed().map(|i| i.version);
+    /// Resolves where this app lives: prefers an already-installed copy in `root` or the default
+    /// `portableApplications/` folder so updates stay in their current location; new installs go
+    /// into `root`.
+    fn target(&self, root: &std::path::Path) -> Target {
+        let preferred = self.target_in(root);
+        if preferred.installed().is_some() {
+            return preferred;
+        }
+        let default_root = crate::settings::app_dir().join(crate::updater::APPS_DIR);
+        if root != default_root {
+            let legacy = self.target_in(&default_root);
+            if legacy.installed().is_some() {
+                return legacy;
+            }
+        }
+        preferred
+    }
+
+    fn refresh_installed(&mut self, root: &std::path::Path) {
+        self.installed = self.target(root).installed().map(|i| i.version);
     }
 
     /// The app's start .bat, if it has one and the installed version shipped it.
-    fn bat_path(&self) -> Option<std::path::PathBuf> {
+    fn bat_path(&self, root: &std::path::Path) -> Option<std::path::PathBuf> {
         let name = self.info.bat.filter(|_| cfg!(windows) && self.installed.is_some())?;
-        Some(self.target().dir().join(name)).filter(|p| p.is_file())
+        Some(self.target(root).dir().join(name)).filter(|p| p.is_file())
     }
 
     fn update_available(&self) -> bool {
@@ -573,12 +627,17 @@ impl AppState {
         matches!(
             self.task,
             Task::Checking
+                | Task::Queued
                 | Task::Downloading { .. }
                 | Task::Installing
                 | Task::Verifying { .. }
                 | Task::Repairing { .. }
                 | Task::Stopping
         )
+    }
+
+    fn downloading(&self) -> bool {
+        matches!(self.task, Task::Downloading { .. } | Task::Installing)
     }
 
     fn log(&mut self, kind: &'static str, text: impl Into<String>) {
@@ -596,10 +655,13 @@ impl AppState {
 pub struct Library {
     apps: Vec<AppState>,
     proxy: EventLoopProxy<UserEvent>,
+    install_root: std::path::PathBuf,
+    max_downloads: u8,
+    queue: Vec<&'static str>,
 }
 
 impl Library {
-    pub fn new(proxy: EventLoopProxy<UserEvent>) -> Self {
+    pub fn new(proxy: EventLoopProxy<UserEvent>, install_root: std::path::PathBuf, max_downloads: u8) -> Self {
         let apps = CATALOG
             .iter()
             .map(|info| {
@@ -614,17 +676,33 @@ impl Library {
                     running: false,
                     starting: None,
                 };
-                a.refresh_installed();
+                a.refresh_installed(&install_root);
                 a
             })
             .collect();
-        Self { apps, proxy }
+        Self { apps, proxy, install_root, max_downloads, queue: Vec::new() }
+    }
+
+    pub fn set_install_root(&mut self, root: std::path::PathBuf) {
+        self.install_root = root;
+        for a in &mut self.apps {
+            a.refresh_installed(&self.install_root);
+        }
+    }
+
+    pub fn set_max_downloads(&mut self, max_downloads: u8) {
+        self.max_downloads = max_downloads;
+        self.drain_queue();
+    }
+
+    fn active_downloads(&self) -> usize {
+        self.apps.iter().filter(|a| a.downloading()).count()
     }
 
     /// Clears what earlier updates left behind in each installed app's folder.
     pub fn sweep(&self) {
         for a in self.apps.iter().filter(|a| a.installed.is_some()) {
-            a.target().sweep_leftovers();
+            a.target(&self.install_root).sweep_leftovers();
         }
     }
 
@@ -633,12 +711,17 @@ impl Library {
             .apps
             .iter()
             .map(|a| {
+                let (accent, ink_light, ink_dark) = app_colors(a.info.id);
                 json!({
                     "id": a.info.id,
                     "name": a.info.name,
                     "folder": a.info.folder(),
                     "tagline": a.info.tagline,
                     "repo": a.info.repo,
+                    "publisher": publisher_of(a.info),
+                    "accent": accent,
+                    "inkLight": ink_light,
+                    "inkDark": ink_dark,
                     "platforms": a.info.platforms,
                     "supported": a.info.supported_on_current_os(),
                     "thirdParty": matches!(a.info.source, Source::ThirdParty { .. }),
@@ -653,7 +736,7 @@ impl Library {
                     "damaged": a.damaged,
                     "running": a.running,
                     "starting": a.starting.is_some(),
-                    "bat": a.bat_path().is_some(),
+                    "bat": a.bat_path(&self.install_root).is_some(),
                 })
             })
             .collect();
@@ -667,15 +750,16 @@ impl Library {
     /// Looks for new releases of every app supported on the current OS. Finding one
     /// only shows the Update button; nothing is downloaded until it's pressed.
     pub fn check_all(&mut self, prereleases: bool) {
+        let root = self.install_root.clone();
         for a in self.apps.iter_mut().filter(|a| !a.busy()) {
-            a.refresh_installed();
+            a.refresh_installed(&root);
             if !a.info.supported_on_current_os() {
                 a.checked = true;
                 a.task = Task::Idle;
                 continue;
             }
             a.task = Task::Checking;
-            let (id, target, proxy) = (a.info.id, a.target(), self.proxy.clone());
+            let (id, target, proxy) = (a.info.id, a.target(&root), self.proxy.clone());
             std::thread::spawn(move || {
                 let result = target.latest(prereleases);
                 let _ = proxy.send_event(UserEvent::App(id, AppEvent::Checked(result)));
@@ -683,9 +767,12 @@ impl Library {
         }
     }
 
-    /// Installs the app, or updates it to the newest release found.
+    /// Queues or starts installing/updating an app, respecting `max_downloads`.
     pub fn install(&mut self, id: &str) {
-        let proxy = self.proxy.clone();
+        let root = self.install_root.clone();
+        let active = self.active_downloads();
+        let limit_hit = self.max_downloads > 0 && active >= self.max_downloads as usize;
+
         let Some(a) = self.get(id) else { return };
         if a.busy() {
             return;
@@ -700,11 +787,80 @@ impl Library {
             a.task = Task::Error { message };
             return;
         }
+        if a.latest.is_none() {
+            a.task = Task::Error { message: "No release has been found to install yet.".into() };
+            return;
+        }
+        let target = a.target(&root);
+        if target.exe_in_use() {
+            let message = format!("{} is running. Close it, then update.", a.info.name);
+            a.log("error", message.clone());
+            a.task = Task::Error { message };
+            return;
+        }
+
+        if limit_hit {
+            let static_id = a.info.id;
+            a.log.clear();
+            a.log("info", "Waiting for another download to finish…");
+            a.task = Task::Queued;
+            if !self.queue.contains(&static_id) {
+                self.queue.push(static_id);
+            }
+            return;
+        }
+        self.start_install(id);
+    }
+
+    /// Starts updating every eligible installed app that has a newer release available.
+    pub fn update_all(&mut self) {
+        let ids: Vec<&'static str> = self
+            .apps
+            .iter()
+            .filter(|a| a.installed.is_some() && a.update_available() && a.info.supported_on_current_os() && !a.busy() && !a.running)
+            .map(|a| a.info.id)
+            .collect();
+        for id in ids {
+            self.install(id);
+        }
+    }
+
+    /// Cancels a queued download before it has begun.
+    pub fn cancel_queued(&mut self, id: &str) {
+        self.queue.retain(|q| *q != id);
+        if let Some(a) = self.get(id) {
+            if matches!(a.task, Task::Queued) {
+                a.task = Task::Idle;
+                a.log("info", "Removed from download queue");
+            }
+        }
+    }
+
+    fn drain_queue(&mut self) {
+        while !self.queue.is_empty() && (self.max_downloads == 0 || self.active_downloads() < self.max_downloads as usize) {
+            let next_id = self.queue.remove(0);
+            if let Some(a) = self.get(next_id) {
+                if !matches!(a.task, Task::Queued) {
+                    continue;
+                }
+                a.task = Task::Idle;
+            }
+            self.start_install(next_id);
+        }
+    }
+
+    fn start_install(&mut self, id: &str) {
+        let proxy = self.proxy.clone();
+        let root = self.install_root.clone();
+        let Some(a) = self.get(id) else { return };
+        if a.busy() {
+            return;
+        }
         let Some(release) = a.latest.clone() else {
             a.task = Task::Error { message: "No release has been found to install yet.".into() };
             return;
         };
-        let target = a.target();
+        let target = a.target(&root);
         if target.exe_in_use() {
             let message = format!("{} is running. Close it, then update.", a.info.name);
             a.log("error", message.clone());
@@ -746,9 +902,11 @@ impl Library {
     }
 
     pub fn on_event(&mut self, id: &str, event: AppEvent) {
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
         // A verify that finds damage goes straight on to repairing it.
         let mut repair_next = false;
+        let mut drain_next = false;
         match event {
             AppEvent::Checked(Ok(latest)) => {
                 a.latest = latest;
@@ -765,16 +923,18 @@ impl Library {
             AppEvent::Progress(done, total) => a.task = Task::Downloading { done, total },
             AppEvent::Log(line) => a.log("info", line),
             AppEvent::Finished(Ok(())) => {
-                a.refresh_installed();
+                a.refresh_installed(&root);
                 a.damaged.clear();
                 let done = format!("Done: {} v{} is installed", a.info.name, a.installed.as_deref().unwrap_or("?"));
                 a.log("ok", done);
                 a.task = Task::Idle;
+                drain_next = true;
             }
             AppEvent::Finished(Err(message)) => {
-                a.refresh_installed();
+                a.refresh_installed(&root);
                 a.log("error", format!("Stopped: {message}"));
                 a.task = Task::Error { message };
+                drain_next = true;
             }
             AppEvent::VerifyProgress(done, total) => a.task = Task::Verifying { done, total },
             AppEvent::Verified(Ok(damaged)) => {
@@ -805,12 +965,12 @@ impl Library {
                 a.task = Task::Error { message };
             }
             AppEvent::StopDeferred(message) => {
-                a.running = a.target().exe_in_use();
+                a.running = a.target(&root).exe_in_use();
                 a.log("info", message);
                 a.task = Task::Idle;
             }
             AppEvent::Stopped(result) => {
-                a.running = a.target().exe_in_use();
+                a.running = a.target(&root).exe_in_use();
                 a.task = match result {
                     Ok(()) => {
                         a.log("ok", format!("{} has stopped", a.info.name));
@@ -826,12 +986,16 @@ impl Library {
         if repair_next {
             self.repair(id);
         }
+        if drain_next {
+            self.drain_queue();
+        }
     }
 
     /// Checks every installed file against its SHA-256. Damaged files are only
     /// reported; Repair fixes them.
     pub fn verify(&mut self, id: &str) {
         let proxy = self.proxy.clone();
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
         if a.busy() || a.installed.is_none() {
             return;
@@ -839,7 +1003,7 @@ impl Library {
         a.log.clear();
         a.log("info", format!("Verifying {} v{}", a.info.name, a.installed.as_deref().unwrap_or("?")));
         a.task = Task::Verifying { done: 0, total: 0 };
-        let (id, target) = (a.info.id, a.target());
+        let (id, target) = (a.info.id, a.target(&root));
         std::thread::spawn(move || {
             let send = |e: AppEvent| {
                 let _ = proxy.send_event(UserEvent::App(id, e));
@@ -860,11 +1024,12 @@ impl Library {
     /// Re-downloads only the files the last verify found damaged.
     pub fn repair(&mut self, id: &str) {
         let proxy = self.proxy.clone();
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
         if a.busy() || a.damaged.is_empty() {
             return;
         }
-        let target = a.target();
+        let target = a.target(&root);
         if target.exe_in_use() {
             let message = format!("{} is running. Close it, then repair.", a.info.name);
             a.log("error", message.clone());
@@ -894,9 +1059,10 @@ impl Library {
     /// Notices apps starting and stopping, whether through this launcher or not.
     /// Returns true when anything changed and the page needs a new snapshot.
     pub fn refresh_running(&mut self) -> bool {
+        let root = self.install_root.clone();
         let mut changed = false;
         for a in self.apps.iter_mut().filter(|a| a.installed.is_some()) {
-            let running = a.target().exe_in_use();
+            let running = a.target(&root).exe_in_use();
             if running != a.running {
                 a.running = running;
                 changed = true;
@@ -920,8 +1086,9 @@ impl Library {
     }
 
     fn start(&mut self, id: &str, bat: bool) {
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
-        let target = a.target();
+        let target = a.target(&root);
         let Some(installed) = target.installed() else { return };
         // The button turns into Stop while it runs; this covers a click that
         // arrived just before that, or an app started some other way.
@@ -932,7 +1099,7 @@ impl Library {
         }
         let exe = match bat {
             false => target.dir().join(&installed.exe),
-            true => match a.bat_path() {
+            true => match a.bat_path(&root) {
                 Some(p) => p,
                 None => {
                     a.log("error", format!("This version of {} has no .bat to start it with", a.info.name));
@@ -956,11 +1123,12 @@ impl Library {
     /// Asks a running app to quit, and ends it if it hasn't after a while.
     pub fn stop(&mut self, id: &str) {
         let proxy = self.proxy.clone();
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
         if a.busy() || !a.running {
             return;
         }
-        let (id, name, how, target) = (a.info.id, a.info.name, a.info.stop, a.target());
+        let (id, name, how, target) = (a.info.id, a.info.name, a.info.stop, a.target(&root));
         let Some(installed) = target.installed() else { return };
         a.task = Task::Stopping;
         a.starting = None;
@@ -1034,7 +1202,7 @@ impl Library {
 
     pub fn open_folder(&self, id: &str) {
         if let Some(a) = self.apps.iter().find(|a| a.info.id == id) {
-            let target = a.target();
+            let target = a.target(&self.install_root);
             if target.dir().exists() {
                 crate::open_in_shell(target.dir());
             }
@@ -1043,11 +1211,12 @@ impl Library {
 
     /// Deletes the app's folder, its settings included. The page asks first.
     pub fn uninstall(&mut self, id: &str) {
+        let root = self.install_root.clone();
         let Some(a) = self.get(id) else { return };
         if a.busy() {
             return;
         }
-        let target = a.target();
+        let target = a.target(&root);
         if target.exe_in_use() {
             let message = format!("{} is running. Close it, then uninstall.", a.info.name);
             a.log("error", message.clone());
@@ -1067,7 +1236,7 @@ impl Library {
             a.log("info", format!("Deleting {}", target.dir().display()));
             std::fs::remove_dir_all(target.dir()).map_err(|e| e.to_string())
         };
-        a.refresh_installed();
+        a.refresh_installed(&root);
         a.task = match result {
             Ok(()) => {
                 a.log("ok", format!("{} is uninstalled", a.info.name));

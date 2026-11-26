@@ -103,34 +103,62 @@ pub fn data_dir() -> PathBuf {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
-    /// "light" or "dark".
+    /// "light", "dark", or "system".
     pub theme: String,
-    /// Check GitHub on launch, and if a newer release is out, download and apply it.
+    /// "modern" (ArtCraft-inspired) or "legacy" (original reading-room look).
+    pub look: String,
+    /// "auto" (check on launch and every 5 minutes) or "manual" (only when asked).
+    pub check_every: String,
+    /// Check GitHub on launch (Discord-style loading splash), and if a newer launcher
+    /// release is out, download and restart into it.
     pub auto_update: bool,
+    /// Maximum concurrent app downloads (1–4, or 0 for no limit).
+    pub simultaneous_downloads: u8,
+    /// Show a bottom-right popup when a background check finds an installed app update.
+    pub notify_app_updates: bool,
     /// Consider pre-releases when looking for a newer version.
     pub prereleases: bool,
-    /// Unix seconds of the last successful check, shown in settings.
+    /// Custom folder where apps are installed; None uses `portableApplications/` beside Launcher.
+    pub install_dir: Option<String>,
+    /// Unix seconds of the last successful check, shown in settings and footer.
     pub last_check: Option<u64>,
-    /// Colour scheme used in light mode; one of [`LIGHT_SCHEMES`].
+    /// Colour scheme used in Legacy light mode; one of [`LIGHT_SCHEMES`].
     pub light_scheme: String,
-    /// Colour scheme used in dark mode; one of [`DARK_SCHEMES`].
+    /// Colour scheme used in Legacy dark mode; one of [`DARK_SCHEMES`].
     pub dark_scheme: String,
+    /// "grid" or "table".
+    pub view: String,
+    /// "name-asc", "name-desc", "status", or "updated".
+    pub sort: String,
+    /// App IDs pinned to the top of their tab.
+    pub pinned: Vec<String>,
 }
 
-/// The colour schemes ui/app.css defines, the default first. Kept in data\
+/// The colour schemes ui/app.css defines for Legacy look, the default first. Kept in data\
 /// beside the exe like every other setting, so a choice survives updates.
 pub const LIGHT_SCHEMES: &[&str] = &["walnut", "sage", "slate", "rose"];
 pub const DARK_SCHEMES: &[&str] = &["gold", "ocean", "forest", "plum"];
+pub const LOOKS: &[&str] = &["modern", "legacy"];
+pub const VIEWS: &[&str] = &["grid", "table"];
+pub const SORTS: &[&str] = &["name-asc", "name-desc", "status", "updated"];
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "light".into(),
+            look: "modern".into(),
+            check_every: "auto".into(),
             auto_update: true,
+            simultaneous_downloads: 1,
+            notify_app_updates: true,
             prereleases: false,
+            install_dir: None,
             last_check: None,
             light_scheme: LIGHT_SCHEMES[0].into(),
             dark_scheme: DARK_SCHEMES[0].into(),
+            view: "grid".into(),
+            sort: "name-asc".into(),
+            pinned: Vec::new(),
         }
     }
 }
@@ -163,6 +191,29 @@ impl Settings {
         self.theme == "dark"
     }
 
+    pub fn look_name(&self) -> &str {
+        if self.look == "legacy" { "legacy" } else { "modern" }
+    }
+
+    pub fn is_modern(&self) -> bool {
+        self.look_name() == "modern"
+    }
+
+    pub fn checks_automatically(&self) -> bool {
+        self.check_every != "manual"
+    }
+
+    /// Root folder where installed apps live: custom `install_dir` if set, otherwise
+    /// `portableApplications/` beside the launcher.
+    pub fn apps_root(&self) -> PathBuf {
+        self.install_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| app_dir().join(crate::updater::APPS_DIR))
+    }
+
     /// The scheme for whichever mode is on, falling back to the default if the
     /// saved name isn't one this version knows.
     pub fn palette(&self) -> &str {
@@ -174,9 +225,16 @@ impl Settings {
         known.iter().find(|s| **s == saved.as_str()).copied().unwrap_or(known[0])
     }
 
-    /// The page background for the scheme in use, so the window doesn't flash
-    /// a different colour before the page paints. Dark schemes share one.
+    /// The page background for the look and scheme in use, so the window doesn't flash
+    /// a different colour before the page paints.
     pub fn paper(&self) -> (u8, u8, u8, u8) {
+        if self.is_modern() {
+            return if self.is_dark() {
+                (0x12, 0x13, 0x16, 0xFF)
+            } else {
+                (0xF2, 0xF1, 0xEE, 0xFF)
+            };
+        }
         match self.palette() {
             "sage" => (0xEE, 0xF1, 0xE8, 0xFF),
             "slate" => (0xEE, 0xF1, 0xF5, 0xFF),
@@ -191,8 +249,8 @@ impl Settings {
 mod tests {
     use super::*;
 
-    /// A settings file written before colour schemes existed keeps its other
-    /// choices and opens in the original look.
+    /// A settings file written before colour schemes or modern look existed keeps its other
+    /// choices and picks up clean defaults.
     #[test]
     fn older_file_gets_default_schemes() {
         let old = r#"{"theme":"dark","autoUpdate":false,"prereleases":true,"lastCheck":1700000000}"#;
@@ -201,23 +259,49 @@ mod tests {
         assert_eq!(s.light_scheme, "walnut");
         assert_eq!(s.dark_scheme, "gold");
         assert_eq!(s.palette(), "gold");
+        assert_eq!(s.look_name(), "modern");
+        assert_eq!(s.simultaneous_downloads, 1);
+        assert!(s.notify_app_updates);
+        assert!(s.checks_automatically());
     }
 
     /// A name this version doesn't know (say, from a newer launcher) falls back
     /// to the default instead of leaving the page unstyled.
     #[test]
     fn unknown_scheme_falls_back() {
-        let s = Settings { light_scheme: "neon".into(), ..Settings::default() };
+        let s = Settings { look: "legacy".into(), light_scheme: "neon".into(), ..Settings::default() };
         assert_eq!(s.palette(), "walnut");
         assert_eq!(s.paper(), (0xF4, 0xEE, 0xE2, 0xFF));
     }
 
     #[test]
+    fn modern_paper_colours() {
+        let light = Settings { look: "modern".into(), theme: "light".into(), ..Settings::default() };
+        assert_eq!(light.paper(), (0xF2, 0xF1, 0xEE, 0xFF));
+        let dark = Settings { look: "modern".into(), theme: "dark".into(), ..Settings::default() };
+        assert_eq!(dark.paper(), (0x12, 0x13, 0x16, 0xFF));
+    }
+
+    #[test]
     fn schemes_round_trip() {
-        let s = Settings { theme: "dark".into(), light_scheme: "rose".into(), dark_scheme: "plum".into(), ..Settings::default() };
+        let s = Settings {
+            look: "legacy".into(),
+            theme: "dark".into(),
+            light_scheme: "rose".into(),
+            dark_scheme: "plum".into(),
+            simultaneous_downloads: 3,
+            notify_app_updates: false,
+            check_every: "manual".into(),
+            pinned: vec!["lighthouse".into()],
+            ..Settings::default()
+        };
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
         assert_eq!((back.light_scheme.as_str(), back.dark_scheme.as_str()), ("rose", "plum"));
         assert_eq!(back.palette(), "plum");
         assert_eq!(back.paper(), (0x12, 0x12, 0x12, 0xFF));
+        assert_eq!(back.simultaneous_downloads, 3);
+        assert!(!back.notify_app_updates);
+        assert!(!back.checks_automatically());
+        assert_eq!(back.pinned, vec!["lighthouse"]);
     }
 }
