@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.18",
-      "published": "2026-11-26T08:10:32Z",
-      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
+      "version": "0.3.19",
+      "published": "2026-11-26T22:16:25Z",
+      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-macos.zip",
-        "size": 3530572,
-        "sha256": "1a8a0e55d4573f70aefb99fb4e114ada363661fb8097c48a25df29df190d4258"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-macos.zip",
+        "size": 3702198,
+        "sha256": "805aa261144b4e593e4638e08640dc1762ef81fea362d73737eec8a2ba8572c4"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "f3fe70771527b319afb4baad784850fe8ff848c90b5bd77abce3de128d0c6498"
+          "sha256": "f6b18890f0cdfec3478cbcce16e64315ed02af438eea3db314fe5f14604a9811"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 5657520,
-          "sha256": "c5da5fe9bf45755a649190eab23f6c2ef71a41cd4f8b2eb42ee52493f2cd3d87"
+          "size": 6051392,
+          "sha256": "19c1a5ee4a9c1c02690e4d8af16f7b95abba73977ad2dc4eb3abad897ff276ba"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.18",
-      "published": "2026-11-26T08:10:32Z",
-      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
+      "version": "0.3.19",
+      "published": "2026-11-26T22:16:25Z",
+      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-macos.zip",
-        "size": 3530572,
-        "sha256": "1a8a0e55d4573f70aefb99fb4e114ada363661fb8097c48a25df29df190d4258"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-macos.zip",
+        "size": 3702198,
+        "sha256": "805aa261144b4e593e4638e08640dc1762ef81fea362d73737eec8a2ba8572c4"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "f3fe70771527b319afb4baad784850fe8ff848c90b5bd77abce3de128d0c6498"
+          "sha256": "f6b18890f0cdfec3478cbcce16e64315ed02af438eea3db314fe5f14604a9811"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 5657520,
-          "sha256": "c5da5fe9bf45755a649190eab23f6c2ef71a41cd4f8b2eb42ee52493f2cd3d87"
+          "size": 6051392,
+          "sha256": "19c1a5ee4a9c1c02690e4d8af16f7b95abba73977ad2dc4eb3abad897ff276ba"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",

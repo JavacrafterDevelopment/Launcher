@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.18",
-      "published": "2026-11-26T08:10:32Z",
-      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
+      "version": "0.3.19",
+      "published": "2026-11-26T22:16:25Z",
+      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-windows-x64.zip",
-        "size": 1619742,
-        "sha256": "72bfa8f64cf9d50901c246761542b67b8bd5950146549ab670a87f6f5e18861d"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-windows-x64.zip",
+        "size": 1706875,
+        "sha256": "59f81f7b8d3b8f86e6ab3ab7301adb5e063bda7efc2d8dc8494c8f7968cc1893"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2512384,
-          "sha256": "af9db94cccead0efe783433116420955ae4ab0b527a33e32ff000286b694228b"
+          "size": 2725376,
+          "sha256": "c41f9e46bd825f079898189845b59548ec907de40ed92f9b7f152461f8ea2e8f"
         }
       ]
     },
     "stable": {
-      "version": "0.3.18",
-      "published": "2026-11-26T08:10:32Z",
-      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
+      "version": "0.3.19",
+      "published": "2026-11-26T22:16:25Z",
+      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-windows-x64.zip",
-        "size": 1619742,
-        "sha256": "72bfa8f64cf9d50901c246761542b67b8bd5950146549ab670a87f6f5e18861d"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-windows-x64.zip",
+        "size": 1706875,
+        "sha256": "59f81f7b8d3b8f86e6ab3ab7301adb5e063bda7efc2d8dc8494c8f7968cc1893"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2512384,
-          "sha256": "af9db94cccead0efe783433116420955ae4ab0b527a33e32ff000286b694228b"
+          "size": 2725376,
+          "sha256": "c41f9e46bd825f079898189845b59548ec907de40ed92f9b7f152461f8ea2e8f"
         }
       ]
     }
