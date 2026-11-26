@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="{{THEME}}" data-palette="{{PALETTE}}" data-os="{{OS}}">
+<html lang="en" data-look="{{LOOK}}" data-theme="{{THEME}}" data-palette="{{PALETTE}}" data-os="{{OS}}">
 <head>
   <meta charset="utf-8">
   <title>Launcher</title>
@@ -7,11 +7,32 @@
   <script>/*{{BOOT}}*/</script>
 </head>
 <body>
+  <!-- Discord-style startup splash while checking for / applying a launch-time launcher update. -->
+  <div id="splash" aria-live="polite">
+    <div class="splash-card">
+      <svg class="splash-mark" width="56" height="56" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <path class="fin" d="M22 33 L13 45 L13 53 L22 46 Z"/>
+        <path class="fin" d="M42 33 L51 45 L51 53 L42 46 Z"/>
+        <path class="body" d="M32 4 C40 10.5 42.5 19 42.5 31 V48.5 H21.5 V31 C21.5 19 24 10.5 32 4 Z"/>
+        <path class="band" d="M21.5 40 H42.5" stroke-width="3.4"/>
+        <circle class="fin" cx="32" cy="23" r="6.2"/>
+        <circle class="lamp" cx="32" cy="23" r="4"/>
+        <rect class="fin" x="25.5" y="47.5" width="13" height="4" rx="1"/>
+      </svg>
+      <div class="splash-title">LAUNCHER</div>
+      <div class="splash-bar-wrap">
+        <div class="splash-bar indeterminate" id="splash-bar"></div>
+      </div>
+      <div class="splash-status" id="splash-status">Checking for updates…</div>
+      <button class="splash-skip" id="splash-skip" type="button">Skip for now</button>
+    </div>
+  </div>
+
   <div id="app">
 
-    <!-- Masthead: the mark stands full height on the left, wordmark and page tabs
-         stacked beside it, window buttons pinned to the corner. The whole band is
-         the drag handle except the controls sitting on it. -->
+    <!-- Top Header: In Modern look, a crisp 48px ArtCraft-style title bar with wordmark,
+         suite subtitle, updates bell, settings gear on the right, and window buttons.
+         In Legacy look, the classic warm masthead with animated rocket mark and tabs. -->
     <header id="top">
       <svg id="mark" width="68" height="68" viewBox="0 0 64 64" fill="none" aria-hidden="true">
         <defs>
@@ -25,8 +46,6 @@
             <stop offset="1"   stop-color="#A8843F" stop-opacity="0"/>
           </linearGradient>
         </defs>
-
-        <!-- Drawn first so the body and nozzle sit over the root of the exhaust. -->
         <g class="sparks">
           <circle cx="27" cy="56" r="1.1"/>
           <circle cx="37" cy="58" r=".9"/>
@@ -34,7 +53,6 @@
         </g>
         <circle class="glow" cx="32" cy="54" r="10" fill="url(#exhaustGlow)"/>
         <path class="flame" d="M26 49 Q32 66 38 49 Z" fill="url(#flameFade)"/>
-
         <path class="fin" d="M22 33 L13 45 L13 53 L22 46 Z"/>
         <path class="fin" d="M42 33 L51 45 L51 53 L42 46 Z"/>
         <path class="body" d="M32 4 C40 10.5 42.5 19 42.5 31 V48.5 H21.5 V31 C21.5 19 24 10.5 32 4 Z"/>
@@ -47,10 +65,13 @@
       <div id="brandcol">
         <div id="brandrow">
           <span id="wordmark">Launcher</span>
+          <span class="suite-sep" aria-hidden="true"></span>
+          <span id="suite-label">Javacrafter App Suite</span>
         </div>
 
-        <nav id="tabs">
-          <button class="chip on" data-page="library" title="Your apps">
+        <!-- Legacy-only inline header tabs (hidden in Modern, where tabs sit in #toolbar). -->
+        <nav id="legacy-tabs" aria-label="Sections">
+          <button class="chip on" data-tab="library" title="Your apps">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
@@ -58,17 +79,17 @@
               <rect x="9" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
             </svg>
             Apps
-            <span class="badge" id="lib-badge" title="App updates available"></span>
+            <span class="badge" id="legacy-lib-badge" title="App updates available"></span>
           </button>
-          <button class="chip" data-page="temporary" title="Short-lived tools">
+          <button class="chip" data-tab="temporary" title="Short-lived tools">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 1.8h8M4 14.2h8M4.8 1.8c0 3.2 3.2 4.4 3.2 6.2S4.8 11 4.8 14.2M11.2 1.8c0 3.2-3.2 4.4-3.2 6.2s3.2 3 3.2 6.2"
                     stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             Temporary Apps
-            <span class="badge" id="temp-badge" title="App updates available"></span>
+            <span class="badge" id="legacy-temp-badge" title="App updates available"></span>
           </button>
-          <button class="chip" data-page="games" title="Your games">
+          <button class="chip" data-tab="games" title="Your games">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4.6 4.2h6.8a3.4 3.4 0 0 1 3.3 2.6l.6 2.9a1.9 1.9 0 0 1-3.3 1.6L10.6 9.8H5.4L4 11.3a1.9 1.9 0 0 1-3.3-1.6l.6-2.9a3.4 3.4 0 0 1 3.3-2.6z"
                     stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -77,10 +98,10 @@
               <circle cx="11.9" cy="8" r=".85" fill="currentColor"/>
             </svg>
             Games
-            <span class="badge" id="games-badge" title="Game updates available"></span>
+            <span class="badge" id="legacy-games-badge" title="Game updates available"></span>
           </button>
-          <button class="chip" data-page="settings" title="Settings (Ctrl+,)">
-            <!-- A cog, not a sun: short thick teeth on a heavy ring around a hub hole. -->
+          <span class="grow"></span>
+          <button class="chip" id="legacy-settings-btn" data-tab="settings" title="Settings (Ctrl+,)">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M13.2 8H15.0M2.8 8H1.0M10.6 12.5l.9 1.56M5.4 3.5l-.9-1.56M10.6 3.5l.9-1.56M5.4 12.5l-.9 1.56"
                     stroke="currentColor" stroke-width="2.3" stroke-linecap="butt"/>
@@ -89,6 +110,32 @@
             Settings
           </button>
         </nav>
+      </div>
+
+      <!-- Modern right-side header cells: updates bell + settings gear (matching ArtCraft Launcher). -->
+      <div id="head-actions">
+        <div class="bell-wrap">
+          <button class="head-cell" id="btn-bell" title="Updates &amp; notices" aria-label="Updates">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span class="bell-count" id="bell-count"></span>
+          </button>
+          <div id="bell-popover" class="popover" role="dialog" aria-label="Available updates">
+            <div class="popover-head">
+              <span class="hud-label">Updates</span>
+              <button class="popover-close" id="bell-close" title="Close" aria-label="Close">×</button>
+            </div>
+            <div class="popover-body" id="bell-body"></div>
+          </div>
+        </div>
+        <button class="head-cell" id="btn-settings" title="Settings (Ctrl+,)" aria-label="Settings">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
       </div>
 
       <div id="winbtns">
@@ -105,209 +152,330 @@
       </div>
     </header>
 
+    <!-- Main scrollable body -->
     <main id="body">
 
-      <!-- ------------------------------------------------------------ library -->
-      <section id="page-library" class="page on">
-        <div class="column wide">
-          <div class="lib-head">
-            <h1 class="page-title">Apps</h1>
-            <span class="meta" id="lib-summary"></span>
+      <!-- Shared Library View (Apps / Temporary Apps / Games) -->
+      <section id="page-catalog" class="page on">
+        <div class="catalog-shell">
+          <!-- Launcher update banner (when user dismissed popup or update is available) -->
+          <div id="launcher-banner" class="launcher-banner">
+            <span class="banner-tag">UPDATE</span>
+            <span class="banner-text" id="banner-text"></span>
             <span class="grow"></span>
-            <button class="btn small app-check" title="Look for new releases of every app">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
-              </svg>
-              Check for updates
-            </button>
-          </div>
-          <p class="lib-note">Each app installs into its own folder in
-            <code>portableApplications\</code>. Updates are found automatically, but only
-            installed when you press <b>Update</b>; an app's settings are kept.</p>
-          <div id="apps" class="apps"></div>
-
-          <div class="lib-section">
-            <div class="lib-head">
-              <h2 class="section-title">Third-party apps</h2>
-              <span class="meta" id="third-party-summary"></span>
+            <div class="banner-progress" id="banner-progress">
+              <span class="banner-prog-label" id="banner-prog-label"></span>
+              <div class="progress small on"><div class="bar" id="banner-bar"></div></div>
             </div>
-            <p class="lib-note">Open-source apps from other authors on GitHub, unpacked into
-              <code>portableApplications\</code> with the same update and file checks.</p>
-            <div id="third-party-apps" class="apps"></div>
+            <button class="btn primary small" id="banner-action" type="button">Update &amp; restart</button>
+            <button class="banner-dismiss" id="banner-dismiss" title="Dismiss" type="button">×</button>
           </div>
-        </div>
-      </section>
 
-      <!-- ---------------------------------------------------------- temporary -->
-      <section id="page-temporary" class="page">
-        <div class="column wide">
-          <div class="lib-head">
-            <h1 class="page-title">Temporary Apps</h1>
-            <span class="meta" id="temp-summary"></span>
-            <span class="grow"></span>
-            <button class="btn small app-check" title="Look for new releases of every app">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
-              </svg>
-              Check for updates
-            </button>
-          </div>
-          <p class="lib-note">Short-lived tools for a job at hand. They install into
-            <code>portableApplications\</code> like any other app; uninstall them once
-            they've done their work.</p>
-          <div id="temp-apps" class="apps"></div>
-          <p class="apps-empty" id="temp-empty">No temporary apps right now.</p>
-        </div>
-      </section>
-
-      <!-- -------------------------------------------------------------- games -->
-      <section id="page-games" class="page">
-        <div class="column wide">
-          <div class="lib-head">
-            <h1 class="page-title">Games</h1>
-            <span class="meta" id="games-summary"></span>
-            <span class="grow"></span>
-            <button class="btn small app-check" title="Look for new releases of every app">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
-              </svg>
-              Check for updates
-            </button>
-          </div>
-          <p class="lib-note">Games install into <code>portableApplications\</code> and
-            update the same way as apps; their saves and settings are kept.</p>
-          <div id="games" class="apps"></div>
-          <p class="apps-empty" id="games-empty">No games yet. They'll appear here once they're added.</p>
-        </div>
-      </section>
-
-      <!-- ----------------------------------------------------------- settings -->
-      <section id="page-settings" class="page">
-        <div class="column">
-          <h1 class="page-title">Settings</h1>
-
-          <div class="card" id="updates-card">
-            <div class="card-head">
-              <h3>Updates</h3>
-              <a class="link" id="repo-link" href="#" title="Open the releases page on GitHub"></a>
-            </div>
-
-            <div class="ver-block">
-              <div class="ver">
-                <span class="ver-label">Installed</span>
-                <span class="ver-num" id="ver-current"></span>
-              </div>
-              <div class="ver-status">
-                <span class="pill" id="upd-pill"><span class="dot"></span><span id="upd-pill-text">Not checked</span></span>
-                <p class="ver-detail" id="upd-detail">The launcher can check GitHub for a newer release.</p>
-              </div>
-            </div>
-
-            <div class="progress" id="upd-progress"><div class="bar" id="upd-bar"></div></div>
-
-            <div class="notes" id="upd-notes">
-              <div class="notes-head">
-                <span class="notes-title" id="upd-notes-title"></span>
-                <a class="link" id="upd-notes-link" href="#">View on GitHub</a>
-              </div>
-              <div class="notes-body" id="upd-notes-body"></div>
-            </div>
-
-            <div class="actions">
-              <button class="btn" id="btn-check">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <!-- Toolbar: tabs + refresh on left; update-all + sort + search + grid/table toggle on right.
+               Visible in BOTH Modern and Legacy looks so search/sort/view carry over! -->
+          <div id="toolbar">
+            <div class="tb-left">
+              <nav id="tabs" class="cell-group" aria-label="Catalog tabs">
+                <button class="cell on" data-tab="library" type="button" title="Your apps">
+                  APPS
+                  <span class="cell-badge" id="lib-badge"></span>
+                </button>
+                <button class="cell" data-tab="temporary" type="button" title="Short-lived tools">
+                  TEMPORARY APPS
+                  <span class="cell-badge" id="temp-badge"></span>
+                </button>
+                <button class="cell" data-tab="games" type="button" title="Your games">
+                  GAMES
+                  <span class="cell-badge" id="games-badge"></span>
+                </button>
+              </nav>
+              <button class="sq-btn app-check" id="btn-refresh" type="button" title="Check for updates" aria-label="Check for updates">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                   <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
                 </svg>
-                Check for updates
               </button>
-              <button class="btn primary" id="btn-download">Download &amp; install</button>
-              <button class="btn primary" id="btn-restart">Restart to update</button>
-              <span class="grow"></span>
-              <span class="meta" id="upd-last"></span>
+              <span class="tb-summary meta" id="catalog-summary"></span>
             </div>
 
-            <div class="set-row">
-              <label class="set-text" for="set-auto">
-                <span class="set-title">Update automatically</span>
-                <span class="set-desc">Each time the launcher opens it checks GitHub, and if
-                  there's a newer release it downloads it and restarts into it.</span>
-              </label>
-              <input type="checkbox" id="set-auto" class="switch">
-            </div>
+            <div class="tb-right">
+              <button class="btn primary small" id="btn-update-all" type="button">Update all</button>
 
-            <div class="set-row last">
-              <label class="set-text" for="set-pre">
-                <span class="set-title">Include pre-releases</span>
-                <span class="set-desc">Also offer releases marked as pre-release on GitHub.
-                  Earlier, and sometimes rougher.</span>
+              <label class="sort-wrap" id="sort-wrap">
+                <span class="hud-label sort-label">SORT</span>
+                <select id="sort-select" class="select" aria-label="Sort apps">
+                  <option value="name-asc">Name (A–Z)</option>
+                  <option value="name-desc">Name (Z–A)</option>
+                  <option value="status">Status</option>
+                  <option value="updated">Recently updated</option>
+                </select>
               </label>
-              <input type="checkbox" id="set-pre" class="switch">
+
+              <div class="search-wrap">
+                <input id="search-input" class="search-input" type="text" placeholder="Search apps" autocomplete="off" spellcheck="false" aria-label="Search apps">
+                <button id="search-clear" class="search-clear" type="button" title="Clear search" aria-label="Clear search">×</button>
+              </div>
+
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button class="vt-btn on" id="vt-grid" data-view="grid" type="button" title="Show apps as cards" aria-label="Grid view">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                    <rect x="0.5" y="0.5" width="5.5" height="5.5"/>
+                    <rect x="8" y="0.5" width="5.5" height="5.5"/>
+                    <rect x="0.5" y="8" width="5.5" height="5.5"/>
+                    <rect x="8" y="8" width="5.5" height="5.5"/>
+                  </svg>
+                </button>
+                <button class="vt-btn" id="vt-table" data-view="table" type="button" title="Show apps as a table" aria-label="Table view">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                    <rect x="0" y="1" width="14" height="2.4"/>
+                    <rect x="0" y="5.8" width="14" height="2.4"/>
+                    <rect x="0" y="10.6" width="14" height="2.4"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-head"><h3>Appearance</h3></div>
-            <div class="set-row">
-              <label class="set-text" for="set-dark">
-                <span class="set-title">Dark mode</span>
-                <span class="set-desc">Near-black, in the dark colours chosen below.</span>
-              </label>
-              <input type="checkbox" id="set-dark" class="switch">
-            </div>
+          <!-- Catalog content rendered dynamically (Grid or Table, Pinned / Installed / Not Installed) -->
+          <div id="catalog-content"></div>
+        </div>
+      </section>
 
-            <!-- One scheme for each mode; the first of each is the original look. -->
-            <div class="set-row scheme-head">
-              <div class="set-text">
-                <span class="set-title">Light mode colours</span>
-                <span class="set-desc">Used while dark mode is off.</span>
+      <!-- Settings: Styled as a centered ArtCraft modal sheet in Modern look (matching image_2.png),
+           and as a full scrolling page in Legacy look! Same DOM, zero duplication. -->
+      <section id="page-settings" class="page" aria-label="Settings">
+        <div class="settings-backdrop" id="settings-backdrop"></div>
+        <div class="settings-sheet">
+          <div class="settings-hero">
+            <div class="settings-hero-accent"></div>
+            <div class="settings-hero-inner">
+              <svg class="settings-hero-icon" width="40" height="40" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                <path class="fin" d="M22 33 L13 45 L13 53 L22 46 Z"/>
+                <path class="fin" d="M42 33 L51 45 L51 53 L42 46 Z"/>
+                <path class="body" d="M32 4 C40 10.5 42.5 19 42.5 31 V48.5 H21.5 V31 C21.5 19 24 10.5 32 4 Z"/>
+                <path class="band" d="M21.5 40 H42.5" stroke-width="3.4"/>
+                <circle class="fin" cx="32" cy="23" r="6.2"/>
+                <circle class="lamp" cx="32" cy="23" r="4"/>
+                <rect class="fin" x="25.5" y="47.5" width="13" height="4" rx="1"/>
+              </svg>
+              <div class="settings-hero-text">
+                <h1 class="page-title">Settings</h1>
+                <span class="hud-label settings-hero-sub">JAVACRAFTER LAUNCHER</span>
               </div>
             </div>
-            <div class="schemes" id="schemes-light"></div>
-
-            <div class="set-row scheme-head">
-              <div class="set-text">
-                <span class="set-title">Dark mode colours</span>
-                <span class="set-desc">Used while dark mode is on.</span>
-              </div>
-            </div>
-            <div class="schemes last" id="schemes-dark"></div>
           </div>
 
-          <div class="card">
-            <div class="card-head"><h3>Portable</h3></div>
-            <div class="set-row last">
-              <div class="set-text">
-                <span class="set-title">Everything stays in this folder</span>
-                <span class="set-desc">Settings and the browser profile live in
-                  <code>data\</code> beside <code>Launcher.exe</code>. Copy the folder to a
-                  stick or another PC and it comes with you.</span>
+          <div class="settings-scroll">
+            <div class="settings-grid">
+              <!-- Left Column: Updates + Appearance -->
+              <div class="settings-col">
+
+                <div class="card" id="updates-card">
+                  <div class="card-head">
+                    <h3>Updates</h3>
+                    <a class="link" id="repo-link" href="#" title="Open the releases page on GitHub"></a>
+                  </div>
+
+                  <div class="set-row inline-control">
+                    <label class="set-text" for="set-check-every">
+                      <span class="set-title">Check for updates</span>
+                    </label>
+                    <select id="set-check-every" class="select">
+                      <option value="auto">Automatically</option>
+                      <option value="manual">Only when I ask</option>
+                    </select>
+                  </div>
+
+                  <div class="set-row check-row">
+                    <label class="check-label" for="set-auto">
+                      <input type="checkbox" id="set-auto" class="chk">
+                      <span class="check-copy">
+                        <span class="set-title">Automatically download and install launcher updates</span>
+                        <span class="set-desc">Checks on startup while loading, and updates before the launcher opens.</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="set-row inline-control">
+                    <label class="set-text" for="set-sim-dl">
+                      <span class="set-title">Simultaneous downloads</span>
+                    </label>
+                    <select id="set-sim-dl" class="select">
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="0">No limit</option>
+                    </select>
+                  </div>
+                  <p class="set-note">Downloads running together share your connection, so each one is slower.</p>
+
+                  <div class="set-row check-row">
+                    <label class="check-label" for="set-notify">
+                      <input type="checkbox" id="set-notify" class="chk">
+                      <span class="check-copy">
+                        <span class="set-title">Notify me when an installed app has an update</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div class="set-row check-row">
+                    <label class="check-label" for="set-pre">
+                      <input type="checkbox" id="set-pre" class="chk">
+                      <span class="check-copy">
+                        <span class="set-title">Include pre-releases (betas and release candidates)</span>
+                        <span class="set-desc">Betas and release candidates can replace your stable installation.</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <!-- Launcher manual check & release notes (no launcher version dropdown or version number) -->
+                  <div class="upd-manual">
+                    <div class="upd-status-row">
+                      <span class="pill" id="upd-pill"><span class="dot"></span><span id="upd-pill-text">Not checked</span></span>
+                      <span class="meta" id="upd-last"></span>
+                    </div>
+                    <p class="ver-detail" id="upd-detail">The launcher can check GitHub for a newer release.</p>
+
+                    <div class="progress" id="upd-progress"><div class="bar" id="upd-bar"></div></div>
+
+                    <div class="notes" id="upd-notes">
+                      <div class="notes-head">
+                        <span class="notes-title" id="upd-notes-title"></span>
+                        <a class="link" id="upd-notes-link" href="#">View on GitHub</a>
+                      </div>
+                      <div class="notes-body" id="upd-notes-body"></div>
+                    </div>
+
+                    <div class="actions">
+                      <button class="btn small" id="btn-check" type="button">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
+                        </svg>
+                        Check for updates
+                      </button>
+                      <button class="btn small primary" id="btn-download" type="button">Download &amp; install</button>
+                      <button class="btn small primary" id="btn-restart" type="button">Restart to update</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card" id="portable-card">
+                  <div class="card-head"><h3>Portable</h3></div>
+                  <div class="set-row last">
+                    <div class="set-text">
+                      <span class="set-title">Everything stays in this folder</span>
+                      <span class="set-desc">Settings and the browser profile live in
+                        <code>data\</code> beside <code>Launcher.exe</code>. Copy the folder to a
+                        stick or another PC and it comes with you.</span>
+                    </div>
+                    <button class="btn small" id="btn-data" type="button">Open folder</button>
+                  </div>
+                </div>
+
               </div>
-              <button class="btn small" id="btn-data">Open folder</button>
+
+              <!-- Right Column: Default Install Folder + Appearance -->
+              <div class="settings-col">
+
+                <div class="card" id="install-folder-card">
+                  <div class="card-head"><h3>Default Install Folder</h3></div>
+                  <div class="folder-panel">
+                    <label class="set-title" for="install-folder-display">Install folder</label>
+                    <input type="text" id="install-folder-display" class="folder-input" readonly>
+                    <p class="set-desc">Apps are placed inside this folder.</p>
+                    <div class="folder-btns">
+                      <button class="btn small" id="btn-browse-install" type="button">Browse…</button>
+                      <button class="btn small" id="btn-default-install" type="button">Use default</button>
+                    </div>
+                    <p class="set-note">New installs use this folder. Updates stay in their current location.</p>
+                  </div>
+                </div>
+
+                <div class="card" id="appearance-card">
+                  <div class="card-head"><h3>Appearance</h3></div>
+
+                  <div class="set-row stacked">
+                    <div class="set-text">
+                      <span class="set-title">Theme</span>
+                      <span class="set-desc">Switch between the crisp Modern layout and the classic Legacy look.</span>
+                    </div>
+                    <div class="cell-group seg-group" id="look-group" role="radiogroup" aria-label="Launcher look">
+                      <button class="cell" data-look-val="modern" type="button">Modern</button>
+                      <button class="cell" data-look-val="legacy" type="button">Legacy</button>
+                    </div>
+                  </div>
+
+                  <div class="set-row stacked" id="mode-row">
+                    <div class="set-text">
+                      <span class="set-title">Color mode</span>
+                      <span class="set-desc">Follow your operating system, or pick Light or Dark.</span>
+                    </div>
+                    <div class="cell-group seg-group" id="theme-group" role="radiogroup" aria-label="Color mode">
+                      <button class="cell" data-theme-val="system" type="button">Match system</button>
+                      <button class="cell" data-theme-val="light" type="button">Light</button>
+                      <button class="cell" data-theme-val="dark" type="button">Dark</button>
+                    </div>
+                  </div>
+
+                  <!-- Legacy colour scheme pickers (shown when Legacy theme is active). -->
+                  <div id="legacy-schemes-wrap">
+                    <div class="set-row scheme-head">
+                      <div class="set-text">
+                        <span class="set-title">Light mode colours</span>
+                        <span class="set-desc">Used in Legacy look while light mode is active.</span>
+                      </div>
+                    </div>
+                    <div class="schemes" id="schemes-light"></div>
+
+                    <div class="set-row scheme-head">
+                      <div class="set-text">
+                        <span class="set-title">Dark mode colours</span>
+                        <span class="set-desc">Used in Legacy look while dark mode is active.</span>
+                      </div>
+                    </div>
+                    <div class="schemes last" id="schemes-dark"></div>
+                  </div>
+                </div>
+
+              </div>
             </div>
+          </div>
+
+          <div class="settings-footer">
+            <button class="btn small" id="btn-quit" type="button">Quit Launcher</button>
+            <span class="grow"></span>
+            <button class="btn small primary" id="btn-settings-done" type="button">Done</button>
           </div>
         </div>
       </section>
     </main>
 
+    <!-- Bottom status bar: active jobs / last checked on left; update shortcut + GitHub org button on right -->
     <footer id="status">
       <span id="lamp"></span>
       <span id="statusText"></span>
       <span class="grow"></span>
-      <button id="status-update" class="statusbtn" title="Update settings">
+      <button id="status-update" class="statusbtn" type="button" title="Update settings">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M8 2.5v8M4.6 7.3 8 10.7l3.4-3.4M3 13.5h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span id="status-update-text">Update</span>
       </button>
-      <span id="version"></span>
+      <button id="btn-github-org" class="footer-icon-btn" type="button" title="JavacrafterDevelopment on GitHub" aria-label="JavacrafterDevelopment on GitHub">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.1.75-.24.75-.53v-1.85c-3.06.66-3.71-1.48-3.71-1.48-.5-1.27-1.22-1.61-1.22-1.61-1-.68.08-.67.08-.67 1.1.08 1.68 1.13 1.68 1.13.98 1.68 2.57 1.2 3.2.92.1-.71.38-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.43 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.4.11-2.91 0 0 .92-.3 3.02 1.13a10.5 10.5 0 0 1 5.5 0c2.1-1.43 3.02-1.13 3.02-1.13.6 1.51.22 2.63.11 2.91.7.77 1.13 1.75 1.13 2.95 0 4.22-2.58 5.15-5.03 5.42.39.34.74 1.01.74 2.04v3.02c0 .29.2.63.76.53A11 11 0 0 0 12 1.27z"/>
+        </svg>
+        <span class="footer-gh-label">GitHub</span>
+      </button>
     </footer>
   </div>
 
-  <!-- Shown for updates that run on their own at launch. -->
+  <!-- Floating card action overflow menu (shared so it never gets clipped by card borders) -->
+  <div id="card-menu" class="card-menu" role="menu"></div>
+
+  <!-- Bottom-right popup toast for background 5-minute update detections & notices. -->
   <div id="toast" role="status" aria-live="polite">
     <div class="toast-row">
       <span class="toast-lamp"></span>
@@ -318,13 +486,12 @@
     </div>
     <div class="progress small" id="toast-progress"><div class="bar" id="toast-bar"></div></div>
     <div class="toast-actions" id="toast-actions">
-      <button class="btn small ghost" id="toast-later">Later</button>
-      <button class="btn small primary" id="toast-now">Restart now</button>
+      <button class="btn small ghost" id="toast-later" type="button">Dismiss</button>
+      <button class="btn small primary" id="toast-now" type="button">Update now</button>
     </div>
   </div>
 
-  <!-- The webview fills the window, so the window never sees a hit test near its
-       border. These invisible strips sit on top and hand the resize back. -->
+  <!-- Borderless window resize grips (Windows). -->
   <div class="grips">
     <div class="grip n"  data-dir="n"></div>
     <div class="grip s"  data-dir="s"></div>
