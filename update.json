@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.17",
-      "published": "2026-11-26T07:09:44Z",
-      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
+      "version": "0.3.18",
+      "published": "2026-11-26T08:10:32Z",
+      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-windows-x64.zip",
-        "size": 1221015,
-        "sha256": "ebf22eeb00e43763f8f11ea4ce8d740d7f87f8de21a86c21a7a10eb834b2e407"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-windows-x64.zip",
+        "size": 1619742,
+        "sha256": "72bfa8f64cf9d50901c246761542b67b8bd5950146549ab670a87f6f5e18861d"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2077696,
-          "sha256": "0bf8b3ba20fb0685102644f3775e44d6bf27f4c75aaac929506af431de368327"
+          "size": 2512384,
+          "sha256": "af9db94cccead0efe783433116420955ae4ab0b527a33e32ff000286b694228b"
         }
       ]
     },
     "stable": {
-      "version": "0.3.17",
-      "published": "2026-11-26T07:09:44Z",
-      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
+      "version": "0.3.18",
+      "published": "2026-11-26T08:10:32Z",
+      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-windows-x64.zip",
-        "size": 1221015,
-        "sha256": "ebf22eeb00e43763f8f11ea4ce8d740d7f87f8de21a86c21a7a10eb834b2e407"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-windows-x64.zip",
+        "size": 1619742,
+        "sha256": "72bfa8f64cf9d50901c246761542b67b8bd5950146549ab670a87f6f5e18861d"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2077696,
-          "sha256": "0bf8b3ba20fb0685102644f3775e44d6bf27f4c75aaac929506af431de368327"
+          "size": 2512384,
+          "sha256": "af9db94cccead0efe783433116420955ae4ab0b527a33e32ff000286b694228b"
         }
       ]
     }

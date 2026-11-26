@@ -2,70 +2,70 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.17",
-      "published": "2026-11-26T07:09:44Z",
-      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
+      "version": "0.3.18",
+      "published": "2026-11-26T08:10:32Z",
+      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-macos.zip",
-        "size": 2848250,
-        "sha256": "19efa3e71a1bcb0b018da18f3e9cee1bb267ada3c8da107e84ec25ce6d36f72d"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-macos.zip",
+        "size": 3530572,
+        "sha256": "1a8a0e55d4573f70aefb99fb4e114ada363661fb8097c48a25df29df190d4258"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "8211c73425f37ee85d7c2f524169ed258243e30ab283c4b269498d16ee45abe5"
+          "sha256": "f3fe70771527b319afb4baad784850fe8ff848c90b5bd77abce3de128d0c6498"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4771920,
-          "sha256": "1cb46d96274864553c5c94ce182935733ac21d0e0850d82f0ead614094c78d58"
+          "size": 5657520,
+          "sha256": "c5da5fe9bf45755a649190eab23f6c2ef71a41cd4f8b2eb42ee52493f2cd3d87"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
-          "size": 198323,
-          "sha256": "b00f67ee8515a60355e93d272b4fa28a4599d2fe842c7ca694e30ca7221b4e68"
+          "size": 70432,
+          "sha256": "0fcc98a4bd4c7e5dbeb88c356f77c48df8f0f3137aa6cb4ab280abe292afadb1"
         },
         {
           "path": "Launcher.app/Contents/_CodeSignature/CodeResources",
           "size": 2448,
-          "sha256": "8a84535b335a106117e0022a545738256fc7a1d4cf245fa23dd05c81e249bf01"
+          "sha256": "1e7c324c7a1c590827356dd885886c07efcdb390fe8e6427cfd663bf610cbbf9"
         }
       ]
     },
     "stable": {
-      "version": "0.3.17",
-      "published": "2026-11-26T07:09:44Z",
-      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
+      "version": "0.3.18",
+      "published": "2026-11-26T08:10:32Z",
+      "notes": "## What's Changed\n* Release 0.3.17: Modern ArtCraft-inspired theme, Legacy look, search/sort/table view, Discord-style startup splash & 5-min background checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/4\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.17...v0.3.18",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.18",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-macos.zip",
-        "size": 2848250,
-        "sha256": "19efa3e71a1bcb0b018da18f3e9cee1bb267ada3c8da107e84ec25ce6d36f72d"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.18/Launcher-macos.zip",
+        "size": 3530572,
+        "sha256": "1a8a0e55d4573f70aefb99fb4e114ada363661fb8097c48a25df29df190d4258"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "8211c73425f37ee85d7c2f524169ed258243e30ab283c4b269498d16ee45abe5"
+          "sha256": "f3fe70771527b319afb4baad784850fe8ff848c90b5bd77abce3de128d0c6498"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 4771920,
-          "sha256": "1cb46d96274864553c5c94ce182935733ac21d0e0850d82f0ead614094c78d58"
+          "size": 5657520,
+          "sha256": "c5da5fe9bf45755a649190eab23f6c2ef71a41cd4f8b2eb42ee52493f2cd3d87"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
-          "size": 198323,
-          "sha256": "b00f67ee8515a60355e93d272b4fa28a4599d2fe842c7ca694e30ca7221b4e68"
+          "size": 70432,
+          "sha256": "0fcc98a4bd4c7e5dbeb88c356f77c48df8f0f3137aa6cb4ab280abe292afadb1"
         },
         {
           "path": "Launcher.app/Contents/_CodeSignature/CodeResources",
           "size": 2448,
-          "sha256": "8a84535b335a106117e0022a545738256fc7a1d4cf245fa23dd05c81e249bf01"
+          "sha256": "1e7c324c7a1c590827356dd885886c07efcdb390fe8e6427cfd663bf610cbbf9"
         }
       ]
     }
