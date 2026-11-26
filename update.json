@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.16",
-      "published": "2026-11-25T08:28:44Z",
-      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
+      "version": "0.3.17",
+      "published": "2026-11-26T07:09:44Z",
+      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-windows-x64.zip",
-        "size": 1191527,
-        "sha256": "ba1e29d9c82ea403f065cd5f6de738eb28850b89ec2ce3c539b53c3db498a0b2"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-windows-x64.zip",
+        "size": 1221015,
+        "sha256": "ebf22eeb00e43763f8f11ea4ce8d740d7f87f8de21a86c21a7a10eb834b2e407"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1965056,
-          "sha256": "a262dfceb8d2b5eeae4fa5561857717973046eb0885f7a901de312aace547fbd"
+          "size": 2077696,
+          "sha256": "0bf8b3ba20fb0685102644f3775e44d6bf27f4c75aaac929506af431de368327"
         }
       ]
     },
     "stable": {
-      "version": "0.3.16",
-      "published": "2026-11-25T08:28:44Z",
-      "notes": "## What's Changed\n* List Ink-cognito for Windows only by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/2\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.15...v0.3.16",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.16",
+      "version": "0.3.17",
+      "published": "2026-11-26T07:09:44Z",
+      "notes": "## What's Changed\n* Release 0.3.16: Ink-cognito logo & macOS support, instant update checks by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/3\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.16...v0.3.17",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.17",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.16/Launcher-windows-x64.zip",
-        "size": 1191527,
-        "sha256": "ba1e29d9c82ea403f065cd5f6de738eb28850b89ec2ce3c539b53c3db498a0b2"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.17/Launcher-windows-x64.zip",
+        "size": 1221015,
+        "sha256": "ebf22eeb00e43763f8f11ea4ce8d740d7f87f8de21a86c21a7a10eb834b2e407"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 1965056,
-          "sha256": "a262dfceb8d2b5eeae4fa5561857717973046eb0885f7a901de312aace547fbd"
+          "size": 2077696,
+          "sha256": "0bf8b3ba20fb0685102644f3775e44d6bf27f4c75aaac929506af431de368327"
         }
       ]
     }
