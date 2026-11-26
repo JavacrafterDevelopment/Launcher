@@ -1,4 +1,4 @@
-# Generates the launcher's icon — a walnut-and-gilt rocket on a transparent ground,
+# Generates the launcher's icon — the Modern blue rocket on a transparent ground,
 # drawn at every size Windows asks for.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\make-icon.ps1
@@ -16,11 +16,10 @@ $outIco  = Join-Path $assets 'launcher.ico'
 $outRgba = Join-Path $assets 'icon-64.rgba'
 $sizes   = @(16, 20, 24, 32, 40, 48, 64, 128, 256)
 
-$walnut     = [System.Drawing.Color]::FromArgb(255, 107, 79, 53)
-$walnutDeep = [System.Drawing.Color]::FromArgb(255, 74, 53, 36)
-$cream      = [System.Drawing.Color]::FromArgb(255, 244, 238, 226)
-$gilt       = [System.Drawing.Color]::FromArgb(255, 168, 132, 63)
-$lamp       = [System.Drawing.Color]::FromArgb(255, 199, 154, 74)
+$blueBody = [System.Drawing.Color]::FromArgb(255, 45, 129, 255)   # #2D81FF (--accent)
+$blueDeep = [System.Drawing.Color]::FromArgb(255, 22, 89, 196)    # #1659C4 (--accent-ink)
+$band     = [System.Drawing.Color]::FromArgb(255, 242, 241, 238)  # #F2F1EE (--bg)
+$lamp     = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)  # #FFFFFF
 
 function P([float]$x, [float]$y) { New-Object System.Drawing.PointF($x, $y) }
 
@@ -30,51 +29,47 @@ function New-RocketBitmap([int]$size) {
     $g.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 
-    # Authored on a 48x48 grid and scaled to the target.
-    $k = $size / 48.0
+    # Authored on a 64x64 grid (matching the UI SVG) and scaled slightly to fill the icon box.
+    $k = $size / 64.0
     $g.ScaleTransform($k, $k)
+    $g.TranslateTransform(32.0, 32.0)
+    $g.ScaleTransform(1.12, 1.12)
+    $g.TranslateTransform(-32.0, -28.5)
 
-    $brWalnut = New-Object System.Drawing.SolidBrush($walnut)
-    $brDeep   = New-Object System.Drawing.SolidBrush($walnutDeep)
-    $brCream  = New-Object System.Drawing.SolidBrush($cream)
-    $brGilt   = New-Object System.Drawing.SolidBrush($gilt)
-    $brLamp   = New-Object System.Drawing.SolidBrush($lamp)
-
-    # Exhaust, drawn first so the nozzle sits over its root.
-    $flame = New-Object 'System.Drawing.Drawing2D.GraphicsPath'
-    $flame.AddPolygon(@((P 19.5 37), (P 24 47), (P 28.5 37)))
-    $g.FillPath($brGilt, $flame)
-    $flame.Dispose()
+    $brBody = New-Object System.Drawing.SolidBrush($blueBody)
+    $brDeep = New-Object System.Drawing.SolidBrush($blueDeep)
+    $brBand = New-Object System.Drawing.SolidBrush($band)
+    $brLamp = New-Object System.Drawing.SolidBrush($lamp)
 
     # Fins.
-    $g.FillPolygon($brDeep, @((P 16.5 25), (P 9.5 34), (P 9.5 40), (P 16.5 35)))
-    $g.FillPolygon($brDeep, @((P 31.5 25), (P 38.5 34), (P 38.5 40), (P 31.5 35)))
+    $g.FillPolygon($brDeep, @((P 22 33), (P 13 45), (P 13 53), (P 22 46)))
+    $g.FillPolygon($brDeep, @((P 42 33), (P 51 45), (P 51 53), (P 42 46)))
 
     # Body: an ogive nose running down into straight sides.
     $body = New-Object 'System.Drawing.Drawing2D.GraphicsPath'
-    $body.AddBezier((P 24 2.5), (P 30 7.5), (P 32 14), (P 32 23))
-    $body.AddLine((P 32 23), (P 32 36.5))
-    $body.AddLine((P 32 36.5), (P 16 36.5))
-    $body.AddLine((P 16 36.5), (P 16 23))
-    $body.AddBezier((P 16 23), (P 16 14), (P 18 7.5), (P 24 2.5))
+    $body.AddBezier((P 32 4), (P 40 10.5), (P 42.5 19), (P 42.5 31))
+    $body.AddLine((P 42.5 31), (P 42.5 48.5))
+    $body.AddLine((P 42.5 48.5), (P 21.5 48.5))
+    $body.AddLine((P 21.5 48.5), (P 21.5 31))
+    $body.AddBezier((P 21.5 31), (P 21.5 19), (P 24 10.5), (P 32 4))
     $body.CloseFigure()
-    $g.FillPath($brWalnut, $body)
+    $g.FillPath($brBody, $body)
 
-    # A cream band, clipped to the body.
+    # Light band, clipped to the body.
     $saved = $g.Save()
     $g.SetClip($body)
-    $g.FillRectangle($brCream, 14.0, 29.0, 20.0, 2.8)
+    $g.FillRectangle($brBand, 20.0, 38.25, 24.0, 3.5)
     $g.Restore($saved)
     $body.Dispose()
 
     # Porthole.
-    $g.FillEllipse($brDeep, 19.4, 12.4, 9.2, 9.2)
-    $g.FillEllipse($brLamp, 21.0, 14.0, 6.0, 6.0)
+    $g.FillEllipse($brDeep, 25.7, 16.7, 12.6, 12.6)
+    $g.FillEllipse($brLamp, 28.0, 19.0, 8.0, 8.0)
 
     # Nozzle.
-    $g.FillRectangle($brDeep, 19.0, 36.0, 10.0, 3.2)
+    $g.FillRectangle($brDeep, 25.5, 47.5, 13.0, 4.2)
 
-    $brWalnut.Dispose(); $brDeep.Dispose(); $brCream.Dispose(); $brGilt.Dispose(); $brLamp.Dispose()
+    $brBody.Dispose(); $brDeep.Dispose(); $brBand.Dispose(); $brLamp.Dispose()
     $g.Dispose()
     return $bmp
 }

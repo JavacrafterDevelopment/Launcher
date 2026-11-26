@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-look="{{LOOK}}" data-theme="{{THEME}}" data-palette="{{PALETTE}}" data-os="{{OS}}">
+<html lang="{{LANG}}" data-look="{{LOOK}}" data-theme="{{THEME}}" data-palette="{{PALETTE}}" data-os="{{OS}}">
 <head>
   <meta charset="utf-8">
   <title>Launcher</title>
@@ -24,7 +24,7 @@
         <div class="splash-bar indeterminate" id="splash-bar"></div>
       </div>
       <div class="splash-status" id="splash-status">Checking for updates…</div>
-      <button class="splash-skip" id="splash-skip" type="button">Skip for now</button>
+      <button class="splash-skip" id="splash-skip" type="button" data-i18n="Skip for now">Skip for now</button>
     </div>
   </div>
 
@@ -66,30 +66,30 @@
         <div id="brandrow">
           <span id="wordmark">Launcher</span>
           <span class="suite-sep" aria-hidden="true"></span>
-          <span id="suite-label">Javacrafter App Suite</span>
+          <span id="suite-label" data-i18n="Javacrafter App Suite">Javacrafter App Suite</span>
         </div>
 
         <!-- Legacy-only inline header tabs (hidden in Modern, where tabs sit in #toolbar). -->
         <nav id="legacy-tabs" aria-label="Sections">
-          <button class="chip on" data-tab="library" title="Your apps">
+          <button class="chip on" data-tab="library" title="Your apps" data-i18n-title="Your apps">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
               <rect x="9" y="9" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
             </svg>
-            Apps
-            <span class="badge" id="legacy-lib-badge" title="App updates available"></span>
+            <span data-i18n="Apps">Apps</span>
+            <span class="badge" id="legacy-lib-badge" title="App updates available" data-i18n-title="App updates available"></span>
           </button>
-          <button class="chip" data-tab="temporary" title="Short-lived tools">
+          <button class="chip" data-tab="temporary" title="Short-lived tools" data-i18n-title="Short-lived tools">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 1.8h8M4 14.2h8M4.8 1.8c0 3.2 3.2 4.4 3.2 6.2S4.8 11 4.8 14.2M11.2 1.8c0 3.2-3.2 4.4-3.2 6.2s3.2 3 3.2 6.2"
                     stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Temporary Apps
-            <span class="badge" id="legacy-temp-badge" title="App updates available"></span>
+            <span data-i18n="Temporary Apps">Temporary Apps</span>
+            <span class="badge" id="legacy-temp-badge" title="App updates available" data-i18n-title="App updates available"></span>
           </button>
-          <button class="chip" data-tab="games" title="Your games">
+          <button class="chip" data-tab="games" title="Your games" data-i18n-title="Your games">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4.6 4.2h6.8a3.4 3.4 0 0 1 3.3 2.6l.6 2.9a1.9 1.9 0 0 1-3.3 1.6L10.6 9.8H5.4L4 11.3a1.9 1.9 0 0 1-3.3-1.6l.6-2.9a3.4 3.4 0 0 1 3.3-2.6z"
                     stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -97,17 +97,17 @@
               <circle cx="10.4" cy="6.6" r=".85" fill="currentColor"/>
               <circle cx="11.9" cy="8" r=".85" fill="currentColor"/>
             </svg>
-            Games
-            <span class="badge" id="legacy-games-badge" title="Game updates available"></span>
+            <span data-i18n="Games">Games</span>
+            <span class="badge" id="legacy-games-badge" title="Game updates available" data-i18n-title="Game updates available"></span>
           </button>
           <span class="grow"></span>
-          <button class="chip" id="legacy-settings-btn" data-tab="settings" title="Settings (Ctrl+,)">
+          <button class="chip" id="legacy-settings-btn" data-tab="settings" title="Settings (Ctrl+,)" data-i18n-title="Settings (Ctrl+,)">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M13.2 8H15.0M2.8 8H1.0M10.6 12.5l.9 1.56M5.4 3.5l-.9-1.56M10.6 3.5l.9-1.56M5.4 12.5l-.9 1.56"
                     stroke="currentColor" stroke-width="2.3" stroke-linecap="butt"/>
               <circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="2.7"/>
             </svg>
-            Settings
+            <span data-i18n="Settings">Settings</span>
           </button>
         </nav>
       </div>
@@ -115,22 +115,22 @@
       <!-- Modern right-side header cells: updates bell + settings gear (matching ArtCraft Launcher). -->
       <div id="head-actions">
         <div class="bell-wrap">
-          <button class="head-cell" id="btn-bell" title="Updates &amp; notices" aria-label="Updates">
+          <button class="head-cell" id="btn-bell" title="Updates &amp; notices" aria-label="Updates" data-i18n-title="Updates & notices" data-i18n-aria="Updates">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
             <span class="bell-count" id="bell-count"></span>
           </button>
-          <div id="bell-popover" class="popover" role="dialog" aria-label="Available updates">
+          <div id="bell-popover" class="popover" role="dialog" aria-label="Available updates" data-i18n-aria="Available updates">
             <div class="popover-head">
-              <span class="hud-label">Updates</span>
-              <button class="popover-close" id="bell-close" title="Close" aria-label="Close">×</button>
+              <span class="hud-label" data-i18n="Updates">Updates</span>
+              <button class="popover-close" id="bell-close" title="Close" aria-label="Close" data-i18n-title="Close" data-i18n-aria="Close">×</button>
             </div>
             <div class="popover-body" id="bell-body"></div>
           </div>
         </div>
-        <button class="head-cell" id="btn-settings" title="Settings (Ctrl+,)" aria-label="Settings">
+        <button class="head-cell" id="btn-settings" title="Settings (Ctrl+,)" aria-label="Settings" data-i18n-title="Settings (Ctrl+,)" data-i18n-aria="Settings">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -139,14 +139,14 @@
       </div>
 
       <div id="winbtns">
-        <button class="winbtn min" data-win="minimize" title="Minimise">
+        <button class="winbtn min" data-win="minimize" title="Minimize" data-i18n-title="Minimize">
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" stroke-width="1.2"/></svg>
         </button>
-        <button class="winbtn maxbtn" data-win="maximize" title="Maximise">
+        <button class="winbtn maxbtn" data-win="maximize" title="Maximize" data-i18n-title="Maximize">
           <svg class="max" width="10" height="10" viewBox="0 0 10 10"><rect x="1.2" y="1.2" width="7.6" height="7.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
           <svg class="restore" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="1" y="3" width="6" height="6"/><path d="M3 3V1h6v6H7"/></svg>
         </button>
-        <button class="winbtn close" data-win="close" title="Close">
+        <button class="winbtn close" data-win="close" title="Close" data-i18n-title="Close">
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.4 1.4l7.2 7.2M8.6 1.4L1.4 8.6" stroke="currentColor" stroke-width="1.2"/></svg>
         </button>
       </div>
@@ -160,7 +160,7 @@
         <div class="catalog-shell">
           <!-- Launcher update banner (when user dismissed popup or update is available) -->
           <div id="launcher-banner" class="launcher-banner">
-            <span class="banner-tag">UPDATE</span>
+            <span class="banner-tag" data-i18n="UPDATE">UPDATE</span>
             <span class="banner-text" id="banner-text"></span>
             <span class="grow"></span>
             <div class="banner-progress" id="banner-progress">
@@ -168,7 +168,7 @@
               <div class="progress small on"><div class="bar" id="banner-bar"></div></div>
             </div>
             <button class="btn primary small" id="banner-action" type="button">Update &amp; restart</button>
-            <button class="banner-dismiss" id="banner-dismiss" title="Dismiss" type="button">×</button>
+            <button class="banner-dismiss" id="banner-dismiss" title="Dismiss" data-i18n-title="Dismiss" type="button">×</button>
           </div>
 
           <!-- Toolbar: tabs + refresh on left; update-all + sort + search + grid/table toggle on right.
@@ -176,20 +176,20 @@
           <div id="toolbar">
             <div class="tb-left">
               <nav id="tabs" class="cell-group" aria-label="Catalog tabs">
-                <button class="cell on" data-tab="library" type="button" title="Your apps">
-                  APPS
+                <button class="cell on" data-tab="library" type="button" title="Your apps" data-i18n-title="Your apps">
+                  <span data-i18n="Apps">Apps</span>
                   <span class="cell-badge" id="lib-badge"></span>
                 </button>
-                <button class="cell" data-tab="temporary" type="button" title="Short-lived tools">
-                  TEMPORARY APPS
+                <button class="cell" data-tab="temporary" type="button" title="Short-lived tools" data-i18n-title="Short-lived tools">
+                  <span data-i18n="Temporary Apps">Temporary Apps</span>
                   <span class="cell-badge" id="temp-badge"></span>
                 </button>
-                <button class="cell" data-tab="games" type="button" title="Your games">
-                  GAMES
+                <button class="cell" data-tab="games" type="button" title="Your games" data-i18n-title="Your games">
+                  <span data-i18n="Games">Games</span>
                   <span class="cell-badge" id="games-badge"></span>
                 </button>
               </nav>
-              <button class="sq-btn app-check" id="btn-refresh" type="button" title="Check for updates" aria-label="Check for updates">
+              <button class="sq-btn app-check" id="btn-refresh" type="button" title="Check for updates" aria-label="Check for updates" data-i18n-title="Check for updates" data-i18n-aria="Check for updates">
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                   <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
@@ -202,22 +202,22 @@
               <button class="btn primary small" id="btn-update-all" type="button">Update all</button>
 
               <label class="sort-wrap" id="sort-wrap">
-                <span class="hud-label sort-label">SORT</span>
-                <select id="sort-select" class="select" aria-label="Sort apps">
-                  <option value="name-asc">Name (A–Z)</option>
-                  <option value="name-desc">Name (Z–A)</option>
-                  <option value="status">Status</option>
-                  <option value="updated">Recently updated</option>
+                <span class="hud-label sort-label" data-i18n="Sort">Sort</span>
+                <select id="sort-select" class="select" aria-label="Sort apps" data-i18n-aria="Sort apps">
+                  <option value="name-asc" data-i18n="Name (A–Z)">Name (A–Z)</option>
+                  <option value="name-desc" data-i18n="Name (Z–A)">Name (Z–A)</option>
+                  <option value="status" data-i18n="Status">Status</option>
+                  <option value="updated" data-i18n="Recently updated">Recently updated</option>
                 </select>
               </label>
 
               <div class="search-wrap">
-                <input id="search-input" class="search-input" type="text" placeholder="Search apps" autocomplete="off" spellcheck="false" aria-label="Search apps">
-                <button id="search-clear" class="search-clear" type="button" title="Clear search" aria-label="Clear search">×</button>
+                <input id="search-input" class="search-input" type="text" placeholder="Search apps" autocomplete="off" spellcheck="false" aria-label="Search apps" data-i18n-placeholder="Search apps" data-i18n-aria="Search apps">
+                <button id="search-clear" class="search-clear" type="button" title="Clear search" aria-label="Clear search" data-i18n-title="Clear search" data-i18n-aria="Clear search">×</button>
               </div>
 
               <div class="view-toggle" role="group" aria-label="View mode">
-                <button class="vt-btn on" id="vt-grid" data-view="grid" type="button" title="Show apps as cards" aria-label="Grid view">
+                <button class="vt-btn on" id="vt-grid" data-view="grid" type="button" title="Show apps as cards" aria-label="Grid" data-i18n-title="Show apps as cards" data-i18n-aria="Grid">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
                     <rect x="0.5" y="0.5" width="5.5" height="5.5"/>
                     <rect x="8" y="0.5" width="5.5" height="5.5"/>
@@ -225,7 +225,7 @@
                     <rect x="8" y="8" width="5.5" height="5.5"/>
                   </svg>
                 </button>
-                <button class="vt-btn" id="vt-table" data-view="table" type="button" title="Show apps as a table" aria-label="Table view">
+                <button class="vt-btn" id="vt-table" data-view="table" type="button" title="Show apps as a table" aria-label="Table" data-i18n-title="Show apps as a table" data-i18n-aria="Table">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
                     <rect x="0" y="1" width="14" height="2.4"/>
                     <rect x="0" y="5.8" width="14" height="2.4"/>
@@ -241,9 +241,9 @@
         </div>
       </section>
 
-      <!-- Settings: Styled as a centered ArtCraft modal sheet in Modern look (matching image_2.png),
+      <!-- Settings: Styled as a centered ArtCraft modal sheet in Modern look,
            and as a full scrolling page in Legacy look! Same DOM, zero duplication. -->
-      <section id="page-settings" class="page" aria-label="Settings">
+      <section id="page-settings" class="page" aria-label="Settings" data-i18n-aria="Settings">
         <div class="settings-backdrop" id="settings-backdrop"></div>
         <div class="settings-sheet">
           <div class="settings-hero">
@@ -259,7 +259,7 @@
                 <rect class="fin" x="25.5" y="47.5" width="13" height="4" rx="1"/>
               </svg>
               <div class="settings-hero-text">
-                <h1 class="page-title">Settings</h1>
+                <h1 class="page-title" data-i18n="Settings">Settings</h1>
                 <span class="hud-label settings-hero-sub">JAVACRAFTER LAUNCHER</span>
               </div>
             </div>
@@ -267,22 +267,34 @@
 
           <div class="settings-scroll">
             <div class="settings-grid">
-              <!-- Left Column: Updates + Appearance -->
+              <!-- Left Column: Language (matching craft-launcher) + Updates + Portable -->
               <div class="settings-col">
+
+                <div class="card" id="language-card">
+                  <div class="card-head">
+                    <h3 id="lang-heading" data-i18n="Language">Language</h3>
+                  </div>
+                  <select id="set-language" class="select select-full" aria-labelledby="lang-heading">
+                    <option value="auto" data-i18n="Auto">Auto</option>
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="ru">Русский</option>
+                  </select>
+                </div>
 
                 <div class="card" id="updates-card">
                   <div class="card-head">
-                    <h3>Updates</h3>
-                    <a class="link" id="repo-link" href="#" title="Open the releases page on GitHub"></a>
+                    <h3 data-i18n="Updates">Updates</h3>
+                    <a class="link" id="repo-link" href="#" title="Open the releases page on GitHub" data-i18n-title="Open the releases page on GitHub"></a>
                   </div>
 
                   <div class="set-row inline-control">
                     <label class="set-text" for="set-check-every">
-                      <span class="set-title">Check for updates</span>
+                      <span class="set-title" data-i18n="Check for updates">Check for updates</span>
                     </label>
                     <select id="set-check-every" class="select">
-                      <option value="auto">Automatically</option>
-                      <option value="manual">Only when I ask</option>
+                      <option value="auto" data-i18n="Automatically">Automatically</option>
+                      <option value="manual" data-i18n="Only when I ask">Only when I ask</option>
                     </select>
                   </div>
 
@@ -290,31 +302,31 @@
                     <label class="check-label" for="set-auto">
                       <input type="checkbox" id="set-auto" class="chk">
                       <span class="check-copy">
-                        <span class="set-title">Automatically download and install launcher updates</span>
-                        <span class="set-desc">Checks on startup while loading, and updates before the launcher opens.</span>
+                        <span class="set-title" data-i18n="Automatically download and install launcher updates">Automatically download and install launcher updates</span>
+                        <span class="set-desc" data-i18n="Checks on startup while loading, and updates before the launcher opens.">Checks on startup while loading, and updates before the launcher opens.</span>
                       </span>
                     </label>
                   </div>
 
                   <div class="set-row inline-control">
                     <label class="set-text" for="set-sim-dl">
-                      <span class="set-title">Simultaneous downloads</span>
+                      <span class="set-title" data-i18n="Simultaneous downloads">Simultaneous downloads</span>
                     </label>
                     <select id="set-sim-dl" class="select">
                       <option value="1">1</option>
                       <option value="2">2</option>
                       <option value="3">3</option>
                       <option value="4">4</option>
-                      <option value="0">No limit</option>
+                      <option value="0" data-i18n="No limit">No limit</option>
                     </select>
                   </div>
-                  <p class="set-note">Downloads running together share your connection, so each one is slower.</p>
+                  <p class="set-note" data-i18n="Downloads running together share your connection, so each one is slower.">Downloads running together share your connection, so each one is slower.</p>
 
                   <div class="set-row check-row">
                     <label class="check-label" for="set-notify">
                       <input type="checkbox" id="set-notify" class="chk">
                       <span class="check-copy">
-                        <span class="set-title">Notify me when an installed app has an update</span>
+                        <span class="set-title" data-i18n="Notify me when an installed app has an update">Notify me when an installed app has an update</span>
                       </span>
                     </label>
                   </div>
@@ -323,13 +335,13 @@
                     <label class="check-label" for="set-pre">
                       <input type="checkbox" id="set-pre" class="chk">
                       <span class="check-copy">
-                        <span class="set-title">Include pre-releases (betas and release candidates)</span>
-                        <span class="set-desc">Betas and release candidates can replace your stable installation.</span>
+                        <span class="set-title" data-i18n="Include pre-releases (betas and release candidates)">Include pre-releases (betas and release candidates)</span>
+                        <span class="set-desc" data-i18n="Betas and release candidates can replace your stable installation.">Betas and release candidates can replace your stable installation.</span>
                       </span>
                     </label>
                   </div>
 
-                  <!-- Launcher manual check & release notes (no launcher version dropdown or version number) -->
+                  <!-- Launcher manual check, release notes, and current version -->
                   <div class="upd-manual">
                     <div class="upd-status-row">
                       <span class="pill" id="upd-pill"><span class="dot"></span><span id="upd-pill-text">Not checked</span></span>
@@ -342,7 +354,7 @@
                     <div class="notes" id="upd-notes">
                       <div class="notes-head">
                         <span class="notes-title" id="upd-notes-title"></span>
-                        <a class="link" id="upd-notes-link" href="#">View on GitHub</a>
+                        <a class="link" id="upd-notes-link" href="#" data-i18n="View on GitHub">View on GitHub</a>
                       </div>
                       <div class="notes-body" id="upd-notes-body"></div>
                     </div>
@@ -353,24 +365,25 @@
                           <path d="M12.73 8.83A4.8 4.8 0 1 1 8.83 3.27" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                           <path d="M12.18 3.86 8.41 5.63 9.25 0.91z" fill="currentColor"/>
                         </svg>
-                        Check for updates
+                        <span data-i18n="Check for updates">Check for updates</span>
                       </button>
-                      <button class="btn small primary" id="btn-download" type="button">Download &amp; install</button>
-                      <button class="btn small primary" id="btn-restart" type="button">Restart to update</button>
+                      <button class="btn small primary" id="btn-download" type="button" data-i18n="Download & install">Download &amp; install</button>
+                      <button class="btn small primary" id="btn-restart" type="button" data-i18n="Restart to update">Restart to update</button>
                     </div>
+                    <p class="current-version" id="current-version"></p>
                   </div>
                 </div>
 
                 <div class="card" id="portable-card">
-                  <div class="card-head"><h3>Portable</h3></div>
+                  <div class="card-head"><h3 data-i18n="Portable">Portable</h3></div>
                   <div class="set-row last">
                     <div class="set-text">
-                      <span class="set-title">Everything stays in this folder</span>
-                      <span class="set-desc">Settings and the browser profile live in
+                      <span class="set-title" data-i18n="Everything stays in this folder">Everything stays in this folder</span>
+                      <span class="set-desc" id="portable-desc">Settings and the browser profile live in
                         <code>data\</code> beside <code>Launcher.exe</code>. Copy the folder to a
                         stick or another PC and it comes with you.</span>
                     </div>
-                    <button class="btn small" id="btn-data" type="button">Open folder</button>
+                    <button class="btn small" id="btn-data" type="button" data-i18n="Open folder">Open folder</button>
                   </div>
                 </div>
 
@@ -380,42 +393,42 @@
               <div class="settings-col">
 
                 <div class="card" id="install-folder-card">
-                  <div class="card-head"><h3>Default Install Folder</h3></div>
+                  <div class="card-head"><h3 data-i18n="Default Install Folder">Default Install Folder</h3></div>
                   <div class="folder-panel">
-                    <label class="set-title" for="install-folder-display">Install folder</label>
+                    <label class="set-title" for="install-folder-display" data-i18n="Install folder">Install folder</label>
                     <input type="text" id="install-folder-display" class="folder-input" readonly>
-                    <p class="set-desc">Apps are placed inside this folder.</p>
+                    <p class="set-desc" data-i18n="Apps are placed inside this folder.">Apps are placed inside this folder.</p>
                     <div class="folder-btns">
-                      <button class="btn small" id="btn-browse-install" type="button">Browse…</button>
-                      <button class="btn small" id="btn-default-install" type="button">Use default</button>
+                      <button class="btn small" id="btn-browse-install" type="button" data-i18n="Browse…">Browse…</button>
+                      <button class="btn small" id="btn-default-install" type="button" data-i18n="Use default">Use default</button>
                     </div>
-                    <p class="set-note">New installs use this folder. Updates stay in their current location.</p>
+                    <p class="set-note" data-i18n="New installs use this folder. Updates stay in their current location.">New installs use this folder. Updates stay in their current location.</p>
                   </div>
                 </div>
 
                 <div class="card" id="appearance-card">
-                  <div class="card-head"><h3>Appearance</h3></div>
+                  <div class="card-head"><h3 data-i18n="Appearance">Appearance</h3></div>
 
                   <div class="set-row stacked">
                     <div class="set-text">
-                      <span class="set-title">Theme</span>
-                      <span class="set-desc">Switch between the crisp Modern layout and the classic Legacy look.</span>
+                      <span class="set-title" data-i18n="Theme">Theme</span>
+                      <span class="set-desc" data-i18n="Switch between the crisp Modern layout and the classic Legacy look.">Switch between the crisp Modern layout and the classic Legacy look.</span>
                     </div>
                     <div class="cell-group seg-group" id="look-group" role="radiogroup" aria-label="Launcher look">
-                      <button class="cell" data-look-val="modern" type="button">Modern</button>
-                      <button class="cell" data-look-val="legacy" type="button">Legacy</button>
+                      <button class="cell" data-look-val="modern" type="button" data-i18n="Modern">Modern</button>
+                      <button class="cell" data-look-val="legacy" type="button" data-i18n="Legacy">Legacy</button>
                     </div>
                   </div>
 
                   <div class="set-row stacked" id="mode-row">
                     <div class="set-text">
-                      <span class="set-title">Color mode</span>
-                      <span class="set-desc">Follow your operating system, or pick Light or Dark.</span>
+                      <span class="set-title" data-i18n="Color mode">Color mode</span>
+                      <span class="set-desc" data-i18n="Follow your operating system, or pick Light or Dark.">Follow your operating system, or pick Light or Dark.</span>
                     </div>
                     <div class="cell-group seg-group" id="theme-group" role="radiogroup" aria-label="Color mode">
-                      <button class="cell" data-theme-val="system" type="button">Match system</button>
-                      <button class="cell" data-theme-val="light" type="button">Light</button>
-                      <button class="cell" data-theme-val="dark" type="button">Dark</button>
+                      <button class="cell" data-theme-val="system" type="button" data-i18n="Match system">Match system</button>
+                      <button class="cell" data-theme-val="light" type="button" data-i18n="Light">Light</button>
+                      <button class="cell" data-theme-val="dark" type="button" data-i18n="Dark">Dark</button>
                     </div>
                   </div>
 
@@ -423,16 +436,16 @@
                   <div id="legacy-schemes-wrap">
                     <div class="set-row scheme-head">
                       <div class="set-text">
-                        <span class="set-title">Light mode colours</span>
-                        <span class="set-desc">Used in Legacy look while light mode is active.</span>
+                        <span class="set-title" data-i18n="Light mode colours">Light mode colours</span>
+                        <span class="set-desc" data-i18n="Used in Legacy look while light mode is active.">Used in Legacy look while light mode is active.</span>
                       </div>
                     </div>
                     <div class="schemes" id="schemes-light"></div>
 
                     <div class="set-row scheme-head">
                       <div class="set-text">
-                        <span class="set-title">Dark mode colours</span>
-                        <span class="set-desc">Used in Legacy look while dark mode is active.</span>
+                        <span class="set-title" data-i18n="Dark mode colours">Dark mode colours</span>
+                        <span class="set-desc" data-i18n="Used in Legacy look while dark mode is active.">Used in Legacy look while dark mode is active.</span>
                       </div>
                     </div>
                     <div class="schemes last" id="schemes-dark"></div>
@@ -444,9 +457,9 @@
           </div>
 
           <div class="settings-footer">
-            <button class="btn small" id="btn-quit" type="button">Quit Launcher</button>
+            <button class="btn small" id="btn-quit" type="button" data-i18n="Quit Launcher">Quit Launcher</button>
             <span class="grow"></span>
-            <button class="btn small primary" id="btn-settings-done" type="button">Done</button>
+            <button class="btn small primary" id="btn-settings-done" type="button" data-i18n="Done">Done</button>
           </div>
         </div>
       </section>
@@ -457,13 +470,13 @@
       <span id="lamp"></span>
       <span id="statusText"></span>
       <span class="grow"></span>
-      <button id="status-update" class="statusbtn" type="button" title="Update settings">
+      <button id="status-update" class="statusbtn" type="button" title="Update settings" data-i18n-title="Update settings">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M8 2.5v8M4.6 7.3 8 10.7l3.4-3.4M3 13.5h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span id="status-update-text">Update</span>
       </button>
-      <button id="btn-github-org" class="footer-icon-btn" type="button" title="JavacrafterDevelopment on GitHub" aria-label="JavacrafterDevelopment on GitHub">
+      <button id="btn-github-org" class="footer-icon-btn" type="button" title="JavacrafterDevelopment on GitHub" aria-label="JavacrafterDevelopment on GitHub" data-i18n-title="JavacrafterDevelopment on GitHub" data-i18n-aria="JavacrafterDevelopment on GitHub">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.1.75-.24.75-.53v-1.85c-3.06.66-3.71-1.48-3.71-1.48-.5-1.27-1.22-1.61-1.22-1.61-1-.68.08-.67.08-.67 1.1.08 1.68 1.13 1.68 1.13.98 1.68 2.57 1.2 3.2.92.1-.71.38-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.43 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.4.11-2.91 0 0 .92-.3 3.02 1.13a10.5 10.5 0 0 1 5.5 0c2.1-1.43 3.02-1.13 3.02-1.13.6 1.51.22 2.63.11 2.91.7.77 1.13 1.75 1.13 2.95 0 4.22-2.58 5.15-5.03 5.42.39.34.74 1.01.74 2.04v3.02c0 .29.2.63.76.53A11 11 0 0 0 12 1.27z"/>
         </svg>

@@ -918,6 +918,7 @@ code {
   transition: border-color .12s ease, background-color .12s ease;
 }
 .select:hover { border-color: var(--line-strong); background-color: var(--sunken); }
+.select-full { width: 100%; }
 
 .search-wrap {
   position: relative;
@@ -2005,6 +2006,10 @@ code {
 }
 
 .seg-group { flex-wrap: wrap; }
+.seg-group .cell { padding: 0 11px; letter-spacing: 0.1em; }
+
+#language-card .select-full { display: block; }
+:root[data-look="legacy"] #language-card .select-full { margin: 8px 0 6px; }
 
 /* Default install folder panel (matching image_2.png right column) */
 .folder-panel {
@@ -2091,6 +2096,16 @@ code {
 }
 #btn-download, #btn-restart { display: none; }
 #btn-download.on, #btn-restart.on { display: inline-flex; }
+
+.current-version {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin-top: -2px;
+}
+:root[data-look="legacy"] .current-version {
+  color: var(--ink-faint);
+}
 
 .progress {
   height: 4px;

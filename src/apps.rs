@@ -122,7 +122,7 @@ pub const CATALOG: &[AppInfo] = &[
         folder: None,
         repo: "JavacrafterDevelopment/Lighthouse",
         tagline: "Instant search across every file and folder on every drive, with Explorer's own icons.",
-        icon: None,
+        icon: Some(include_bytes!("../assets/lighthouse.png")),
         platforms: &["Windows"],
         // Runs as administrator, and its close button only hides it to the tray.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.2" },
@@ -136,7 +136,7 @@ pub const CATALOG: &[AppInfo] = &[
         folder: None,
         repo: "JavacrafterDevelopment/ScreenshotApp",
         tagline: "Timed and hotkey screenshots, numbered and saved wherever you like.",
-        icon: None,
+        icon: Some(include_bytes!("../assets/screenshotapp.png")),
         platforms: &["Windows"],
         stop: Stop::CloseWindows,
         source: Source::Own,
@@ -149,7 +149,7 @@ pub const CATALOG: &[AppInfo] = &[
         folder: None,
         repo: "JavacrafterDevelopment/RustWinUtil",
         tagline: "Chris Titus Tech's WinUtil, rebuilt in Rust: install apps, apply tweaks, fix Windows.",
-        icon: None,
+        icon: Some(include_bytes!("../assets/rustwinutil.png")),
         platforms: &["Windows"],
         // Runs as administrator, so the launcher can't close it itself.
         stop: Stop::QuitArg { arg: "--quit", since: "0.0.1" },
@@ -166,7 +166,7 @@ pub const CATALOG: &[AppInfo] = &[
         folder: Some("KittyConnect"),
         repo: "JavacrafterDevelopment/KittyConnect",
         tagline: "Hubs, voice rooms, file sharing and game hosting with friends over encrypted TailCat tunnels. No account, no router setup.",
-        icon: None,
+        icon: Some(include_bytes!("../assets/portside.png")),
         // macOS from KittyConnect 0.8.0. On a Mac its data goes in
         // KittyConnectData beside the app, which `shell_open` points it at.
         platforms: &["Windows", "MacOS"],
@@ -1370,5 +1370,14 @@ mod tests {
         folders.sort();
         folders.dedup();
         assert_eq!(folders.len(), CATALOG.len());
+    }
+
+    #[test]
+    fn javacrafter_apps_have_embedded_png_icons() {
+        for id in ["lighthouse", "screenshotapp", "rustwinutil", "kittyconnect", "inkcognito"] {
+            let app = CATALOG.iter().find(|a| a.id == id).unwrap();
+            let bytes = app.icon.unwrap_or_else(|| panic!("{id} should have an embedded icon"));
+            assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "{id} icon should be a valid PNG");
+        }
     }
 }
