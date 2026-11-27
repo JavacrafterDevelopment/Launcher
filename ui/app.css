@@ -2573,6 +2573,23 @@ code {
 }
 .gh-login-wrap.on { display: flex; }
 
+/* Signed-in accounts sit at the top of the card; the add-token form follows them. */
+#gh-auth-signed-in { margin-top: 0; padding-top: 0; border-top: 0; }
+#gh-auth-signed-in.on + .gh-login-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+:root[data-look="legacy"] #gh-auth-signed-in.on + .gh-login-wrap { border-top-color: var(--rule); }
+.gh-row-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.gh-avatar.small { width: 28px; height: 28px; font-size: 12px; }
+
 .gh-pat-form {
   display: flex;
   flex-direction: column;

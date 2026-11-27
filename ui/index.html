@@ -497,27 +497,23 @@
                   <span class="pill" id="gh-auth-pill"><span class="dot"></span><span id="gh-auth-pill-text" data-i18n="Not signed in">Not signed in</span></span>
                 </div>
 
-                <!-- Signed-in summary -->
-                <div id="gh-auth-signed-in" class="gh-account-bar">
-                  <div class="gh-user-box">
-                    <div class="gh-avatar" id="gh-user-avatar"></div>
-                    <div class="gh-user-meta">
-                      <div class="gh-user-row">
-                        <span class="set-title" id="gh-user-name"></span>
-                      </div>
-                      <span class="set-desc" id="gh-user-desc" data-i18n="Private repositories enabled · 5,000 GitHub requests/hour">Private repositories enabled · 5,000 GitHub requests/hour</span>
-                    </div>
+                <!-- Signed-in accounts: one row per saved token (yours, a friend's…) -->
+                <div class="gh-subpanel" id="gh-auth-signed-in">
+                  <div class="gh-subhead">
+                    <span class="set-title" data-i18n="Signed-in accounts">Signed-in accounts</span>
+                    <span class="meta" id="gh-accounts-count"></span>
                   </div>
-                  <button class="btn small" id="btn-gh-logout" type="button" data-i18n="Sign out">Sign out</button>
+                  <div class="gh-list" id="gh-accounts-list"></div>
+                  <p class="set-note" data-i18n="Launcher uses whichever account can see each repository, so you can add a friend's token to test their private apps. The first account is used for public repositories.">Launcher uses whichever account can see each repository, so you can add a friend's token to test their private apps. The first account is used for public repositories.</p>
                 </div>
 
-                <!-- Signed-out login: Personal Access Token -->
-                <div id="gh-auth-signed-out" class="gh-login-wrap">
-                  <p class="set-desc" data-i18n="Sign in with a Personal Access Token to pull private repositories and raise GitHub's rate limit. Tokens are stored securely in your OS credential store.">Sign in with a Personal Access Token to pull private repositories and raise GitHub's rate limit. Tokens are stored securely in your OS credential store.</p>
+                <!-- Add a Personal Access Token: always available, to sign in or add another account -->
+                <div id="gh-auth-signed-out" class="gh-login-wrap on">
+                  <p class="set-desc" id="gh-login-desc">Sign in with a Personal Access Token to pull private repositories and raise GitHub's rate limit. Tokens are stored securely in your OS credential store.</p>
 
                   <div class="gh-pat-form">
                     <div class="gh-subhead">
-                      <label class="set-title" for="gh-pat-input" data-i18n="Personal Access Token">Personal Access Token</label>
+                      <label class="set-title" for="gh-pat-input" id="gh-pat-label">Personal Access Token</label>
                       <a class="link" id="link-gh-tokens" href="#" data-i18n="Create token on GitHub ↗">Create token on GitHub ↗</a>
                     </div>
                     <div class="gh-add-row">

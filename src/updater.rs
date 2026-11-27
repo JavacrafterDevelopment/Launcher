@@ -337,7 +337,7 @@ impl Target {
     }
 
     fn latest_via_update_json(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        let token = crate::github_auth::current_token();
+        let token = crate::github_auth::token_for_repo(&self.repo);
         let doc: UpdateJson = if self.private {
             let Some(tok) = token.as_deref() else {
                 return Err("Sign in to GitHub in Settings to check this private repository.".into());
@@ -405,7 +405,7 @@ impl Target {
     }
 
     fn latest_via_api(&self, prereleases: bool) -> Result<Option<Release>, String> {
-        let token = crate::github_auth::current_token();
+        let token = crate::github_auth::token_for_repo(&self.repo);
         if self.private && token.is_none() {
             return Err("Sign in to GitHub in Settings to access this private repository.".into());
         }
@@ -533,7 +533,7 @@ impl Target {
         tag_hint: Option<&str>,
         asset_name_hint: Option<&str>,
     ) -> Result<String, String> {
-        let Some(token) = crate::github_auth::current_token() else {
+        let Some(token) = crate::github_auth::token_for_repo(&self.repo) else {
             return Err("Sign in to GitHub in Settings to download from this private repository.".into());
         };
         let api_url = match api_asset_url.filter(|u| !u.is_empty()) {
@@ -668,7 +668,7 @@ impl Target {
             .get(&download_url)
             .call()
             .map_err(|e| format!("Download failed ({e})"))?;
-        if resp.status() == 404 && !self.private && crate::github_auth::current_token().is_some() {
+        if resp.status() == 404 && !self.private && crate::github_auth::has_accounts() {
             // A repo that was later made private returns 404 on browser_download_url; retry via API.
             log("Public link returned 404; retrying with your GitHub sign-in".into());
             let signed = self.resolve_private_asset_url(
@@ -955,7 +955,7 @@ impl Target {
                     format!("https://github.com/{}/releases/download/v{}/{pkg}", self.repo, m.version),
                     pkg.to_string(),
                 )
-            } else if let Some(tok) = crate::github_auth::current_token() {
+            } else if let Some(tok) = crate::github_auth::token_for_repo(&self.repo) {
                 let api_url = self.lookup_api_asset_url(&tok, &m.version, None, None)?;
                 let signed = resolve_authenticated_download_url(&api_url, &tok)?;
                 (signed, String::new())

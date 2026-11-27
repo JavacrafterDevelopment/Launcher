@@ -138,6 +138,20 @@ pub struct CustomApp {
     /// True when the repository publishes Launcher's `updates` branch (`update.json`).
     #[serde(default)]
     pub own_format: bool,
+    /// GitHub login of the saved account whose token could see this repository when it
+    /// was added (a friend's token, say). A hint for which token to use; None for apps
+    /// added before multiple accounts existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
+/// One GitHub account signed in with a Personal Access Token. Display data only: the
+/// token itself lives ONLY in the OS credential store.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GitHubAccount {
+    pub login: String,
+    pub avatar_url: Option<String>,
 }
 
 impl CustomApp {
@@ -240,9 +254,15 @@ pub struct Settings {
     pub pinned: Vec<String>,
     /// User-added GitHub repositories populated into the launcher.
     pub custom_apps: Vec<CustomApp>,
-    /// Cached GitHub username for UI display (the token itself lives ONLY in the OS credential store).
+    /// Signed-in GitHub accounts, in the order they were added. The first is the default
+    /// used for public repositories and rate limits.
+    pub github_accounts: Vec<GitHubAccount>,
+    /// Single-account username from before multiple accounts; read once and folded
+    /// into `github_accounts`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub github_user: Option<String>,
-    /// Cached GitHub avatar URL for UI display.
+    /// Single-account avatar from before multiple accounts.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub github_avatar: Option<String>,
 }
 
@@ -274,6 +294,7 @@ impl Default for Settings {
             sort: "name-asc".into(),
             pinned: Vec::new(),
             custom_apps: Vec::new(),
+            github_accounts: Vec::new(),
             github_user: None,
             github_avatar: None,
         }
@@ -288,10 +309,24 @@ impl Settings {
     /// Missing or unreadable settings fall back to defaults rather than failing:
     /// a launcher that refuses to open over a bad JSON file is no launcher.
     pub fn load() -> Self {
-        fs::read(Self::path())
+        let mut s: Self = fs::read(Self::path())
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        s.migrate_single_account();
+        s
+    }
+
+    /// Folds the single `github_user`/`github_avatar` pair older copies saved into
+    /// `github_accounts`, so an existing sign-in carries over as the first account.
+    pub fn migrate_single_account(&mut self) {
+        let user = self.github_user.take();
+        let avatar = self.github_avatar.take();
+        if let Some(login) = user.filter(|u| !u.trim().is_empty()) {
+            if !self.github_accounts.iter().any(|a| a.login.eq_ignore_ascii_case(&login)) {
+                self.github_accounts.insert(0, GitHubAccount { login, avatar_url: avatar });
+            }
+        }
     }
 
     /// Written to a temp file and renamed over, so a crash mid-write never
@@ -458,8 +493,9 @@ mod tests {
                 platforms: vec!["Windows".into(), "MacOS".into()],
                 private: true,
                 own_format: false,
+                account: Some("bob".into()),
             }],
-            github_user: Some("alice".into()),
+            github_accounts: vec![GitHubAccount { login: "alice".into(), avatar_url: None }],
             ..Settings::default()
         };
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
@@ -467,6 +503,22 @@ mod tests {
         assert_eq!(back.custom_apps[0].repo, "acme/secret");
         assert!(back.custom_apps[0].private);
         assert_eq!(back.custom_apps[0].category, "temporary");
-        assert_eq!(back.github_user.as_deref(), Some("alice"));
+        assert_eq!(back.custom_apps[0].account.as_deref(), Some("bob"));
+        assert_eq!(back.github_accounts[0].login, "alice");
+    }
+
+    #[test]
+    fn single_account_settings_migrate_to_account_list() {
+        let old = br#"{"githubUser":"alice","githubAvatar":"https://a/1.png","customApps":[{"id":"x","name":"X","folder":"X","repo":"a/x","private":true}]}"#;
+        let mut s: Settings = serde_json::from_slice(old).unwrap();
+        assert!(s.custom_apps[0].account.is_none());
+        s.migrate_single_account();
+        assert_eq!(s.github_accounts, vec![GitHubAccount { login: "alice".into(), avatar_url: Some("https://a/1.png".into()) }]);
+        assert!(s.github_user.is_none() && s.github_avatar.is_none());
+        let json = String::from_utf8(serde_json::to_vec(&s).unwrap()).unwrap();
+        assert!(!json.contains("githubUser"));
+        // Running it again changes nothing.
+        s.migrate_single_account();
+        assert_eq!(s.github_accounts.len(), 1);
     }
 }

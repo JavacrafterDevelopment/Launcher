@@ -25,7 +25,7 @@ use wry::WebViewBuilderExtWindows;
 
 use apps::{AppEvent, Library};
 use github_auth::{AuthStatus, GitHubUser, RepoPreview, RepoSummary, StoredCredential};
-use settings::{app_dir, data_dir, CustomApp, Settings};
+use settings::{app_dir, data_dir, CustomApp, GitHubAccount, Settings};
 use updater::{Release, Target};
 
 const INDEX_HTML: &str = include_str!("../ui/index.html");
@@ -68,10 +68,12 @@ impl Update {
 }
 
 pub(crate) enum AuthEvent {
-    Connected(GitHubUser),
+    /// A token was verified and saved; `is_new` is false when it replaced that account's token.
+    Connected { user: GitHubUser, is_new: bool },
     Error(String),
     CredentialsListed(Result<Vec<StoredCredential>, String>),
-    CredentialsCleared { scope: &'static str, result: Result<usize, String>, signed_out: bool },
+    /// `signed_out` lists this copy's accounts the clear-up signed out.
+    CredentialsCleared { scope: &'static str, result: Result<usize, String>, signed_out: Vec<String> },
     PrivateRepos(Result<Vec<RepoSummary>, String>),
 }
 
@@ -145,13 +147,12 @@ fn main() {
     }
 
     let mut settings = Settings::load();
-    let pat_removed_externally = github_auth::init_from_store(&mut settings);
-    if pat_removed_externally || github_auth::current_token().is_none() {
-        let pruned = apps::prune_uninstalled_private_apps(&mut settings);
-        if !pruned.is_empty() || pat_removed_externally {
-            let _ = settings.save();
-        }
+    github_auth::init_from_store(&mut settings);
+    let pruned = apps::prune_uninstalled_private_apps(&mut settings, &github_auth::account_logins());
+    if !pruned.is_empty() {
+        let _ = settings.save();
     }
+    remember_app_accounts(&settings);
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
@@ -423,6 +424,15 @@ fn page_html(settings: &Settings) -> String {
         .replace("/*{{JS}}*/", APP_JS)
 }
 
+/// Tells the token picker which account each added private app was added with.
+fn remember_app_accounts(settings: &Settings) {
+    for c in &settings.custom_apps {
+        if let Some(login) = &c.account {
+            github_auth::remember_repo_account(&c.repo, login);
+        }
+    }
+}
+
 fn send(webview: &WebView, msg: Value) {
     let _ = webview.evaluate_script(&format!("window.onHost && window.onHost({msg})"));
 }
@@ -454,7 +464,7 @@ impl App {
                 }
                 self.push_auth(webview);
                 self.spawn_list_credentials();
-                if github_auth::current_token().is_some() {
+                if github_auth::has_accounts() {
                     self.spawn_fetch_private_repos();
                 }
                 send(webview, self.library.snapshot());
@@ -608,9 +618,9 @@ impl App {
                 let proxy = self.proxy.clone();
                 std::thread::spawn(move || {
                     match github_auth::fetch_user(&token) {
-                        Ok(user) => match github_auth::save_active_token(&token, &user.login) {
-                            Ok(()) => {
-                                let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Connected(user)));
+                        Ok(user) => match github_auth::add_account(&token, &user.login) {
+                            Ok(is_new) => {
+                                let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Connected { user, is_new }));
                             }
                             Err(e) => {
                                 let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
@@ -623,9 +633,22 @@ impl App {
                 });
             }
             "githubLogout" => {
-                let account = self.settings.github_user.clone();
-                let _ = github_auth::sign_out(account.as_deref());
-                self.handle_pat_removed(webview);
+                // One account by login; without one (older pages), every account.
+                let logins = match msg["login"].as_str().filter(|l| !l.is_empty()) {
+                    Some(l) => vec![l.to_string()],
+                    None => github_auth::account_logins(),
+                };
+                let mut removed = Vec::new();
+                for login in logins {
+                    match github_auth::remove_account(&login) {
+                        Ok(_) => removed.push(login),
+                        Err(message) => {
+                            removed.push(login);
+                            send(webview, json!({ "type": "githubCredentialsError", "message": message }));
+                        }
+                    }
+                }
+                self.handle_accounts_removed(&removed, webview);
                 self.spawn_list_credentials();
             }
             "githubListCredentials" => {
@@ -638,8 +661,8 @@ impl App {
                 std::thread::spawn(move || {
                     let res = github_auth::delete_credential(&key, account.as_deref());
                     let (result, signed_out) = match res {
-                        Ok(was_current) => (Ok(1), was_current),
-                        Err(e) => (Err(e), false),
+                        Ok(login) => (Ok(1), login.into_iter().collect()),
+                        Err(e) => (Err(e), Vec::new()),
                     };
                     let _ = proxy.send_event(UserEvent::Auth(AuthEvent::CredentialsCleared {
                         scope: "single",
@@ -655,18 +678,21 @@ impl App {
                     let _ = proxy.send_event(UserEvent::Auth(AuthEvent::CredentialsCleared {
                         scope: "old",
                         result,
-                        signed_out: false,
+                        signed_out: Vec::new(),
                     }));
                 });
             }
             "githubClearAllCredentials" => {
                 let proxy = self.proxy.clone();
                 std::thread::spawn(move || {
-                    let result = github_auth::clear_all_credentials();
+                    let (result, signed_out) = match github_auth::clear_all_credentials() {
+                        Ok((n, logins)) => (Ok(n), logins),
+                        Err(e) => (Err(e), github_auth::account_logins()),
+                    };
                     let _ = proxy.send_event(UserEvent::Auth(AuthEvent::CredentialsCleared {
                         scope: "all",
                         result,
-                        signed_out: true,
+                        signed_out,
                     }));
                 });
             }
@@ -723,6 +749,10 @@ impl App {
                     .unwrap_or_else(|| vec!["Windows".into(), "MacOS".into()]);
                 let private = msg["private"].as_bool().unwrap_or(false);
                 let own_format = msg["ownFormat"].as_bool().unwrap_or(false);
+                let account = msg["account"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+                if let Some(login) = &account {
+                    github_auth::remember_repo_account(&repo, login);
+                }
 
                 let existing_ids = self.library.existing_ids();
                 let existing_folders = self.library.existing_folders();
@@ -740,6 +770,7 @@ impl App {
                     platforms,
                     private,
                     own_format,
+                    account,
                 };
                 self.settings.custom_apps.push(custom);
                 let _ = self.settings.save();
@@ -803,17 +834,26 @@ impl App {
         );
     }
 
-    fn handle_pat_removed(&mut self, webview: &WebView) {
-        self.settings.github_user = None;
-        self.settings.github_avatar = None;
-        let pruned = apps::prune_uninstalled_private_apps(&mut self.settings);
+    /// After accounts were signed out: drops them from Settings, removes uninstalled
+    /// private apps no remaining account can reach, and refreshes the page.
+    fn handle_accounts_removed(&mut self, removed: &[String], webview: &WebView) {
+        self.settings
+            .github_accounts
+            .retain(|a| !removed.iter().any(|r| r.eq_ignore_ascii_case(&a.login)));
+        let remaining = github_auth::account_logins();
+        let pruned = apps::prune_uninstalled_private_apps(&mut self.settings, &remaining);
         let _ = self.settings.save();
         if !pruned.is_empty() {
             self.library.sync_custom_apps(&self.settings.custom_apps, self.settings.prereleases);
         }
+        remember_app_accounts(&self.settings);
         send(webview, json!({ "type": "settings", "settings": self.settings }));
         self.push_auth(webview);
-        send(webview, json!({ "type": "githubPrivateRepos", "repos": [] }));
+        if remaining.is_empty() {
+            send(webview, json!({ "type": "githubPrivateRepos", "repos": [] }));
+        } else {
+            self.spawn_fetch_private_repos();
+        }
         if !pruned.is_empty() {
             send(webview, self.library.snapshot());
             send(webview, json!({ "type": "privateAppsPruned", "names": pruned }));
@@ -838,12 +878,23 @@ impl App {
 
     fn on_auth_event(&mut self, event: AuthEvent, webview: &WebView) {
         match event {
-            AuthEvent::Connected(user) => {
-                self.settings.github_user = Some(user.login);
-                self.settings.github_avatar = user.avatar_url;
+            AuthEvent::Connected { user, is_new } => {
+                let login = user.login.clone();
+                match self.settings.github_accounts.iter_mut().find(|a| a.login.eq_ignore_ascii_case(&user.login)) {
+                    Some(a) => {
+                        a.login = user.login;
+                        a.avatar_url = user.avatar_url;
+                    }
+                    None => self.settings.github_accounts.push(GitHubAccount {
+                        login: user.login,
+                        avatar_url: user.avatar_url,
+                    }),
+                }
                 let _ = self.settings.save();
+                remember_app_accounts(&self.settings);
                 send(webview, json!({ "type": "settings", "settings": self.settings }));
                 self.push_auth(webview);
+                send(webview, json!({ "type": "githubAccountAdded", "login": login, "isNew": is_new }));
                 self.spawn_list_credentials();
                 self.spawn_fetch_private_repos();
                 // Immediately re-check any private repos or previously failed checks.
@@ -862,8 +913,8 @@ impl App {
                 }
             },
             AuthEvent::CredentialsCleared { scope, result, signed_out } => {
-                if signed_out {
-                    self.handle_pat_removed(webview);
+                if !signed_out.is_empty() {
+                    self.handle_accounts_removed(&signed_out, webview);
                 }
                 match result {
                     Ok(removed) => {
