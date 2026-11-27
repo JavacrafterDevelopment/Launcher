@@ -454,6 +454,136 @@
 
               </div>
             </div>
+
+            <!-- Bottom of Settings: Custom GitHub Apps + GitHub Account & OS Credential Store -->
+            <div class="settings-bottom">
+
+              <div class="card" id="custom-apps-card">
+                <div class="card-head">
+                  <h3 data-i18n="Add App from GitHub">Add App from GitHub</h3>
+                  <span class="meta" data-i18n="Installs & updates from GitHub releases">Installs &amp; updates from GitHub releases</span>
+                </div>
+
+                <div class="gh-add-row">
+                  <input type="text" id="gh-repo-url" class="text-input" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false" aria-label="GitHub repository URL" data-i18n-aria="GitHub repository URL">
+                  <button class="btn small primary" id="btn-gh-add-repo" type="button" data-i18n="Add app">Add app</button>
+                </div>
+                <p class="set-desc" data-i18n="Paste any public or private GitHub repository link to add it to your launcher with automatic update checks.">Paste any public or private GitHub repository link to add it to your launcher with automatic update checks.</p>
+                <div class="gh-msg" id="gh-repo-msg"></div>
+
+                <!-- Private repo browser (visible when signed in to GitHub) -->
+                <div class="gh-subpanel" id="gh-private-repos-wrap">
+                  <div class="gh-subhead">
+                    <span class="set-title" data-i18n="Your Private Repositories">Your Private Repositories</span>
+                    <button class="btn compact" id="btn-gh-refresh-repos" type="button" data-i18n="Refresh">Refresh</button>
+                  </div>
+                  <input type="text" id="gh-private-filter" class="text-input compact" placeholder="Filter private repositories…" autocomplete="off" spellcheck="false" data-i18n-placeholder="Filter private repositories…">
+                  <div class="gh-list" id="gh-private-repos-list"></div>
+                </div>
+
+                <!-- List of custom apps already added -->
+                <div class="gh-subpanel" id="custom-apps-list-wrap">
+                  <div class="gh-subhead">
+                    <span class="set-title" data-i18n="Added GitHub Apps">Added GitHub Apps</span>
+                    <span class="meta" id="custom-apps-count"></span>
+                  </div>
+                  <div class="gh-list" id="custom-apps-list"></div>
+                </div>
+              </div>
+
+              <div class="card" id="github-account-card">
+                <div class="card-head">
+                  <h3 data-i18n="GitHub Account">GitHub Account</h3>
+                  <span class="pill" id="gh-auth-pill"><span class="dot"></span><span id="gh-auth-pill-text" data-i18n="Not signed in">Not signed in</span></span>
+                </div>
+
+                <!-- Signed-in summary -->
+                <div id="gh-auth-signed-in" class="gh-account-bar">
+                  <div class="gh-user-box">
+                    <div class="gh-avatar" id="gh-user-avatar"></div>
+                    <div class="gh-user-meta">
+                      <div class="gh-user-row">
+                        <span class="set-title" id="gh-user-name"></span>
+                        <span class="hud-badge info" id="gh-user-method"></span>
+                      </div>
+                      <span class="set-desc" id="gh-user-desc" data-i18n="Private repositories enabled · 5,000 GitHub requests/hour">Private repositories enabled · 5,000 GitHub requests/hour</span>
+                    </div>
+                  </div>
+                  <button class="btn small" id="btn-gh-logout" type="button" data-i18n="Sign out">Sign out</button>
+                </div>
+
+                <!-- Signed-out login options: Both OAuth Device Flow & Personal Access Token -->
+                <div id="gh-auth-signed-out" class="gh-login-wrap">
+                  <p class="set-desc" data-i18n="Sign in to pull private repositories and raise GitHub's rate limit. Tokens are stored securely in your OS credential store.">Sign in to pull private repositories and raise GitHub's rate limit. Tokens are stored securely in your OS credential store.</p>
+
+                  <div class="cell-group seg-group" id="gh-auth-mode-group" role="tablist" aria-label="GitHub sign-in method">
+                    <button class="cell on" data-auth-mode="oauth" type="button" data-i18n="GitHub OAuth">GitHub OAuth</button>
+                    <button class="cell" data-auth-mode="pat" type="button" data-i18n="Personal Access Token">Personal Access Token</button>
+                  </div>
+
+                  <!-- OAuth Device Flow panel -->
+                  <div id="gh-panel-oauth" class="gh-auth-panel on">
+                    <div id="gh-oauth-cid-row" class="gh-cid-wrap">
+                      <div class="gh-subhead">
+                        <label class="set-title" for="gh-oauth-client-id" data-i18n="OAuth App Client ID">OAuth App Client ID</label>
+                        <a class="link" id="link-gh-dev" href="#" data-i18n="Create GitHub OAuth App ↗">Create GitHub OAuth App ↗</a>
+                      </div>
+                      <input type="text" id="gh-oauth-client-id" class="text-input" placeholder="Ov23li…" autocomplete="off" spellcheck="false">
+                      <p class="set-note" data-i18n="Enable Device Flow in your GitHub OAuth App settings (no client secret needed).">Enable Device Flow in your GitHub OAuth App settings (no client secret needed).</p>
+                    </div>
+
+                    <div id="gh-oauth-start-row" class="actions">
+                      <button class="btn small primary" id="btn-gh-oauth" type="button" data-i18n="Sign in with GitHub">Sign in with GitHub</button>
+                    </div>
+
+                    <div id="gh-oauth-device-box" class="gh-device-box">
+                      <div class="gh-device-code-row">
+                        <span class="gh-device-code" id="gh-device-code"></span>
+                        <button class="btn compact" id="btn-gh-copy-code" type="button" data-i18n="Copy code">Copy code</button>
+                        <button class="btn compact" id="btn-gh-open-device" type="button" data-i18n="Open GitHub ↗">Open GitHub ↗</button>
+                      </div>
+                      <div class="gh-device-foot">
+                        <span class="set-desc" id="gh-device-status" data-i18n="Enter this code on GitHub to finish signing in…">Enter this code on GitHub to finish signing in…</span>
+                        <button class="btn compact ghost" id="btn-gh-cancel-oauth" type="button" data-i18n="Cancel">Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Personal Access Token panel -->
+                  <div id="gh-panel-pat" class="gh-auth-panel">
+                    <div class="gh-subhead">
+                      <label class="set-title" for="gh-pat-input" data-i18n="Personal Access Token">Personal Access Token</label>
+                      <a class="link" id="link-gh-tokens" href="#" data-i18n="Create token on GitHub ↗">Create token on GitHub ↗</a>
+                    </div>
+                    <div class="gh-add-row">
+                      <input type="password" id="gh-pat-input" class="text-input" placeholder="ghp_… or github_pat_…" autocomplete="off" spellcheck="false">
+                      <button class="btn small primary" id="btn-gh-pat" type="button" data-i18n="Connect token">Connect token</button>
+                    </div>
+                    <p class="set-note" data-i18n="Use a classic token with 'repo' scope, or a fine-grained token with 'Contents: Read-only' access.">Use a classic token with 'repo' scope, or a fine-grained token with 'Contents: Read-only' access.</p>
+                  </div>
+                </div>
+
+                <div class="gh-msg" id="gh-auth-msg"></div>
+
+                <!-- OS Credential Store cleanup (Windows Credential Manager / macOS Keychain) -->
+                <div class="gh-cred-section" id="gh-cred-store-section">
+                  <div class="gh-subhead">
+                    <div class="gh-cred-title-wrap">
+                      <span class="set-title" id="gh-store-name">OS Credential Store</span>
+                      <span class="meta" id="gh-cred-count"></span>
+                    </div>
+                    <button class="btn compact" id="btn-gh-refresh-creds" type="button" data-i18n="Refresh">Refresh</button>
+                  </div>
+                  <p class="set-desc" data-i18n="Manage credentials saved by this copy or older/deleted copies of Launcher.">Manage credentials saved by this copy or older/deleted copies of Launcher.</p>
+                  <div class="gh-list" id="gh-cred-list"></div>
+                  <div class="actions gh-cred-actions">
+                    <button class="btn small" id="btn-gh-clear-old" type="button" data-i18n="Clear old copies">Clear old copies</button>
+                    <button class="btn small danger" id="btn-gh-clear-all" type="button" data-i18n="Clear all from credential store">Clear all from credential store</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
 
           <div class="settings-footer">
@@ -483,6 +613,48 @@
         <span class="footer-gh-label">GitHub</span>
       </button>
     </footer>
+  </div>
+
+  <!-- Pop-up modal: choose where a pasted public link or selected private repo appears -->
+  <div id="add-app-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-app-modal-title">
+    <div class="modal-backdrop" id="add-app-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <h2 id="add-app-modal-title" data-i18n="Add Repository to Launcher">Add Repository to Launcher</h2>
+          <span class="meta" id="add-app-repo-slug"></span>
+        </div>
+        <button class="popover-close" id="add-app-close" type="button" title="Close" aria-label="Close" data-i18n-title="Close" data-i18n-aria="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-repo-meta" id="add-app-meta"></div>
+        <div class="modal-field">
+          <label class="set-title" for="add-app-name" data-i18n="Display name">Display name</label>
+          <input type="text" id="add-app-name" class="text-input" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="modal-field">
+          <span class="set-title" data-i18n="Where should this appear?">Where should this appear?</span>
+          <div class="cat-choices" id="add-app-categories" role="radiogroup" aria-label="Launcher section">
+            <button type="button" class="cat-choice on" data-cat="apps">
+              <span class="cat-choice-title" data-i18n="Apps">Apps</span>
+              <span class="cat-choice-desc" data-i18n="Main app library">Main app library</span>
+            </button>
+            <button type="button" class="cat-choice" data-cat="temporary">
+              <span class="cat-choice-title" data-i18n="Temporary Apps">Temporary Apps</span>
+              <span class="cat-choice-desc" data-i18n="Short-lived tools & utilities">Short-lived tools &amp; utilities</span>
+            </button>
+            <button type="button" class="cat-choice" data-cat="games">
+              <span class="cat-choice-title" data-i18n="Games">Games</span>
+              <span class="cat-choice-desc" data-i18n="Games library">Games library</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn small ghost" id="add-app-cancel" type="button" data-i18n="Cancel">Cancel</button>
+        <button class="btn small primary" id="add-app-confirm" type="button" data-i18n="Add to Launcher">Add to Launcher</button>
+      </div>
+    </div>
   </div>
 
   <!-- Floating card action overflow menu (shared so it never gets clipped by card borders) -->

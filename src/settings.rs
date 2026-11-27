@@ -100,6 +100,110 @@ pub fn data_dir() -> PathBuf {
     app_dir().join("data")
 }
 
+fn default_category() -> String {
+    "apps".into()
+}
+
+fn default_platforms() -> Vec<String> {
+    vec!["Windows".into(), "MacOS".into()]
+}
+
+/// A user-added GitHub repository populated into the launcher.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomApp {
+    /// Unique identifier for this app, e.g. `"custom-owner-repo"`.
+    pub id: String,
+    /// Display name shown on the card.
+    pub name: String,
+    /// Folder name under `portableApplications/` (or custom install root).
+    pub folder: String,
+    /// Repository in `"owner/repo"` form.
+    pub repo: String,
+    /// Short description shown on the card.
+    #[serde(default)]
+    pub tagline: String,
+    /// GitHub owner / publisher shown in the badge.
+    #[serde(default)]
+    pub publisher: String,
+    /// Which tab it appears under: `"apps"`, `"temporary"`, or `"games"`.
+    #[serde(default = "default_category")]
+    pub category: String,
+    /// Platforms this repository has releases for (`"Windows"`, `"MacOS"`).
+    #[serde(default = "default_platforms")]
+    pub platforms: Vec<String>,
+    /// True when the repository is private (uses authenticated GitHub API downloads).
+    #[serde(default)]
+    pub private: bool,
+    /// True when the repository publishes Launcher's `updates` branch (`update.json`).
+    #[serde(default)]
+    pub own_format: bool,
+}
+
+impl CustomApp {
+    /// Normalizes a category string to one of `"apps"`, `"temporary"`, or `"games"`.
+    pub fn normalize_category(cat: &str) -> String {
+        match cat {
+            "temporary" => "temporary".into(),
+            "games" => "games".into(),
+            _ => "apps".into(),
+        }
+    }
+
+    /// Generates a safe, filesystem-friendly folder name from a repo name.
+    pub fn sanitize_folder(name: &str) -> String {
+        let cleaned: String = name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ' ') { c } else { '-' })
+            .collect();
+        let trimmed = cleaned.trim().trim_matches('.');
+        if trimmed.is_empty() {
+            "CustomApp".into()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    /// Generates a deterministic slug ID for a GitHub `"owner/repo"`.
+    pub fn make_id(repo: &str, existing_ids: &[String]) -> String {
+        let slug: String = repo
+            .to_ascii_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let base = format!("custom-{}", slug.trim_matches('-'));
+        if !existing_ids.iter().any(|e| e.eq_ignore_ascii_case(&base)) {
+            return base;
+        }
+        for i in 2..1000 {
+            let candidate = format!("{base}-{i}");
+            if !existing_ids.iter().any(|e| e.eq_ignore_ascii_case(&candidate)) {
+                return candidate;
+            }
+        }
+        base
+    }
+
+    /// Picks a unique folder name not colliding with any existing catalog or custom app folder.
+    pub fn make_folder(name: &str, owner: &str, existing_folders: &[String]) -> String {
+        let base = Self::sanitize_folder(name);
+        if !existing_folders.iter().any(|f| f.eq_ignore_ascii_case(&base)) {
+            return base;
+        }
+        let with_owner = Self::sanitize_folder(&format!("{owner}-{name}"));
+        if !existing_folders.iter().any(|f| f.eq_ignore_ascii_case(&with_owner)) {
+            return with_owner;
+        }
+        for i in 2..1000 {
+            let candidate = format!("{base}-{i}");
+            if !existing_folders.iter().any(|f| f.eq_ignore_ascii_case(&candidate)) {
+                return candidate;
+            }
+        }
+        base
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -134,6 +238,16 @@ pub struct Settings {
     pub sort: String,
     /// App IDs pinned to the top of their tab.
     pub pinned: Vec<String>,
+    /// User-added GitHub repositories populated into the launcher.
+    pub custom_apps: Vec<CustomApp>,
+    /// Optional GitHub OAuth App Client ID for Device Flow login when none is compiled in.
+    pub github_oauth_client_id: Option<String>,
+    /// Cached GitHub username for UI display (the token itself lives ONLY in the OS credential store).
+    pub github_user: Option<String>,
+    /// Cached GitHub avatar URL for UI display.
+    pub github_avatar: Option<String>,
+    /// Cached GitHub login method ("oauth" or "pat").
+    pub github_method: Option<String>,
 }
 
 /// The colour schemes ui/app.css defines for Legacy look, the default first. Kept in data\
@@ -163,6 +277,11 @@ impl Default for Settings {
             view: "grid".into(),
             sort: "name-asc".into(),
             pinned: Vec::new(),
+            custom_apps: Vec::new(),
+            github_oauth_client_id: None,
+            github_user: None,
+            github_avatar: None,
+            github_method: None,
         }
     }
 }
@@ -321,5 +440,40 @@ mod tests {
         assert!(!back.notify_app_updates);
         assert!(!back.checks_automatically());
         assert_eq!(back.pinned, vec!["lighthouse"]);
+    }
+
+    #[test]
+    fn custom_apps_round_trip_and_dedup() {
+        let existing_ids = vec!["lighthouse".to_string(), "custom-acme-tool".to_string()];
+        let existing_folders = vec!["Lighthouse".to_string(), "Tool".to_string()];
+        assert_eq!(CustomApp::make_id("acme/tool", &existing_ids), "custom-acme-tool-2");
+        assert_eq!(CustomApp::make_folder("Tool", "acme", &existing_folders), "acme-Tool");
+        assert_eq!(CustomApp::normalize_category("games"), "games");
+        assert_eq!(CustomApp::normalize_category("temporary"), "temporary");
+        assert_eq!(CustomApp::normalize_category("other"), "apps");
+
+        let s = Settings {
+            custom_apps: vec![CustomApp {
+                id: "custom-acme-secret".into(),
+                name: "Secret Tool".into(),
+                folder: "Secret Tool".into(),
+                repo: "acme/secret".into(),
+                tagline: "Private internal utility".into(),
+                publisher: "acme".into(),
+                category: "temporary".into(),
+                platforms: vec!["Windows".into(), "MacOS".into()],
+                private: true,
+                own_format: false,
+            }],
+            github_user: Some("alice".into()),
+            github_method: Some("oauth".into()),
+            ..Settings::default()
+        };
+        let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
+        assert_eq!(back.custom_apps.len(), 1);
+        assert_eq!(back.custom_apps[0].repo, "acme/secret");
+        assert!(back.custom_apps[0].private);
+        assert_eq!(back.custom_apps[0].category, "temporary");
+        assert_eq!(back.github_user.as_deref(), Some("alice"));
     }
 }

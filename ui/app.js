@@ -8,7 +8,7 @@
 
 const BOOT = window.BOOT || {
   // Opened as a plain file (browser preview): stand in for the host.
-  version: '0.3.18',
+  version: '0.3.19',
   repo: 'JavacrafterDevelopment/Launcher',
   githubOrgUrl: 'https://github.com/JavacrafterDevelopment',
   os: /Mac/i.test(navigator.platform || '') ? 'MacOS' : 'Windows',
@@ -122,6 +122,60 @@ const el = {
   btnData:         $('btn-data'),
   lookButtons:     document.querySelectorAll('#look-group .cell'),
   themeButtons:    document.querySelectorAll('#theme-group .cell'),
+  // Custom GitHub Apps & Private Repo Picker
+  ghRepoUrl:       $('gh-repo-url'),
+  btnGhAddRepo:    $('btn-gh-add-repo'),
+  ghRepoMsg:       $('gh-repo-msg'),
+  ghPrivWrap:      $('gh-private-repos-wrap'),
+  ghPrivFilter:    $('gh-private-filter'),
+  btnGhRefRepos:   $('btn-gh-refresh-repos'),
+  ghPrivList:      $('gh-private-repos-list'),
+  customAppsWrap:  $('custom-apps-list-wrap'),
+  customAppsCount: $('custom-apps-count'),
+  customAppsList:  $('custom-apps-list'),
+  // GitHub Account & OS Credential Store
+  ghAuthPill:      $('gh-auth-pill'),
+  ghAuthPillText:  $('gh-auth-pill-text'),
+  ghSignedIn:      $('gh-auth-signed-in'),
+  ghSignedOut:     $('gh-auth-signed-out'),
+  ghUserAvatar:    $('gh-user-avatar'),
+  ghUserName:      $('gh-user-name'),
+  ghUserMethod:    $('gh-user-method'),
+  btnGhLogout:     $('btn-gh-logout'),
+  ghAuthModeBtns:  document.querySelectorAll('#gh-auth-mode-group .cell'),
+  ghPanelOauth:    $('gh-panel-oauth'),
+  ghPanelPat:      $('gh-panel-pat'),
+  ghOauthCidRow:   $('gh-oauth-cid-row'),
+  ghOauthCid:      $('gh-oauth-client-id'),
+  linkGhDev:       $('link-gh-dev'),
+  ghOauthStartRow: $('gh-oauth-start-row'),
+  btnGhOauth:      $('btn-gh-oauth'),
+  ghDeviceBox:     $('gh-oauth-device-box'),
+  ghDeviceCode:    $('gh-device-code'),
+  btnGhCopyCode:   $('btn-gh-copy-code'),
+  btnGhOpenDev:    $('btn-gh-open-device'),
+  ghDeviceStatus:  $('gh-device-status'),
+  btnGhCancelOauth:$('btn-gh-cancel-oauth'),
+  linkGhTokens:    $('link-gh-tokens'),
+  ghPatInput:      $('gh-pat-input'),
+  btnGhPat:        $('btn-gh-pat'),
+  ghAuthMsg:       $('gh-auth-msg'),
+  ghStoreName:     $('gh-store-name'),
+  ghCredCount:     $('gh-cred-count'),
+  btnGhRefCreds:   $('btn-gh-refresh-creds'),
+  ghCredList:      $('gh-cred-list'),
+  btnGhClearOld:   $('btn-gh-clear-old'),
+  btnGhClearAll:   $('btn-gh-clear-all'),
+  // Category Picker Modal Popup
+  addAppModal:     $('add-app-modal'),
+  addAppBack:      $('add-app-backdrop'),
+  addAppClose:     $('add-app-close'),
+  addAppSlug:      $('add-app-repo-slug'),
+  addAppMeta:      $('add-app-meta'),
+  addAppName:      $('add-app-name'),
+  addAppCats:      document.querySelectorAll('#add-app-categories .cat-choice'),
+  addAppCancel:    $('add-app-cancel'),
+  addAppConfirm:   $('add-app-confirm'),
   cardMenu:        $('card-menu'),
   toast:           $('toast'),
   toastTitle:      $('toast-title'),
@@ -150,7 +204,39 @@ const state = {
     view: 'grid',
     sort: 'name-asc',
     pinned: [],
+    customApps: [],
+    githubOauthClientId: null,
+    githubUser: null,
+    githubAvatar: null,
+    githubMethod: null,
   }, BOOT.settings || {}),
+  auth:             Object.assign({
+    loggedIn: false,
+    username: null,
+    avatarUrl: null,
+    method: null,
+    storeName: CURRENT_OS === 'MacOS' ? 'macOS Keychain' : 'Windows Credential Manager',
+    hasBuiltinOauth: false,
+    currentKey: '',
+  }, BOOT.auth || {}),
+  authMode:         'oauth',        // 'oauth' | 'pat'
+  authBusy:         false,
+  authMsg:          null,           // { kind: 'ok'|'bad'|'info', text }
+  oauth:            { state: 'idle', userCode: '', verificationUri: 'https://github.com/login/device' },
+  credentials:      [],
+  credsLoaded:      false,
+  clearAllArmed:    false,
+  clearAllTimer:    null,
+  privateRepos:     [],
+  privLoading:      false,
+  privError:        null,
+  privFilter:       '',
+  repoBusy:         false,
+  repoMsg:          null,           // { kind: 'ok'|'bad'|'info', text }
+  pendingRepo:      null,           // RepoPreview currently open in category modal
+  pendingCategory:  'apps',         // 'apps' | 'temporary' | 'games'
+  removeArmedId:    null,
+  removeArmedTimer: null,
   update:           { state: 'idle' },
   updateMode:       'manual',
   tab:              'library',      // 'library' | 'temporary' | 'games'
@@ -405,6 +491,60 @@ const I18N = {
     'Everything installed is on its newest release.': 'Все установленные приложения обновлены до последних версий.',
     'Launcher updated': 'Launcher обновлён',
     'You’re running the newest release.': 'У вас установлена новейшая версия.',
+    'Add App from GitHub': 'Добавить приложение с GitHub',
+    'Installs & updates from GitHub releases': 'Установка и обновления из релизов GitHub',
+    'GitHub repository URL': 'Ссылка на репозиторий GitHub',
+    'Add app': 'Добавить',
+    'Paste any public or private GitHub repository link to add it to your launcher with automatic update checks.': 'Вставьте ссылку на любой публичный или приватный репозиторий GitHub, чтобы добавить его с автоматической проверкой обновлений.',
+    'Your Private Repositories': 'Ваши приватные репозитории',
+    'Refresh': 'Обновить',
+    'Filter private repositories…': 'Фильтр приватных репозиториев…',
+    'Added GitHub Apps': 'Добавленные приложения GitHub',
+    'GitHub Account': 'Аккаунт GitHub',
+    'Not signed in': 'Вход не выполнен',
+    'Signed in': 'Вход выполнен',
+    'Signing in…': 'Выполняется вход…',
+    'Private repositories enabled · 5,000 GitHub requests/hour': 'Доступ к приватным репозиториям включён · 5 000 запросов/час',
+    'Sign out': 'Выйти',
+    'Sign in to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Войдите, чтобы загружать приватные репозитории и увеличить лимит запросов GitHub. Токены безопасно хранятся в системном хранилище учётных данных.',
+    'GitHub OAuth': 'GitHub OAuth',
+    'Personal Access Token': 'Персональный токен',
+    'OAuth App Client ID': 'Client ID приложения OAuth',
+    'Create GitHub OAuth App ↗': 'Создать OAuth-приложение ↗',
+    'Enable Device Flow in your GitHub OAuth App settings (no client secret needed).': 'Включите Device Flow в настройках OAuth-приложения GitHub (секрет не нужен).',
+    'Sign in with GitHub': 'Войти через GitHub',
+    'Copy code': 'Скопировать код',
+    'Copied!': 'Скопировано!',
+    'Open GitHub ↗': 'Открыть GitHub ↗',
+    'Enter this code on GitHub to finish signing in…': 'Введите этот код на GitHub для завершения входа…',
+    'Cancel': 'Отмена',
+    'Create token on GitHub ↗': 'Создать токен на GitHub ↗',
+    'Connect token': 'Подключить токен',
+    'Use a classic token with \'repo\' scope, or a fine-grained token with \'Contents: Read-only\' access.': 'Используйте классический токен с правом «repo» или fine-grained токен с доступом «Contents: Read-only».',
+    'Manage credentials saved by this copy or older/deleted copies of Launcher.': 'Управление учётными данными, сохранёнными этой или старыми/удалёнными копиями Launcher.',
+    'Clear old copies': 'Очистить старые копии',
+    'Clear old copies ({n})': 'Очистить старые копии ({n})',
+    'Clear all from credential store': 'Очистить все из хранилища',
+    'Click again to clear all credentials': 'Нажмите ещё раз, чтобы очистить все учётные данные',
+    'This copy': 'Эта копия',
+    'Deleted copy': 'Удалённая копия',
+    'Old / other copy': 'Старая / другая копия',
+    'Delete': 'Удалить',
+    'Private': 'Приватный',
+    'Public': 'Публичный',
+    'Add': 'Добавить',
+    'Added': 'Добавлено',
+    'Remove': 'Убрать',
+    'Confirm': 'Подтвердить',
+    'Remove from Launcher': 'Убрать из Launcher',
+    'Click again to remove from Launcher': 'Нажмите ещё раз, чтобы убрать из Launcher',
+    'Add Repository to Launcher': 'Добавить репозиторий в Launcher',
+    'Display name': 'Отображаемое имя',
+    'Where should this appear?': 'Где должно отображаться?',
+    'Main app library': 'Основная библиотека приложений',
+    'Short-lived tools & utilities': 'Временные инструменты и утилиты',
+    'Games library': 'Библиотека игр',
+    'Add to Launcher': 'Добавить в Launcher',
   },
   es: {
     'Checking for updates…': 'Buscando actualizaciones…',
@@ -630,6 +770,60 @@ const I18N = {
     'Everything installed is on its newest release.': 'Todo lo instalado está en su versión más reciente.',
     'Launcher updated': 'Launcher actualizado',
     'You’re running the newest release.': 'Estás usando la versión más reciente.',
+    'Add App from GitHub': 'Añadir aplicación desde GitHub',
+    'Installs & updates from GitHub releases': 'Instala y actualiza desde lanzamientos de GitHub',
+    'GitHub repository URL': 'URL del repositorio de GitHub',
+    'Add app': 'Añadir app',
+    'Paste any public or private GitHub repository link to add it to your launcher with automatic update checks.': 'Pega cualquier enlace de repositorio público o privado de GitHub para añadirlo con comprobación automática de actualizaciones.',
+    'Your Private Repositories': 'Tus repositorios privados',
+    'Refresh': 'Actualizar',
+    'Filter private repositories…': 'Filtrar repositorios privados…',
+    'Added GitHub Apps': 'Aplicaciones de GitHub añadidas',
+    'GitHub Account': 'Cuenta de GitHub',
+    'Not signed in': 'Sin iniciar sesión',
+    'Signed in': 'Sesión iniciada',
+    'Signing in…': 'Iniciando sesión…',
+    'Private repositories enabled · 5,000 GitHub requests/hour': 'Repositorios privados habilitados · 5.000 solicitudes/hora',
+    'Sign out': 'Cerrar sesión',
+    'Sign in to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Inicia sesión para obtener repositorios privados y aumentar el límite de GitHub. Los tokens se guardan de forma segura en el almacén de credenciales del sistema.',
+    'GitHub OAuth': 'GitHub OAuth',
+    'Personal Access Token': 'Token de acceso personal',
+    'OAuth App Client ID': 'Client ID de la app OAuth',
+    'Create GitHub OAuth App ↗': 'Crear app OAuth en GitHub ↗',
+    'Enable Device Flow in your GitHub OAuth App settings (no client secret needed).': 'Activa Device Flow en la configuración de tu app OAuth de GitHub (no requiere secreto).',
+    'Sign in with GitHub': 'Iniciar sesión con GitHub',
+    'Copy code': 'Copiar código',
+    'Copied!': '¡Copiado!',
+    'Open GitHub ↗': 'Abrir GitHub ↗',
+    'Enter this code on GitHub to finish signing in…': 'Introduce este código en GitHub para completar el inicio de sesión…',
+    'Cancel': 'Cancelar',
+    'Create token on GitHub ↗': 'Crear token en GitHub ↗',
+    'Connect token': 'Conectar token',
+    'Use a classic token with \'repo\' scope, or a fine-grained token with \'Contents: Read-only\' access.': 'Usa un token clásico con permiso «repo» o un token detallado con acceso «Contents: Read-only».',
+    'Manage credentials saved by this copy or older/deleted copies of Launcher.': 'Administra las credenciales guardadas por esta copia o copias antiguas/eliminadas de Launcher.',
+    'Clear old copies': 'Borrar copias antiguas',
+    'Clear old copies ({n})': 'Borrar copias antiguas ({n})',
+    'Clear all from credential store': 'Borrar todo del almacén de credenciales',
+    'Click again to clear all credentials': 'Haz clic de nuevo para borrar todas las credenciales',
+    'This copy': 'Esta copia',
+    'Deleted copy': 'Copia eliminada',
+    'Old / other copy': 'Copia antigua / otra',
+    'Delete': 'Eliminar',
+    'Private': 'Privado',
+    'Public': 'Público',
+    'Add': 'Añadir',
+    'Added': 'Añadido',
+    'Remove': 'Quitar',
+    'Confirm': 'Confirmar',
+    'Remove from Launcher': 'Quitar de Launcher',
+    'Click again to remove from Launcher': 'Haz clic de nuevo para quitar de Launcher',
+    'Add Repository to Launcher': 'Añadir repositorio a Launcher',
+    'Display name': 'Nombre para mostrar',
+    'Where should this appear?': '¿Dónde debería aparecer?',
+    'Main app library': 'Biblioteca principal de apps',
+    'Short-lived tools & utilities': 'Herramientas y utilidades temporales',
+    'Games library': 'Biblioteca de juegos',
+    'Add to Launcher': 'Añadir a Launcher',
   },
 };
 
@@ -967,6 +1161,7 @@ function openSettings() {
   closeCardMenu();
   closeBell();
   syncNav();
+  post({ cmd: 'githubListCredentials' });
 }
 
 function closeSettings() {
@@ -1118,6 +1313,7 @@ function renderSettings() {
   renderSchemes();
   renderLastCheck();
   renderActivity();
+  renderGitHubSettings();
 }
 
 function patchSettings(patch) {
@@ -1797,6 +1993,9 @@ function buildAppCard(a) {
     b.append(badgeInfo.text);
     badges.append(b);
   }
+  if (a.private) {
+    badges.append(h('span', 'hud-badge warn', t('Private')));
+  }
   if (a.portable != null) {
     const pTag = h('span', `hud-badge${a.portable ? ' good' : ''}`, a.portable ? t('Portable') : t('Not portable'));
     pTag.title = a.portable
@@ -2164,6 +2363,19 @@ function fillCardMenu(a) {
       keepOpen: !armed,
     });
   }
+
+  if (a.custom) {
+    if (!a.installed) el.cardMenu.append(h('div', 'cm-sep'));
+    const armed = state.removeArmedId === a.id;
+    const label = armed
+      ? t('Click again to remove from Launcher')
+      : t('Remove from Launcher');
+    addItem(label, () => removeCustomClick(a.id), {
+      cls: armed ? 'danger armed' : 'danger',
+      disabled: busy,
+      keepOpen: !armed,
+    });
+  }
 }
 
 function uninstallClick(id) {
@@ -2389,6 +2601,451 @@ function reportMenuCheck() {
   }
 }
 
+/* ------------------- GitHub Account, OS Credential Store & Custom Apps */
+
+function setRepoMsg(kind, text) {
+  state.repoMsg = text ? { kind, text } : null;
+  renderGitHubSettings();
+}
+
+function setAuthMsg(kind, text) {
+  state.authMsg = text ? { kind, text } : null;
+  renderGitHubSettings();
+}
+
+function categoryLabel(cat) {
+  if (cat === 'temporary') return t('Temporary Apps');
+  if (cat === 'games') return t('Games');
+  return t('Apps');
+}
+
+function inspectGitHubRepo(input) {
+  const val = (input || '').trim();
+  if (!val) {
+    setRepoMsg('bad', t('Paste a GitHub repository link (for example, https://github.com/owner/repo).'));
+    return;
+  }
+  state.repoBusy = true;
+  setRepoMsg('info', t('Looking up repository on GitHub…'));
+  post({ cmd: 'customAppInspect', input: val });
+}
+
+function openAddAppModal(preview) {
+  state.pendingRepo = preview;
+  state.pendingCategory = 'apps';
+  el.addAppSlug.textContent = preview.repo;
+  el.addAppName.value = preview.name || '';
+  el.addAppMeta.replaceChildren();
+
+  const badges = h('div', 'modal-meta-badges');
+  if (preview.private) badges.append(h('span', 'hud-badge warn', t('Private')));
+  else badges.append(h('span', 'hud-badge', t('Public')));
+  if (preview.latestVersion) {
+    badges.append(h('span', 'hud-badge good', `v${preview.latestVersion}`));
+  } else if (preview.hasReleases) {
+    badges.append(h('span', 'hud-badge warn', t('No matching {os} package yet', { os: CURRENT_OS })));
+  } else {
+    badges.append(h('span', 'hud-badge', t('No release yet')));
+  }
+  if (Array.isArray(preview.platforms) && preview.platforms.length) {
+    badges.append(h('span', 'hud-badge info', preview.platforms.join(' · ')));
+  }
+  el.addAppMeta.append(badges);
+
+  if (preview.tagline) {
+    el.addAppMeta.append(h('div', '', preview.tagline));
+  }
+  if (preview.matchedAsset) {
+    el.addAppMeta.append(h('div', 'meta', t('Package: {file}', { file: preview.matchedAsset })));
+  }
+
+  el.addAppCats.forEach((b) => b.classList.toggle('on', b.dataset.cat === state.pendingCategory));
+  el.addAppModal.classList.add('on');
+  setTimeout(() => el.addAppName.focus(), 20);
+}
+
+function closeAddAppModal() {
+  state.pendingRepo = null;
+  el.addAppModal.classList.remove('on');
+}
+
+function confirmAddAppModal() {
+  const p = state.pendingRepo;
+  if (!p) return;
+  post({
+    cmd: 'customAppAdd',
+    repo: p.repo,
+    name: el.addAppName.value.trim() || p.name,
+    publisher: p.publisher,
+    tagline: p.tagline,
+    category: state.pendingCategory,
+    platforms: p.platforms,
+    private: !!p.private,
+    ownFormat: !!p.ownFormat,
+  });
+  closeAddAppModal();
+}
+
+function removeCustomClick(id) {
+  clearTimeout(state.removeArmedTimer);
+  if (state.removeArmedId === id) {
+    state.removeArmedId = null;
+    closeCardMenu();
+    post({ cmd: 'customAppRemove', id, uninstall: false });
+  } else {
+    state.removeArmedId = id;
+    state.removeArmedTimer = setTimeout(() => {
+      state.removeArmedId = null;
+      if (state.openMenuId === id) {
+        const a = library.apps.find((x) => x.id === id);
+        if (a) fillCardMenu(a);
+      }
+      renderCustomAppsList();
+    }, 4500);
+    if (state.openMenuId === id) {
+      const a = library.apps.find((x) => x.id === id);
+      if (a) fillCardMenu(a);
+    }
+    renderCustomAppsList();
+  }
+}
+
+function renderCustomAppsList() {
+  const list = Array.isArray(state.settings.customApps) ? state.settings.customApps : [];
+  el.customAppsWrap.classList.toggle('on', list.length > 0);
+  el.customAppsCount.textContent = list.length ? String(list.length) : '';
+  el.customAppsList.replaceChildren();
+
+  for (const c of list) {
+    const row = h('div', 'gh-row');
+    const main = h('div', 'gh-row-main');
+    const title = h('div', 'gh-row-title');
+    title.append(document.createTextNode(c.name));
+    if (c.private) title.append(h('span', 'hud-badge warn', t('Private')));
+    main.append(title, h('div', 'gh-row-sub', c.repo));
+
+    const acts = h('div', 'gh-row-acts');
+    const sel = document.createElement('select');
+    sel.className = 'select';
+    sel.setAttribute('aria-label', t('Section for {name}', { name: c.name }));
+    for (const [val, label] of [
+      ['apps', t('Apps')],
+      ['temporary', t('Temporary Apps')],
+      ['games', t('Games')],
+    ]) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if ((c.category || 'apps') === val) opt.selected = true;
+      sel.append(opt);
+    }
+    sel.addEventListener('change', () => {
+      post({ cmd: 'customAppMoveCategory', id: c.id, category: sel.value });
+    });
+
+    const armed = state.removeArmedId === c.id;
+    const rm = h('button', `btn compact ${armed ? 'danger' : 'ghost'}`, armed ? t('Confirm') : t('Remove'));
+    rm.type = 'button';
+    rm.addEventListener('click', () => removeCustomClick(c.id));
+
+    acts.append(sel, rm);
+    row.append(main, acts);
+    el.customAppsList.append(row);
+  }
+}
+
+function renderPrivateRepos() {
+  const show = !!state.auth.loggedIn;
+  el.ghPrivWrap.classList.toggle('on', show);
+  if (!show) return;
+
+  el.btnGhRefRepos.disabled = state.privLoading;
+  el.ghPrivList.replaceChildren();
+
+  if (state.privLoading) {
+    el.ghPrivList.append(h('div', 'gh-list-empty', t('Loading private repositories…')));
+    return;
+  }
+  if (state.privError) {
+    el.ghPrivList.append(h('div', 'gh-list-empty', state.privError));
+    return;
+  }
+
+  const q = (state.privFilter || '').trim().toLowerCase();
+  const filtered = state.privateRepos.filter((r) => {
+    if (!q) return true;
+    return `${r.fullName} ${r.description || ''}`.toLowerCase().includes(q);
+  });
+
+  if (filtered.length === 0) {
+    el.ghPrivList.append(h('div', 'gh-list-empty', q
+      ? t('No private repositories match “{q}”.', { q: state.privFilter.trim() })
+      : t('No private repositories found for this GitHub account.')));
+    return;
+  }
+
+  const existingRepos = new Set(library.apps.map((a) => (a.repo || '').toLowerCase()));
+  for (const r of filtered) {
+    const row = h('div', 'gh-row');
+    const main = h('div', 'gh-row-main');
+    const title = h('div', 'gh-row-title');
+    title.append(document.createTextNode(r.fullName), h('span', 'hud-badge warn', t('Private')));
+    main.append(title);
+    if (r.description) main.append(h('div', 'gh-row-sub', r.description));
+
+    const acts = h('div', 'gh-row-acts');
+    const added = existingRepos.has(r.fullName.toLowerCase());
+    const btn = h('button', `btn compact${added ? '' : ' primary'}`, added ? t('Added') : t('Add'));
+    btn.type = 'button';
+    btn.disabled = added || state.repoBusy;
+    if (!added) {
+      btn.addEventListener('click', () => inspectGitHubRepo(r.fullName));
+    }
+    acts.append(btn);
+    row.append(main, acts);
+    el.ghPrivList.append(row);
+  }
+}
+
+function renderStoredCredentials() {
+  const storeName = state.auth.storeName || (CURRENT_OS === 'MacOS' ? 'macOS Keychain' : 'Windows Credential Manager');
+  el.ghStoreName.textContent = storeName;
+  const creds = state.credentials || [];
+  el.ghCredCount.textContent = state.credsLoaded
+    ? (creds.length === 1 ? t('1 saved entry') : t('{n} saved entries', { n: creds.length }))
+    : '';
+
+  el.ghCredList.replaceChildren();
+  if (!state.credsLoaded) {
+    el.ghCredList.append(h('div', 'gh-list-empty', t('Checking OS credential store…')));
+  } else if (creds.length === 0) {
+    el.ghCredList.append(h('div', 'gh-list-empty', t('No Launcher credentials saved in {store}.', { store: storeName })));
+  } else {
+    for (const c of creds) {
+      const row = h('div', 'gh-row');
+      const main = h('div', 'gh-row-main');
+      const title = h('div', 'gh-row-title');
+      title.append(document.createTextNode(c.account ? `@${c.account}` : c.key));
+      if (c.method && c.method !== 'unknown') {
+        title.append(h('span', 'hud-badge info', c.method === 'oauth' ? 'OAuth' : 'PAT'));
+      }
+      if (c.isCurrent) {
+        title.append(h('span', 'hud-badge good', t('This copy')));
+      } else if (c.installDir && !c.dirExists) {
+        title.append(h('span', 'hud-badge bad', t('Deleted copy')));
+      } else {
+        title.append(h('span', 'hud-badge warn', t('Old / other copy')));
+      }
+      const subText = c.installDir ? `${c.installDir} (${c.key})` : c.key;
+      const sub = h('div', 'gh-row-sub', subText);
+      sub.title = subText;
+      main.append(title, sub);
+
+      const acts = h('div', 'gh-row-acts');
+      const del = h('button', 'btn compact ghost', t('Delete'));
+      del.type = 'button';
+      del.addEventListener('click', () => {
+        post({ cmd: 'githubDeleteCredential', key: c.key, account: c.account || '' });
+      });
+      acts.append(del);
+      row.append(main, acts);
+      el.ghCredList.append(row);
+    }
+  }
+
+  const oldCount = creds.filter((c) => !c.isCurrent).length;
+  el.btnGhClearOld.disabled = oldCount === 0;
+  el.btnGhClearOld.textContent = oldCount > 0
+    ? t('Clear old copies ({n})', { n: oldCount })
+    : t('Clear old copies');
+
+  el.btnGhClearAll.disabled = creds.length === 0 && !state.auth.loggedIn;
+  el.btnGhClearAll.textContent = state.clearAllArmed
+    ? t('Click again to clear all credentials')
+    : t('Clear all from credential store');
+}
+
+function renderGitHubSettings() {
+  // Custom repo add controls
+  el.btnGhAddRepo.disabled = state.repoBusy;
+  el.btnGhAddRepo.textContent = state.repoBusy ? t('Checking…') : t('Add app');
+  el.ghRepoMsg.className = `gh-msg${state.repoMsg ? ` on ${state.repoMsg.kind || ''}` : ''}`;
+  el.ghRepoMsg.textContent = state.repoMsg ? state.repoMsg.text : '';
+
+  renderPrivateRepos();
+  renderCustomAppsList();
+
+  // GitHub Account pill & panels
+  const a = state.auth;
+  if (a.loggedIn) {
+    el.ghAuthPill.className = 'pill ok';
+    el.ghAuthPillText.textContent = a.username ? `@${a.username}` : t('Signed in');
+  } else if (state.oauth.state === 'starting' || state.oauth.state === 'pending' || state.authBusy) {
+    el.ghAuthPill.className = 'pill busy';
+    el.ghAuthPillText.textContent = t('Signing in…');
+  } else {
+    el.ghAuthPill.className = 'pill';
+    el.ghAuthPillText.textContent = t('Not signed in');
+  }
+
+  el.ghSignedIn.classList.toggle('on', !!a.loggedIn);
+  el.ghSignedOut.classList.toggle('on', !a.loggedIn);
+
+  if (a.loggedIn) {
+    el.ghUserName.textContent = a.username ? `@${a.username}` : t('GitHub User');
+    el.ghUserMethod.textContent = a.method === 'oauth' ? t('GitHub OAuth') : t('Personal Access Token');
+    el.ghUserAvatar.replaceChildren();
+    if (a.avatarUrl) {
+      const img = document.createElement('img');
+      img.src = a.avatarUrl;
+      img.alt = '';
+      el.ghUserAvatar.append(img);
+    } else {
+      el.ghUserAvatar.textContent = (a.username || 'G')[0].toUpperCase();
+    }
+  } else {
+    el.ghAuthModeBtns.forEach((b) => b.classList.toggle('on', b.dataset.authMode === state.authMode));
+    el.ghPanelOauth.classList.toggle('on', state.authMode === 'oauth');
+    el.ghPanelPat.classList.toggle('on', state.authMode === 'pat');
+
+    el.ghOauthCidRow.classList.toggle('hidden', !!a.hasBuiltinOauth);
+    if (!a.hasBuiltinOauth && document.activeElement !== el.ghOauthCid) {
+      el.ghOauthCid.value = state.settings.githubOauthClientId || '';
+    }
+
+    const pending = state.oauth.state === 'pending';
+    const starting = state.oauth.state === 'starting';
+    el.ghOauthStartRow.style.display = pending ? 'none' : 'flex';
+    el.btnGhOauth.disabled = starting || state.authBusy;
+    el.btnGhOauth.textContent = starting ? t('Starting sign-in…') : t('Sign in with GitHub');
+    el.ghDeviceBox.classList.toggle('on', pending);
+    if (pending) {
+      el.ghDeviceCode.textContent = state.oauth.userCode || '';
+    }
+
+    el.btnGhPat.disabled = state.authBusy;
+    el.btnGhPat.textContent = state.authBusy ? t('Connecting…') : t('Connect token');
+  }
+
+  el.ghAuthMsg.className = `gh-msg${state.authMsg ? ` on ${state.authMsg.kind || ''}` : ''}`;
+  el.ghAuthMsg.textContent = state.authMsg ? state.authMsg.text : '';
+
+  renderStoredCredentials();
+}
+
+// Event bindings for Custom Apps & Category Modal
+el.btnGhAddRepo.addEventListener('click', () => inspectGitHubRepo(el.ghRepoUrl.value));
+el.ghRepoUrl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    inspectGitHubRepo(el.ghRepoUrl.value);
+  }
+});
+el.btnGhRefRepos.addEventListener('click', () => {
+  state.privLoading = true;
+  state.privError = null;
+  renderPrivateRepos();
+  post({ cmd: 'githubFetchPrivateRepos' });
+});
+el.ghPrivFilter.addEventListener('input', () => {
+  state.privFilter = el.ghPrivFilter.value;
+  renderPrivateRepos();
+});
+
+el.addAppCats.forEach((btn) => btn.addEventListener('click', () => {
+  state.pendingCategory = btn.dataset.cat;
+  el.addAppCats.forEach((b) => b.classList.toggle('on', b.dataset.cat === state.pendingCategory));
+}));
+el.addAppCancel.addEventListener('click', closeAddAppModal);
+el.addAppClose.addEventListener('click', closeAddAppModal);
+el.addAppBack.addEventListener('click', closeAddAppModal);
+el.addAppConfirm.addEventListener('click', confirmAddAppModal);
+el.addAppName.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    confirmAddAppModal();
+  }
+});
+
+// Event bindings for GitHub Account & OS Credential Store
+el.ghAuthModeBtns.forEach((btn) => btn.addEventListener('click', () => {
+  state.authMode = btn.dataset.authMode;
+  setAuthMsg('', '');
+}));
+el.ghOauthCid.addEventListener('change', () => {
+  post({ cmd: 'githubSaveClientId', clientId: el.ghOauthCid.value.trim() });
+});
+el.linkGhDev.addEventListener('click', (e) => {
+  e.preventDefault();
+  post({ cmd: 'openUrl', url: 'https://github.com/settings/developers' });
+});
+el.linkGhTokens.addEventListener('click', (e) => {
+  e.preventDefault();
+  post({ cmd: 'openUrl', url: 'https://github.com/settings/tokens' });
+});
+el.btnGhOauth.addEventListener('click', () => {
+  setAuthMsg('', '');
+  post({ cmd: 'githubStartOAuth', clientId: el.ghOauthCid ? el.ghOauthCid.value.trim() : '' });
+});
+el.btnGhCopyCode.addEventListener('click', () => {
+  if (state.oauth.userCode && navigator.clipboard) {
+    navigator.clipboard.writeText(state.oauth.userCode).then(() => {
+      el.btnGhCopyCode.textContent = t('Copied!');
+      setTimeout(() => { el.btnGhCopyCode.textContent = t('Copy code'); }, 1800);
+    }).catch(() => {});
+  }
+});
+el.btnGhOpenDev.addEventListener('click', () => {
+  post({ cmd: 'openUrl', url: state.oauth.verificationUri || 'https://github.com/login/device' });
+});
+el.btnGhCancelOauth.addEventListener('click', () => {
+  post({ cmd: 'githubCancelOAuth' });
+});
+
+function submitPat() {
+  const tok = (el.ghPatInput.value || '').trim();
+  if (!tok) {
+    setAuthMsg('bad', t('Paste a GitHub Personal Access Token first.'));
+    return;
+  }
+  state.authBusy = true;
+  setAuthMsg('info', t('Verifying token with GitHub…'));
+  post({ cmd: 'githubLoginPat', token: tok });
+  el.ghPatInput.value = '';
+}
+el.btnGhPat.addEventListener('click', submitPat);
+el.ghPatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitPat();
+  }
+});
+el.btnGhLogout.addEventListener('click', () => {
+  setAuthMsg('', '');
+  post({ cmd: 'githubLogout' });
+});
+el.btnGhRefCreds.addEventListener('click', () => {
+  post({ cmd: 'githubListCredentials' });
+});
+el.btnGhClearOld.addEventListener('click', () => {
+  post({ cmd: 'githubClearOldCredentials' });
+});
+el.btnGhClearAll.addEventListener('click', () => {
+  clearTimeout(state.clearAllTimer);
+  if (state.clearAllArmed) {
+    state.clearAllArmed = false;
+    post({ cmd: 'githubClearAllCredentials' });
+    renderStoredCredentials();
+  } else {
+    state.clearAllArmed = true;
+    state.clearAllTimer = setTimeout(() => {
+      state.clearAllArmed = false;
+      renderStoredCredentials();
+    }, 4500);
+    renderStoredCredentials();
+  }
+});
+
 window.onHost = (msg) => {
   switch (msg.type) {
     case 'settings':
@@ -2418,8 +3075,90 @@ window.onHost = (msg) => {
       library.apps = msg.apps;
       renderLibrary();
       renderActivity();
+      renderPrivateRepos();
       checkBackgroundAppUpdates();
       reportMenuCheck();
+      break;
+    case 'githubAuth': {
+      const wasLoggedIn = !!state.auth.loggedIn;
+      state.auth = Object.assign({}, state.auth, msg.auth);
+      state.authBusy = false;
+      if (state.auth.loggedIn && !wasLoggedIn) {
+        state.privLoading = true;
+        state.privError = null;
+        setAuthMsg('ok', t('Signed in to GitHub and saved to {store}.', { store: state.auth.storeName }));
+      }
+      renderGitHubSettings();
+      break;
+    }
+    case 'githubOAuth':
+      state.oauth = {
+        state: msg.state || 'idle',
+        userCode: msg.userCode || '',
+        verificationUri: msg.verificationUri || 'https://github.com/login/device',
+      };
+      if (msg.state === 'idle') state.authBusy = false;
+      renderGitHubSettings();
+      break;
+    case 'githubAuthError':
+      state.authBusy = false;
+      state.oauth.state = 'idle';
+      setAuthMsg('bad', msg.message || t('GitHub sign-in failed.'));
+      break;
+    case 'githubCredentials':
+      state.credsLoaded = true;
+      state.credentials = Array.isArray(msg.credentials) ? msg.credentials : [];
+      renderStoredCredentials();
+      break;
+    case 'githubCredentialsCleared': {
+      const n = msg.removed || 0;
+      const store = state.auth.storeName;
+      if (msg.scope === 'all') {
+        setAuthMsg('ok', n
+          ? t('Cleared {n} credential(s) from {store}.', { n, store })
+          : t('No Launcher credentials remained in {store}.', { store }));
+      } else if (msg.scope === 'old') {
+        setAuthMsg('ok', n
+          ? t('Cleared {n} old/duplicate credential(s) from {store}.', { n, store })
+          : t('No old or duplicate credentials found in {store}.', { store }));
+      } else {
+        setAuthMsg('ok', t('Removed credential from {store}.', { store }));
+      }
+      break;
+    }
+    case 'githubCredentialsError':
+      setAuthMsg('bad', msg.message || t('Couldn’t access OS credential store.'));
+      break;
+    case 'githubPrivateRepos':
+      state.privLoading = false;
+      state.privError = null;
+      state.privateRepos = Array.isArray(msg.repos) ? msg.repos : [];
+      renderPrivateRepos();
+      break;
+    case 'githubPrivateReposError':
+      state.privLoading = false;
+      state.privError = msg.message || t('Couldn’t load private repositories.');
+      renderPrivateRepos();
+      break;
+    case 'repoPreview':
+      state.repoBusy = false;
+      setRepoMsg('', '');
+      openAddAppModal(msg.preview);
+      break;
+    case 'repoPreviewError':
+      state.repoBusy = false;
+      setRepoMsg('bad', msg.message || t('Couldn’t find that GitHub repository.'));
+      break;
+    case 'customAppAdded':
+      el.ghRepoUrl.value = '';
+      setRepoMsg('ok', t('Added {name} to {section}.', {
+        name: msg.name,
+        section: categoryLabel(msg.category),
+      }));
+      flashToast(
+        t('Added {name}', { name: msg.name }),
+        t('Populated into {section} — checking for releases.', { section: categoryLabel(msg.category) }),
+      );
       break;
   }
 };
@@ -2454,7 +3193,7 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('contextmenu', (e) => {
-  if (!e.target.closest('input[type=text], .notes-body, .log-body')) e.preventDefault();
+  if (!e.target.closest('input[type=text], input[type=password], .notes-body, .log-body')) e.preventDefault();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -2467,6 +3206,7 @@ document.addEventListener('keydown', (e) => {
     el.searchInput.focus();
     el.searchInput.select();
   } else if (e.key === 'Escape') {
+    if (el.addAppModal.classList.contains('on')) { closeAddAppModal(); return; }
     if (el.cardMenu.classList.contains('on')) { closeCardMenu(); return; }
     if (el.bellPopover.classList.contains('on')) { closeBell(); return; }
     if (state.settingsOpen) { closeSettings(); return; }
