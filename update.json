@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.20",
-      "published": "2026-11-27T07:09:23Z",
-      "notes": "## What's Changed\n* Release 0.3.19: Add GitHub apps from Settings, GitHub OAuth & PAT login, OS credential store & private repo updates by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/6\n* Remove GitHub OAuth, prune uninstalled private apps on PAT removal, and block removing installed apps by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/7\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.19...v0.3.20",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.20",
+      "version": "0.3.21",
+      "published": "2026-11-27T08:09:28Z",
+      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.20/Launcher-windows-x64.zip",
-        "size": 1695429,
-        "sha256": "ff24b77199aef6acbb8e7f474bbacbee6ca1e6150738a703dd93171ba8eeab89"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-windows-x64.zip",
+        "size": 1715110,
+        "sha256": "a6704e5151388bd57a9ee7a3e4f0e18078f353b8a31d6763e8c9829ac3a88de1"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2695168,
-          "sha256": "1976e30395791582ca04b61c583dd4fc16588a5552ffc3f94b2aced89d227838"
+          "size": 2735104,
+          "sha256": "924295425cc739fcbc733581c1c93093fe04c05b6841bab16b88c54ce8a60391"
         }
       ]
     },
     "stable": {
-      "version": "0.3.20",
-      "published": "2026-11-27T07:09:23Z",
-      "notes": "## What's Changed\n* Release 0.3.19: Add GitHub apps from Settings, GitHub OAuth & PAT login, OS credential store & private repo updates by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/6\n* Remove GitHub OAuth, prune uninstalled private apps on PAT removal, and block removing installed apps by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/7\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.19...v0.3.20",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.20",
+      "version": "0.3.21",
+      "published": "2026-11-27T08:09:28Z",
+      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.20/Launcher-windows-x64.zip",
-        "size": 1695429,
-        "sha256": "ff24b77199aef6acbb8e7f474bbacbee6ca1e6150738a703dd93171ba8eeab89"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-windows-x64.zip",
+        "size": 1715110,
+        "sha256": "a6704e5151388bd57a9ee7a3e4f0e18078f353b8a31d6763e8c9829ac3a88de1"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2695168,
-          "sha256": "1976e30395791582ca04b61c583dd4fc16588a5552ffc3f94b2aced89d227838"
+          "size": 2735104,
+          "sha256": "924295425cc739fcbc733581c1c93093fe04c05b6841bab16b88c54ce8a60391"
         }
       ]
     }
