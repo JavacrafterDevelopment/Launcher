@@ -10,8 +10,6 @@ mod updater;
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
@@ -26,7 +24,7 @@ use wry::{WebContext, WebView, WebViewBuilder};
 use wry::WebViewBuilderExtWindows;
 
 use apps::{AppEvent, Library};
-use github_auth::{AuthStatus, DeviceCode, GitHubUser, RepoPreview, RepoSummary, StoredCredential};
+use github_auth::{AuthStatus, GitHubUser, RepoPreview, RepoSummary, StoredCredential};
 use settings::{app_dir, data_dir, CustomApp, Settings};
 use updater::{Release, Target};
 
@@ -70,8 +68,7 @@ impl Update {
 }
 
 pub(crate) enum AuthEvent {
-    DeviceCodeReady(DeviceCode),
-    Connected { user: GitHubUser, method: String },
+    Connected(GitHubUser),
     Error(String),
     CredentialsListed(Result<Vec<StoredCredential>, String>),
     CredentialsCleared { scope: &'static str, result: Result<usize, String>, signed_out: bool },
@@ -116,8 +113,6 @@ struct App {
     last_bg_check: Option<Instant>,
     library: Library,
     proxy: EventLoopProxy<UserEvent>,
-    /// Cancels an active OAuth Device Flow poll thread if the user cancels or restarts.
-    oauth_cancel: Option<Arc<AtomicBool>>,
 }
 
 fn main() {
@@ -150,7 +145,13 @@ fn main() {
     }
 
     let mut settings = Settings::load();
-    github_auth::init_from_store(&mut settings);
+    let pat_removed_externally = github_auth::init_from_store(&mut settings);
+    if pat_removed_externally || github_auth::current_token().is_none() {
+        let pruned = apps::prune_uninstalled_private_apps(&mut settings);
+        if !pruned.is_empty() || pat_removed_externally {
+            let _ = settings.save();
+        }
+    }
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
@@ -232,7 +233,6 @@ fn main() {
         last_bg_check: None,
         library,
         proxy,
-        oauth_cancel: None,
     };
 
     event_loop.run(move |event, _, flow| {
@@ -603,43 +603,14 @@ impl App {
                 let _ = std::fs::create_dir_all(data_dir());
                 open_in_shell(data_dir());
             }
-            "githubSaveClientId" => {
-                let id = msg["clientId"]
-                    .as_str()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(String::from);
-                self.settings.github_oauth_client_id = id;
-                let _ = self.settings.save();
-                send(webview, json!({ "type": "settings", "settings": self.settings }));
-            }
-            "githubStartOAuth" => {
-                if let Some(cid) = msg["clientId"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
-                    if github_auth::BUILTIN_OAUTH_CLIENT_ID.trim().is_empty() {
-                        self.settings.github_oauth_client_id = Some(cid.to_string());
-                        let _ = self.settings.save();
-                        send(webview, json!({ "type": "settings", "settings": self.settings }));
-                    }
-                }
-                self.start_github_oauth(webview);
-            }
-            "githubCancelOAuth" => {
-                if let Some(cancel) = self.oauth_cancel.take() {
-                    cancel.store(true, Ordering::SeqCst);
-                }
-                send(webview, json!({ "type": "githubOAuth", "state": "idle" }));
-            }
             "githubLoginPat" => {
                 let token = msg["token"].as_str().unwrap_or_default().trim().to_string();
                 let proxy = self.proxy.clone();
                 std::thread::spawn(move || {
                     match github_auth::fetch_user(&token) {
-                        Ok(user) => match github_auth::save_active_token(&token, &user.login, "pat") {
+                        Ok(user) => match github_auth::save_active_token(&token, &user.login) {
                             Ok(()) => {
-                                let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Connected {
-                                    user,
-                                    method: "pat".into(),
-                                }));
+                                let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Connected(user)));
                             }
                             Err(e) => {
                                 let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
@@ -652,18 +623,9 @@ impl App {
                 });
             }
             "githubLogout" => {
-                if let Some(cancel) = self.oauth_cancel.take() {
-                    cancel.store(true, Ordering::SeqCst);
-                }
                 let account = self.settings.github_user.clone();
                 let _ = github_auth::sign_out(account.as_deref());
-                self.settings.github_user = None;
-                self.settings.github_avatar = None;
-                self.settings.github_method = None;
-                let _ = self.settings.save();
-                send(webview, json!({ "type": "settings", "settings": self.settings }));
-                self.push_auth(webview);
-                send(webview, json!({ "type": "githubPrivateRepos", "repos": [] }));
+                self.handle_pat_removed(webview);
                 self.spawn_list_credentials();
             }
             "githubListCredentials" => {
@@ -698,9 +660,6 @@ impl App {
                 });
             }
             "githubClearAllCredentials" => {
-                if let Some(cancel) = self.oauth_cancel.take() {
-                    cancel.store(true, Ordering::SeqCst);
-                }
                 let proxy = self.proxy.clone();
                 std::thread::spawn(move || {
                     let result = github_auth::clear_all_credentials();
@@ -805,9 +764,19 @@ impl App {
             }
             "customAppRemove" => {
                 let id = msg["id"].as_str().unwrap_or_default();
-                let uninstall = msg["uninstall"].as_bool().unwrap_or(false);
-                if uninstall {
-                    self.library.uninstall(id);
+                if self.library.is_installed(id) {
+                    let name = self.library.app_name(id).unwrap_or_else(|| id.to_string());
+                    send(webview, self.library.snapshot());
+                    send(
+                        webview,
+                        json!({
+                            "type": "customAppRemoveBlocked",
+                            "id": id,
+                            "name": name,
+                            "message": format!("{name} is still installed. Uninstall it first before removing it from Launcher."),
+                        }),
+                    );
+                    return false;
                 }
                 let before = self.settings.custom_apps.len();
                 self.settings.custom_apps.retain(|c| c.id != id);
@@ -834,6 +803,23 @@ impl App {
         );
     }
 
+    fn handle_pat_removed(&mut self, webview: &WebView) {
+        self.settings.github_user = None;
+        self.settings.github_avatar = None;
+        let pruned = apps::prune_uninstalled_private_apps(&mut self.settings);
+        let _ = self.settings.save();
+        if !pruned.is_empty() {
+            self.library.sync_custom_apps(&self.settings.custom_apps, self.settings.prereleases);
+        }
+        send(webview, json!({ "type": "settings", "settings": self.settings }));
+        self.push_auth(webview);
+        send(webview, json!({ "type": "githubPrivateRepos", "repos": [] }));
+        if !pruned.is_empty() {
+            send(webview, self.library.snapshot());
+            send(webview, json!({ "type": "privateAppsPruned", "names": pruned }));
+        }
+    }
+
     fn spawn_list_credentials(&self) {
         let proxy = self.proxy.clone();
         std::thread::spawn(move || {
@@ -850,109 +836,12 @@ impl App {
         });
     }
 
-    fn start_github_oauth(&mut self, webview: &WebView) {
-        let Some(client_id) = github_auth::resolve_oauth_client_id(&self.settings) else {
-            send(
-                webview,
-                json!({
-                    "type": "githubAuthError",
-                    "message": "Enter your GitHub OAuth App Client ID first (with Device Flow enabled), or sign in with a Personal Access Token.",
-                }),
-            );
-            return;
-        };
-        if let Some(prev) = self.oauth_cancel.take() {
-            prev.store(true, Ordering::SeqCst);
-        }
-        let cancel = Arc::new(AtomicBool::new(false));
-        self.oauth_cancel = Some(cancel.clone());
-        send(webview, json!({ "type": "githubOAuth", "state": "starting" }));
-
-        let proxy = self.proxy.clone();
-        std::thread::spawn(move || {
-            let code = match github_auth::start_device_flow(&client_id) {
-                Ok(c) => c,
-                Err(e) => {
-                    let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
-                    return;
-                }
-            };
-            let device_code = code.device_code.clone();
-            let mut interval = code.interval.max(5);
-            let deadline = Instant::now() + Duration::from_secs(code.expires_in.max(60));
-            let _ = proxy.send_event(UserEvent::Auth(AuthEvent::DeviceCodeReady(code)));
-
-            loop {
-                for _ in 0..(interval * 4) {
-                    if cancel.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    std::thread::sleep(Duration::from_millis(250));
-                }
-                if cancel.load(Ordering::SeqCst) {
-                    return;
-                }
-                if Instant::now() >= deadline {
-                    let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(
-                        "The GitHub sign-in code expired. Try again.".into(),
-                    )));
-                    return;
-                }
-                match github_auth::poll_device_token(&client_id, &device_code) {
-                    github_auth::DevicePoll::Pending => {}
-                    github_auth::DevicePoll::SlowDown(next) => interval = next.max(interval + 5),
-                    github_auth::DevicePoll::Token(token) => {
-                        match github_auth::fetch_user(&token) {
-                            Ok(user) => match github_auth::save_active_token(&token, &user.login, "oauth") {
-                                Ok(()) => {
-                                    let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Connected {
-                                        user,
-                                        method: "oauth".into(),
-                                    }));
-                                }
-                                Err(e) => {
-                                    let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
-                                }
-                            },
-                            Err(e) => {
-                                let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
-                            }
-                        }
-                        return;
-                    }
-                    github_auth::DevicePoll::Error(e) => {
-                        let _ = proxy.send_event(UserEvent::Auth(AuthEvent::Error(e)));
-                        return;
-                    }
-                }
-            }
-        });
-    }
-
     fn on_auth_event(&mut self, event: AuthEvent, webview: &WebView) {
         match event {
-            AuthEvent::DeviceCodeReady(code) => {
-                if code.verification_uri.starts_with("https://github.com/") {
-                    open_in_shell(&code.verification_uri);
-                }
-                send(
-                    webview,
-                    json!({
-                        "type": "githubOAuth",
-                        "state": "pending",
-                        "userCode": code.user_code,
-                        "verificationUri": code.verification_uri,
-                        "expiresIn": code.expires_in,
-                    }),
-                );
-            }
-            AuthEvent::Connected { user, method } => {
-                self.oauth_cancel = None;
+            AuthEvent::Connected(user) => {
                 self.settings.github_user = Some(user.login);
                 self.settings.github_avatar = user.avatar_url;
-                self.settings.github_method = Some(method);
                 let _ = self.settings.save();
-                send(webview, json!({ "type": "githubOAuth", "state": "idle" }));
                 send(webview, json!({ "type": "settings", "settings": self.settings }));
                 self.push_auth(webview);
                 self.spawn_list_credentials();
@@ -962,8 +851,6 @@ impl App {
                 send(webview, self.library.snapshot());
             }
             AuthEvent::Error(message) => {
-                self.oauth_cancel = None;
-                send(webview, json!({ "type": "githubOAuth", "state": "idle" }));
                 send(webview, json!({ "type": "githubAuthError", "message": message }));
             }
             AuthEvent::CredentialsListed(res) => match res {
@@ -976,13 +863,7 @@ impl App {
             },
             AuthEvent::CredentialsCleared { scope, result, signed_out } => {
                 if signed_out {
-                    self.settings.github_user = None;
-                    self.settings.github_avatar = None;
-                    self.settings.github_method = None;
-                    let _ = self.settings.save();
-                    send(webview, json!({ "type": "settings", "settings": self.settings }));
-                    self.push_auth(webview);
-                    send(webview, json!({ "type": "githubPrivateRepos", "repos": [] }));
+                    self.handle_pat_removed(webview);
                 }
                 match result {
                     Ok(removed) => {

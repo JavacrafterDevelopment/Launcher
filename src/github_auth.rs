@@ -25,14 +25,6 @@ use crate::updater::{
 pub const CRED_PREFIX: &str = "JavacrafterLauncher";
 const CRED_GITHUB_PREFIX: &str = "JavacrafterLauncher/github/";
 
-/// Optional compile-time GitHub OAuth App Client ID for Device Flow login.
-/// Can be set at build time via `LAUNCHER_GITHUB_CLIENT_ID`, or configured at
-/// runtime in Settings → GitHub Account.
-pub const BUILTIN_OAUTH_CLIENT_ID: &str = match option_env!("LAUNCHER_GITHUB_CLIENT_ID") {
-    Some(id) => id,
-    None => "",
-};
-
 static TOKEN: RwLock<Option<String>> = RwLock::new(None);
 
 /// Returns the currently active GitHub token from process memory, if signed in.
@@ -91,9 +83,7 @@ pub struct AuthStatus {
     pub logged_in: bool,
     pub username: Option<String>,
     pub avatar_url: Option<String>,
-    pub method: Option<String>,
     pub store_name: &'static str,
-    pub has_builtin_oauth: bool,
     pub current_key: String,
 }
 
@@ -104,9 +94,7 @@ impl AuthStatus {
             logged_in,
             username: if logged_in { settings.github_user.clone() } else { None },
             avatar_url: if logged_in { settings.github_avatar.clone() } else { None },
-            method: if logged_in { settings.github_method.clone() } else { None },
             store_name: store_name(),
-            has_builtin_oauth: !BUILTIN_OAUTH_CLIENT_ID.trim().is_empty(),
             current_key: current_cred_key(),
         }
     }
@@ -152,65 +140,35 @@ pub struct RepoPreview {
     pub has_releases: bool,
 }
 
-/// Response from GitHub's OAuth Device Flow initiation endpoint.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceCode {
-    #[serde(alias = "device_code")]
-    pub device_code: String,
-    #[serde(alias = "user_code")]
-    pub user_code: String,
-    #[serde(alias = "verification_uri")]
-    pub verification_uri: String,
-    #[serde(alias = "expires_in")]
-    pub expires_in: u64,
-    #[serde(default = "default_poll_interval")]
-    pub interval: u64,
-}
-
-fn default_poll_interval() -> u64 {
-    5
-}
-
-pub enum DevicePoll {
-    Pending,
-    SlowDown(u64),
-    Token(String),
-    Error(String),
-}
-
-/// Loads this copy's saved GitHub token from the OS credential store on startup.
-pub fn init_from_store(settings: &mut Settings) {
+/// Loads this copy's saved GitHub PAT from the OS credential store on startup.
+/// Returns `true` if a previously saved login was removed from the OS store.
+pub fn init_from_store(settings: &mut Settings) -> bool {
     let key = current_cred_key();
     match os_store::read_token(&key) {
-        Ok(Some((token, account, method))) => {
+        Ok(Some((token, account, _method))) => {
             set_current_token(Some(token));
             if settings.github_user.is_none() && !account.is_empty() {
                 settings.github_user = Some(account);
             }
-            if settings.github_method.is_none() && !method.is_empty() {
-                settings.github_method = Some(method);
-            }
+            false
         }
         _ => {
             set_current_token(None);
-            if settings.github_user.is_some()
-                || settings.github_avatar.is_some()
-                || settings.github_method.is_some()
-            {
+            let had_login = settings.github_user.is_some() || settings.github_avatar.is_some();
+            if had_login {
                 settings.github_user = None;
                 settings.github_avatar = None;
-                settings.github_method = None;
                 let _ = settings.save();
             }
+            had_login
         }
     }
 }
 
-/// Saves the token in the OS credential store for this copy of Launcher and activates it.
-pub fn save_active_token(token: &str, username: &str, method: &str) -> Result<(), String> {
+/// Saves the PAT in the OS credential store for this copy of Launcher and activates it.
+pub fn save_active_token(token: &str, username: &str) -> Result<(), String> {
     let key = current_cred_key();
-    let comment = encode_comment(method, &app_dir().display().to_string());
+    let comment = encode_comment("pat", &app_dir().display().to_string());
     os_store::write_token(&key, username, &comment, token)?;
     set_current_token(Some(token.to_string()));
     Ok(())
@@ -299,105 +257,7 @@ fn decode_comment(comment: &str) -> (String, String) {
     }
 }
 
-/* ----------------------------------------------------- GitHub OAuth & API */
-
-fn form_encode(val: &str) -> String {
-    let mut out = String::with_capacity(val.len());
-    for b in val.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
-            b' ' => out.push_str("%20"),
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
-/// Resolves the effective OAuth Client ID (built-in constant or user-configured in Settings).
-pub fn resolve_oauth_client_id(settings: &Settings) -> Option<String> {
-    let builtin = BUILTIN_OAUTH_CLIENT_ID.trim();
-    if !builtin.is_empty() {
-        return Some(builtin.to_string());
-    }
-    settings
-        .github_oauth_client_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-}
-
-/// Starts GitHub's OAuth Device Flow (`POST https://github.com/login/device/code`).
-pub fn start_device_flow(client_id: &str) -> Result<DeviceCode, String> {
-    let client_id = client_id.trim();
-    if client_id.is_empty() {
-        return Err("Enter a GitHub OAuth App Client ID first, or sign in with a Personal Access Token.".into());
-    }
-    let body = format!(
-        "client_id={}&scope={}",
-        form_encode(client_id),
-        form_encode("repo read:user")
-    );
-    let mut resp = agent()
-        .post("https://github.com/login/device/code")
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .send(&body)
-        .map_err(|_| "Couldn't reach GitHub to start sign-in. Are you online?".to_string())?;
-    let status = resp.status().as_u16();
-    let v: serde_json::Value = resp
-        .body_mut()
-        .read_json()
-        .map_err(|e| format!("GitHub returned an unreadable OAuth response ({e})."))?;
-    if status != 200 || v.get("error").is_some() {
-        let desc = v["error_description"]
-            .as_str()
-            .or_else(|| v["error"].as_str())
-            .unwrap_or("GitHub rejected the OAuth Client ID. Make sure Device Flow is enabled on your GitHub OAuth App.");
-        return Err(desc.to_string());
-    }
-    serde_json::from_value::<DeviceCode>(v)
-        .map_err(|e| format!("Unexpected OAuth device code response ({e})."))
-}
-
-/// Polls GitHub once for Device Flow authorization completion.
-pub fn poll_device_token(client_id: &str, device_code: &str) -> DevicePoll {
-    let body = format!(
-        "client_id={}&device_code={}&grant_type={}",
-        form_encode(client_id),
-        form_encode(device_code),
-        form_encode("urn:ietf:params:oauth:grant-type:device_code")
-    );
-    let mut resp = match agent()
-        .post("https://github.com/login/oauth/access_token")
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .send(&body)
-    {
-        Ok(r) => r,
-        Err(_) => return DevicePoll::Pending, // transient network blip
-    };
-    let Ok(v) = resp.body_mut().read_json::<serde_json::Value>() else {
-        return DevicePoll::Pending;
-    };
-    if let Some(tok) = v["access_token"].as_str().filter(|s| !s.is_empty()) {
-        return DevicePoll::Token(tok.to_string());
-    }
-    match v["error"].as_str().unwrap_or("") {
-        "authorization_pending" => DevicePoll::Pending,
-        "slow_down" => DevicePoll::SlowDown(v["interval"].as_u64().unwrap_or(10)),
-        "expired_token" => DevicePoll::Error("The sign-in code expired. Try signing in again.".into()),
-        "access_denied" => DevicePoll::Error("GitHub sign-in was cancelled.".into()),
-        other => {
-            let desc = v["error_description"].as_str().unwrap_or(other);
-            DevicePoll::Error(if desc.is_empty() {
-                "GitHub sign-in failed.".into()
-            } else {
-                desc.to_string()
-            })
-        }
-    }
-}
+/* ------------------------------------------------------------- GitHub API */
 
 /// Validates a GitHub token and fetches the authenticated user profile.
 pub fn fetch_user(token: &str) -> Result<GitHubUser, String> {
