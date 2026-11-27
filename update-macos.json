@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.19",
-      "published": "2026-11-26T22:16:25Z",
-      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
+      "version": "0.3.20",
+      "published": "2026-11-27T07:09:23Z",
+      "notes": "## What's Changed\n* Release 0.3.19: Add GitHub apps from Settings, GitHub OAuth & PAT login, OS credential store & private repo updates by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/6\n* Remove GitHub OAuth, prune uninstalled private apps on PAT removal, and block removing installed apps by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/7\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.19...v0.3.20",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.20",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-macos.zip",
-        "size": 3702198,
-        "sha256": "805aa261144b4e593e4638e08640dc1762ef81fea362d73737eec8a2ba8572c4"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.20/Launcher-macos.zip",
+        "size": 3678750,
+        "sha256": "dec20b94594449ec45f5face84b8274c4cbcd6557c00a314d9f21c3ab47052b7"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "f6b18890f0cdfec3478cbcce16e64315ed02af438eea3db314fe5f14604a9811"
+          "sha256": "868fb426d28e4fa82cea58f05e39727d46ca138e122814211a849a87786dd46a"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 6051392,
-          "sha256": "19c1a5ee4a9c1c02690e4d8af16f7b95abba73977ad2dc4eb3abad897ff276ba"
+          "size": 5985744,
+          "sha256": "127a01c857db72831a34ea9ec37e097f485cfddac1de17299b6b1ff7c395fbb2"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.19",
-      "published": "2026-11-26T22:16:25Z",
-      "notes": "## What's Changed\n* Release 0.3.18: Blue rocket taskbar icon, EN/ES/RU language selector, new app icons & Current Version by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/5\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.18...v0.3.19",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.19",
+      "version": "0.3.20",
+      "published": "2026-11-27T07:09:23Z",
+      "notes": "## What's Changed\n* Release 0.3.19: Add GitHub apps from Settings, GitHub OAuth & PAT login, OS credential store & private repo updates by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/6\n* Remove GitHub OAuth, prune uninstalled private apps on PAT removal, and block removing installed apps by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/7\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.19...v0.3.20",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.20",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.19/Launcher-macos.zip",
-        "size": 3702198,
-        "sha256": "805aa261144b4e593e4638e08640dc1762ef81fea362d73737eec8a2ba8572c4"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.20/Launcher-macos.zip",
+        "size": 3678750,
+        "sha256": "dec20b94594449ec45f5face84b8274c4cbcd6557c00a314d9f21c3ab47052b7"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "f6b18890f0cdfec3478cbcce16e64315ed02af438eea3db314fe5f14604a9811"
+          "sha256": "868fb426d28e4fa82cea58f05e39727d46ca138e122814211a849a87786dd46a"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 6051392,
-          "sha256": "19c1a5ee4a9c1c02690e4d8af16f7b95abba73977ad2dc4eb3abad897ff276ba"
+          "size": 5985744,
+          "sha256": "127a01c857db72831a34ea9ec37e097f485cfddac1de17299b6b1ff7c395fbb2"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
