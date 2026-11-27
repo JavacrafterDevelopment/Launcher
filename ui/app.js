@@ -138,9 +138,10 @@ const el = {
   ghAuthPillText:  $('gh-auth-pill-text'),
   ghSignedIn:      $('gh-auth-signed-in'),
   ghSignedOut:     $('gh-auth-signed-out'),
-  ghUserAvatar:    $('gh-user-avatar'),
-  ghUserName:      $('gh-user-name'),
-  btnGhLogout:     $('btn-gh-logout'),
+  ghAccountsList:  $('gh-accounts-list'),
+  ghAccountsCount: $('gh-accounts-count'),
+  ghLoginDesc:     $('gh-login-desc'),
+  ghPatLabel:      $('gh-pat-label'),
   linkGhTokens:    $('link-gh-tokens'),
   ghPatInput:      $('gh-pat-input'),
   btnGhPat:        $('btn-gh-pat'),
@@ -197,10 +198,12 @@ const state = {
     loggedIn: false,
     username: null,
     avatarUrl: null,
+    accounts: [],
     storeName: CURRENT_OS === 'MacOS' ? 'macOS Keychain' : 'Windows Credential Manager',
     currentKey: '',
   }, BOOT.auth || {}),
   authBusy:         false,
+  signingOut:       {},             // login -> true while its sign-out is in flight
   authMsg:          null,           // { kind: 'ok'|'bad'|'info', text }
   credentials:      [],
   credsLoaded:      false,
@@ -490,6 +493,20 @@ const I18N = {
     'Cancel': 'Отмена',
     'Create token on GitHub ↗': 'Создать токен на GitHub ↗',
     'Connect token': 'Подключить токен',
+    'Signed-in accounts': 'Подключённые аккаунты',
+    'Launcher uses whichever account can see each repository, so you can add a friend\'s token to test their private apps. The first account is used for public repositories.': 'Launcher использует тот аккаунт, у которого есть доступ к репозиторию, поэтому можно добавить токен друга, чтобы тестировать его приватные приложения. Первый аккаунт используется для публичных репозиториев.',
+    'Add another Personal Access Token, like a friend\'s, to install and test private apps they made. Each token is stored separately in your OS credential store.': 'Добавьте ещё один персональный токен, например токен друга, чтобы устанавливать и тестировать его приватные приложения. Каждый токен хранится отдельно в системном хранилище учётных данных.',
+    'Add another token': 'Добавить ещё токен',
+    'Add token': 'Добавить токен',
+    '{n} accounts': 'Аккаунтов: {n}',
+    'Default': 'Основной',
+    '1 more private repository': 'Ещё 1 приватный репозиторий',
+    '{n} more private repositories': 'Ещё приватных репозиториев: {n}',
+    'Signing out…': 'Выход…',
+    'via @{login}': 'через @{login}',
+    'Using the token for @{login}': 'Используется токен @{login}',
+    'Updated the token for @{login} in {store}.': 'Токен @{login} обновлён в {store}.',
+    'Added @{login} and saved the token to {store}.': 'Аккаунт @{login} добавлен, токен сохранён в {store}.',
     'Use a classic token with \'repo\' scope, or a fine-grained token with \'Contents: Read-only\' access.': 'Используйте классический токен с правом «repo» или fine-grained токен с доступом «Contents: Read-only».',
     'Manage credentials saved by this copy or older/deleted copies of Launcher.': 'Управление учётными данными, сохранёнными этой или старыми/удалёнными копиями Launcher.',
     'Clear old copies': 'Очистить старые копии',
@@ -765,6 +782,20 @@ const I18N = {
     'Cancel': 'Cancelar',
     'Create token on GitHub ↗': 'Crear token en GitHub ↗',
     'Connect token': 'Conectar token',
+    'Signed-in accounts': 'Cuentas conectadas',
+    'Launcher uses whichever account can see each repository, so you can add a friend\'s token to test their private apps. The first account is used for public repositories.': 'Launcher usa la cuenta que tenga acceso a cada repositorio, así que puedes añadir el token de un amigo para probar sus apps privadas. La primera cuenta se usa para los repositorios públicos.',
+    'Add another Personal Access Token, like a friend\'s, to install and test private apps they made. Each token is stored separately in your OS credential store.': 'Añade otro token de acceso personal, como el de un amigo, para instalar y probar las apps privadas que hizo. Cada token se guarda por separado en el almacén de credenciales del sistema.',
+    'Add another token': 'Añadir otro token',
+    'Add token': 'Añadir token',
+    '{n} accounts': '{n} cuentas',
+    'Default': 'Predeterminada',
+    '1 more private repository': '1 repositorio privado más',
+    '{n} more private repositories': '{n} repositorios privados más',
+    'Signing out…': 'Cerrando sesión…',
+    'via @{login}': 'con @{login}',
+    'Using the token for @{login}': 'Usando el token de @{login}',
+    'Updated the token for @{login} in {store}.': 'Se actualizó el token de @{login} en {store}.',
+    'Added @{login} and saved the token to {store}.': 'Se añadió @{login} y se guardó el token en {store}.',
     'Use a classic token with \'repo\' scope, or a fine-grained token with \'Contents: Read-only\' access.': 'Usa un token clásico con permiso «repo» o un token detallado con acceso «Contents: Read-only».',
     'Manage credentials saved by this copy or older/deleted copies of Launcher.': 'Administra las credenciales guardadas por esta copia o copias antiguas/eliminadas de Launcher.',
     'Clear old copies': 'Borrar copias antiguas',
@@ -2629,6 +2660,9 @@ function openAddAppModal(preview) {
   if (preview.matchedAsset) {
     el.addAppMeta.append(h('div', 'meta', t('Package: {file}', { file: preview.matchedAsset })));
   }
+  if (preview.private && preview.account && authAccounts().length > 1) {
+    el.addAppMeta.append(h('div', 'meta', t('Using the token for @{login}', { login: preview.account })));
+  }
 
   el.addAppCats.forEach((b) => b.classList.toggle('on', b.dataset.cat === state.pendingCategory));
   el.addAppModal.classList.add('on');
@@ -2653,6 +2687,7 @@ function confirmAddAppModal() {
     platforms: p.platforms,
     private: !!p.private,
     ownFormat: !!p.ownFormat,
+    account: p.account || '',
   });
   closeAddAppModal();
 }
@@ -2707,7 +2742,8 @@ function renderCustomAppsList() {
     title.append(document.createTextNode(c.name));
     if (c.private) title.append(h('span', 'hud-badge warn', t('Private')));
     if (live && live.installed) title.append(h('span', 'hud-badge good', t('Installed')));
-    main.append(title, h('div', 'gh-row-sub', c.repo));
+    const via = c.private && c.account && authAccounts().length > 1 ? ` · ${t('via @{login}', { login: c.account })}` : '';
+    main.append(title, h('div', 'gh-row-sub', `${c.repo}${via}`));
 
     const acts = h('div', 'gh-row-acts');
     const sel = document.createElement('select');
@@ -2740,7 +2776,7 @@ function renderCustomAppsList() {
 }
 
 function renderPrivateRepos() {
-  const show = !!state.auth.loggedIn;
+  const show = authAccounts().length > 0;
   el.ghPrivWrap.classList.toggle('on', show);
   if (!show) return;
 
@@ -2775,6 +2811,7 @@ function renderPrivateRepos() {
     const main = h('div', 'gh-row-main');
     const title = h('div', 'gh-row-title');
     title.append(document.createTextNode(r.fullName), h('span', 'hud-badge warn', t('Private')));
+    if (r.account && authAccounts().length > 1) title.append(h('span', 'hud-badge info', `@${r.account}`));
     main.append(title);
     if (r.description) main.append(h('div', 'gh-row-sub', r.description));
 
@@ -2844,10 +2881,63 @@ function renderStoredCredentials() {
     ? t('Clear old copies ({n})', { n: oldCount })
     : t('Clear old copies');
 
-  el.btnGhClearAll.disabled = creds.length === 0 && !state.auth.loggedIn;
+  el.btnGhClearAll.disabled = creds.length === 0 && authAccounts().length === 0;
   el.btnGhClearAll.textContent = state.clearAllArmed
     ? t('Click again to clear all credentials')
     : t('Clear all from credential store');
+}
+
+/** Signed-in accounts, default first. Falls back to the single-account fields. */
+function authAccounts() {
+  const a = state.auth || {};
+  if (Array.isArray(a.accounts)) return a.accounts;
+  return a.loggedIn && a.username ? [{ login: a.username, avatarUrl: a.avatarUrl }] : [];
+}
+
+function renderAccountsList(accounts) {
+  el.ghAccountsList.replaceChildren();
+  accounts.forEach((acc, i) => {
+    const row = h('div', 'gh-row');
+    const user = h('div', 'gh-row-user');
+    const avatar = h('div', 'gh-avatar small');
+    if (acc.avatarUrl) {
+      const img = document.createElement('img');
+      img.src = acc.avatarUrl;
+      img.alt = '';
+      avatar.append(img);
+    } else {
+      avatar.textContent = (acc.login || 'G')[0].toUpperCase();
+    }
+    const main = h('div', 'gh-row-main');
+    const title = h('div', 'gh-row-title');
+    title.append(document.createTextNode(`@${acc.login}`));
+    if (i === 0 && accounts.length > 1) title.append(h('span', 'hud-badge good', t('Default')));
+    let subText;
+    if (i === 0) {
+      subText = t('Private repositories enabled · 5,000 GitHub requests/hour');
+    } else {
+      const n = state.privateRepos.filter((r) => (r.account || '').toLowerCase() === acc.login.toLowerCase()).length;
+      subText = state.privLoading
+        ? t('Loading private repositories…')
+        : (n === 1 ? t('1 more private repository') : t('{n} more private repositories', { n }));
+    }
+    main.append(title, h('div', 'gh-row-sub', subText));
+    user.append(avatar, main);
+
+    const acts = h('div', 'gh-row-acts');
+    const busy = !!state.signingOut[acc.login];
+    const out = h('button', 'btn compact ghost', busy ? t('Signing out…') : t('Sign out'));
+    out.type = 'button';
+    out.disabled = busy;
+    out.addEventListener('click', () => {
+      state.signingOut[acc.login] = true;
+      setAuthMsg('', '');
+      post({ cmd: 'githubLogout', login: acc.login });
+    });
+    acts.append(out);
+    row.append(user, acts);
+    el.ghAccountsList.append(row);
+  });
 }
 
 function renderGitHubSettings() {
@@ -2861,10 +2951,13 @@ function renderGitHubSettings() {
   renderCustomAppsList();
 
   // GitHub Account pill & panels
-  const a = state.auth;
-  if (a.loggedIn) {
+  const accounts = authAccounts();
+  if (accounts.length > 1) {
     el.ghAuthPill.className = 'pill ok';
-    el.ghAuthPillText.textContent = a.username ? `@${a.username}` : t('Signed in');
+    el.ghAuthPillText.textContent = t('{n} accounts', { n: accounts.length });
+  } else if (accounts.length === 1) {
+    el.ghAuthPill.className = 'pill ok';
+    el.ghAuthPillText.textContent = `@${accounts[0].login}`;
   } else if (state.authBusy) {
     el.ghAuthPill.className = 'pill busy';
     el.ghAuthPillText.textContent = t('Signing in…');
@@ -2873,24 +2966,19 @@ function renderGitHubSettings() {
     el.ghAuthPillText.textContent = t('Not signed in');
   }
 
-  el.ghSignedIn.classList.toggle('on', !!a.loggedIn);
-  el.ghSignedOut.classList.toggle('on', !a.loggedIn);
+  el.ghSignedIn.classList.toggle('on', accounts.length > 0);
+  el.ghAccountsCount.textContent = accounts.length > 1 ? String(accounts.length) : '';
+  renderAccountsList(accounts);
 
-  if (a.loggedIn) {
-    el.ghUserName.textContent = a.username ? `@${a.username}` : t('GitHub User');
-    el.ghUserAvatar.replaceChildren();
-    if (a.avatarUrl) {
-      const img = document.createElement('img');
-      img.src = a.avatarUrl;
-      img.alt = '';
-      el.ghUserAvatar.append(img);
-    } else {
-      el.ghUserAvatar.textContent = (a.username || 'G')[0].toUpperCase();
-    }
-  } else {
-    el.btnGhPat.disabled = state.authBusy;
-    el.btnGhPat.textContent = state.authBusy ? t('Connecting…') : t('Connect token');
-  }
+  // The token form stays available so more accounts (a friend's, say) can be added.
+  el.ghLoginDesc.textContent = accounts.length
+    ? t('Add another Personal Access Token, like a friend\'s, to install and test private apps they made. Each token is stored separately in your OS credential store.')
+    : t('Sign in with a Personal Access Token to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.');
+  el.ghPatLabel.textContent = accounts.length ? t('Add another token') : t('Personal Access Token');
+  el.btnGhPat.disabled = state.authBusy;
+  el.btnGhPat.textContent = state.authBusy
+    ? t('Connecting…')
+    : (accounts.length ? t('Add token') : t('Connect token'));
 
   el.ghAuthMsg.className = `gh-msg${state.authMsg ? ` on ${state.authMsg.kind || ''}` : ''}`;
   el.ghAuthMsg.textContent = state.authMsg ? state.authMsg.text : '';
@@ -2956,10 +3044,6 @@ el.ghPatInput.addEventListener('keydown', (e) => {
     submitPat();
   }
 });
-el.btnGhLogout.addEventListener('click', () => {
-  setAuthMsg('', '');
-  post({ cmd: 'githubLogout' });
-});
 el.btnGhRefCreds.addEventListener('click', () => {
   post({ cmd: 'githubListCredentials' });
 });
@@ -3017,15 +3101,28 @@ window.onHost = (msg) => {
       reportMenuCheck();
       break;
     case 'githubAuth': {
-      const wasLoggedIn = !!state.auth.loggedIn;
       state.auth = Object.assign({}, state.auth, msg.auth);
       state.authBusy = false;
-      if (state.auth.loggedIn && !wasLoggedIn) {
-        state.privLoading = true;
-        state.privError = null;
-        setAuthMsg('ok', t('Signed in to GitHub and saved to {store}.', { store: state.auth.storeName }));
+      const live = new Set(authAccounts().map((a) => a.login));
+      for (const login of Object.keys(state.signingOut)) {
+        if (!live.has(login)) delete state.signingOut[login];
       }
       renderGitHubSettings();
+      break;
+    }
+    case 'githubAccountAdded': {
+      state.authBusy = false;
+      state.privLoading = true;
+      state.privError = null;
+      const store = state.auth.storeName;
+      const login = msg.login || '';
+      if (!msg.isNew) {
+        setAuthMsg('ok', t('Updated the token for @{login} in {store}.', { login, store }));
+      } else if (authAccounts().length > 1) {
+        setAuthMsg('ok', t('Added @{login} and saved the token to {store}.', { login, store }));
+      } else {
+        setAuthMsg('ok', t('Signed in to GitHub and saved to {store}.', { store }));
+      }
       break;
     }
     case 'githubAuthError':
@@ -3054,6 +3151,7 @@ window.onHost = (msg) => {
       break;
     }
     case 'githubCredentialsError':
+      state.signingOut = {};
       setAuthMsg('bad', msg.message || t('Couldn’t access OS credential store.'));
       break;
     case 'githubPrivateRepos':
@@ -3061,6 +3159,7 @@ window.onHost = (msg) => {
       state.privError = null;
       state.privateRepos = Array.isArray(msg.repos) ? msg.repos : [];
       renderPrivateRepos();
+      renderAccountsList(authAccounts());
       break;
     case 'githubPrivateReposError':
       state.privLoading = false;

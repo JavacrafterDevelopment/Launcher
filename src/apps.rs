@@ -1574,25 +1574,32 @@ pub fn is_custom_app_installed(c: &crate::settings::CustomApp, root: &std::path:
     false
 }
 
-/// Removes private custom apps that are not installed on disk when the user's GitHub PAT
-/// is removed. Installed private apps and all public apps are preserved. Returns the
-/// display names of the removed apps.
-pub fn prune_uninstalled_private_apps(settings: &mut crate::settings::Settings) -> Vec<String> {
+/// Removes private custom apps that are not installed on disk once no signed-in GitHub
+/// account can reach them: apps added with an account that is no longer in `signed_in`,
+/// or, for apps that don't record an account, once nobody is signed in at all. Installed
+/// private apps and all public apps are preserved. Returns the display names of the
+/// removed apps.
+pub fn prune_uninstalled_private_apps(settings: &mut crate::settings::Settings, signed_in: &[String]) -> Vec<String> {
     let root = settings.apps_root();
-    prune_uninstalled_private_apps_with(settings, |c| is_custom_app_installed(c, &root))
+    prune_uninstalled_private_apps_with(settings, signed_in, |c| is_custom_app_installed(c, &root))
 }
 
 fn prune_uninstalled_private_apps_with<F>(
     settings: &mut crate::settings::Settings,
+    signed_in: &[String],
     mut is_installed: F,
 ) -> Vec<String>
 where
     F: FnMut(&crate::settings::CustomApp) -> bool,
 {
+    let reachable = |c: &crate::settings::CustomApp| match c.account.as_deref() {
+        Some(login) => signed_in.iter().any(|l| l.eq_ignore_ascii_case(login)),
+        None => !signed_in.is_empty(),
+    };
     let mut removed_ids = std::collections::HashSet::new();
     let mut removed_names = Vec::new();
     settings.custom_apps.retain(|c| {
-        if c.private && !is_installed(c) {
+        if c.private && !reachable(c) && !is_installed(c) {
             removed_ids.insert(c.id.clone());
             removed_names.push(c.name.clone());
             false
@@ -1657,6 +1664,7 @@ mod tests {
         use crate::settings::{CustomApp, Settings};
 
         let make = |id: &str, name: &str, private: bool| CustomApp {
+            account: None,
             id: id.into(),
             name: name.into(),
             folder: name.into(),
@@ -1682,7 +1690,7 @@ mod tests {
             "pub-uninstalled".into(),
         ];
 
-        let removed = prune_uninstalled_private_apps_with(&mut settings, |c| {
+        let removed = prune_uninstalled_private_apps_with(&mut settings, &[], |c| {
             c.id == "priv-installed" || c.id == "pub-installed"
         });
 
@@ -1690,5 +1698,40 @@ mod tests {
         let remaining: Vec<&str> = settings.custom_apps.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(remaining, vec!["priv-installed", "pub-uninstalled", "pub-installed"]);
         assert_eq!(settings.pinned, vec!["priv-installed", "pub-uninstalled"]);
+    }
+
+    #[test]
+    fn prune_only_drops_private_apps_of_the_removed_account() {
+        use crate::settings::{CustomApp, Settings};
+
+        let make = |id: &str, account: Option<&str>| CustomApp {
+            id: id.into(),
+            name: id.into(),
+            folder: id.into(),
+            repo: format!("someone/{id}"),
+            tagline: String::new(),
+            publisher: "someone".into(),
+            category: "apps".into(),
+            platforms: vec!["Windows".into()],
+            private: true,
+            own_format: false,
+            account: account.map(String::from),
+        };
+        let mut settings = Settings::default();
+        settings.custom_apps = vec![make("mine", Some("me")), make("friends", Some("Friend")), make("legacy", None)];
+
+        // The friend's token was removed; mine is still signed in.
+        let removed = prune_uninstalled_private_apps_with(&mut settings, &["me".into()], |_| false);
+        assert_eq!(removed, vec!["friends".to_string()]);
+        let left: Vec<&str> = settings.custom_apps.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(left, vec!["mine", "legacy"]);
+
+        // Account names match case-insensitively.
+        let removed = prune_uninstalled_private_apps_with(&mut settings, &["ME".into()], |_| false);
+        assert!(removed.is_empty());
+
+        // Last account gone: everything private and uninstalled goes.
+        let removed = prune_uninstalled_private_apps_with(&mut settings, &[], |_| false);
+        assert_eq!(removed, vec!["mine".to_string(), "legacy".to_string()]);
     }
 }

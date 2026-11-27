@@ -4,18 +4,22 @@
 //! - Windows: Windows Credential Manager (`CredWriteW` / `CredReadW` / `CredEnumerateW` / `CredDeleteW`)
 //! - macOS: macOS Keychain (`/usr/bin/security`)
 //!
-//! Each copy of Launcher keys its credential under `JavacrafterLauncher/github/<install-tag>`
-//! so multiple or previously deleted copies can be enumerated and cleared cleanly from
-//! Settings without leaving stale or duplicated entries behind.
+//! Each copy of Launcher can hold several GitHub accounts (your own token plus, say, a
+//! friend's for testing their private apps). Every account's token is keyed under
+//! `JavacrafterLauncher/github/<install-tag>/<login>`. Copies from before multiple
+//! accounts used a single `JavacrafterLauncher/github/<install-tag>` entry; that entry
+//! is still read and counts as one of this copy's accounts. Entries left by other or
+//! deleted copies can be enumerated and cleared from Settings.
 //!
-//! Raw tokens are kept only in process memory (`TOKEN`) and are never serialized to
+//! Raw tokens are kept only in process memory (`ACCOUNTS`) and are never serialized to
 //! `data/settings.json` or sent to the WebView.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::RwLock;
 
-use crate::settings::{app_dir, Settings};
+use crate::settings::{app_dir, GitHubAccount, Settings};
 use crate::updater::{
     agent, api_base, detect_platforms_from_assets, parse_version_lenient, select_release_asset_for_os,
     GhAsset, GhRelease,
@@ -25,18 +29,111 @@ use crate::updater::{
 pub const CRED_PREFIX: &str = "JavacrafterLauncher";
 const CRED_GITHUB_PREFIX: &str = "JavacrafterLauncher/github/";
 
-static TOKEN: RwLock<Option<String>> = RwLock::new(None);
-
-/// Returns the currently active GitHub token from process memory, if signed in.
-pub fn current_token() -> Option<String> {
-    TOKEN.read().ok().and_then(|g| g.clone())
+/// One signed-in account held in memory.
+#[derive(Clone)]
+struct Account {
+    login: String,
+    token: String,
+    /// The credential store entry holding this token.
+    key: String,
 }
 
-/// Replaces the in-memory GitHub token.
-pub fn set_current_token(token: Option<String>) {
-    if let Ok(mut g) = TOKEN.write() {
-        *g = token.filter(|t| !t.trim().is_empty());
+static ACCOUNTS: RwLock<Vec<Account>> = RwLock::new(Vec::new());
+
+/// Which account's token can see a repository: lowercase `owner/repo` to lowercase login.
+/// Filled from the app list, the private-repo listing and on-demand probes.
+static REPO_ACCOUNT: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
+
+fn accounts() -> Vec<Account> {
+    ACCOUNTS.read().map(|g| g.clone()).unwrap_or_default()
+}
+
+/// True when at least one GitHub account is signed in.
+pub fn has_accounts() -> bool {
+    ACCOUNTS.read().is_ok_and(|g| !g.is_empty())
+}
+
+/// Logins of the signed-in accounts, default first.
+pub fn account_logins() -> Vec<String> {
+    accounts().into_iter().map(|a| a.login).collect()
+}
+
+fn token_of(login: &str) -> Option<String> {
+    ACCOUNTS
+        .read()
+        .ok()
+        .and_then(|g| g.iter().find(|a| a.login.eq_ignore_ascii_case(login)).map(|a| a.token.clone()))
+}
+
+/// Records which account can see `repo`, so later checks and downloads use that token.
+pub fn remember_repo_account(repo: &str, login: &str) {
+    if repo.is_empty() || login.is_empty() {
+        return;
     }
+    if let Ok(mut g) = REPO_ACCOUNT.write() {
+        g.get_or_insert_with(HashMap::new)
+            .insert(repo.to_ascii_lowercase(), login.to_ascii_lowercase());
+    }
+}
+
+/// Forgets every repo-to-account pairing, e.g. after an account was added or removed,
+/// so the next request probes again.
+pub fn forget_repo_accounts() {
+    if let Ok(mut g) = REPO_ACCOUNT.write() {
+        *g = None;
+    }
+}
+
+fn remembered_account(repo: &str) -> Option<String> {
+    REPO_ACCOUNT
+        .read()
+        .ok()
+        .and_then(|g| g.as_ref().and_then(|m| m.get(&repo.to_ascii_lowercase()).cloned()))
+}
+
+/// The token to use for `repo`: the account remembered for it, or else the first
+/// account whose token GitHub lets see the repository (probed once and remembered),
+/// or else the default account. None when nobody is signed in.
+pub fn token_for_repo(repo: &str) -> Option<String> {
+    let all = accounts();
+    match all.len() {
+        0 => return None,
+        1 => return Some(all[0].token.clone()),
+        _ => {}
+    }
+    if let Some(tok) = remembered_account(repo).and_then(|login| token_of(&login)) {
+        return Some(tok);
+    }
+    let mut definitive = true;
+    for a in &all {
+        match probe_repo(repo, &a.token) {
+            Some(200) => {
+                remember_repo_account(repo, &a.login);
+                return Some(a.token.clone());
+            }
+            Some(_) => {}
+            None => definitive = false,
+        }
+    }
+    // No token sees it: use the default, and don't probe again every check unless
+    // the network was the problem.
+    if definitive {
+        remember_repo_account(repo, &all[0].login);
+    }
+    Some(all[0].token.clone())
+}
+
+/// HTTP status of `GET /repos/{repo}` with `token`, or None when GitHub couldn't be reached.
+fn probe_repo(repo: &str, token: &str) -> Option<u16> {
+    let url = format!("{}/repos/{repo}", api_base());
+    agent()
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("Authorization", &format!("Bearer {token}"))
+        .call()
+        .ok()
+        .map(|r| r.status().as_u16())
 }
 
 /// Human-readable name of the credential store for this OS.
@@ -59,9 +156,19 @@ pub fn install_tag() -> String {
     format!("{:08x}", (hash ^ (hash >> 32)) as u32)
 }
 
-/// Credential key/service name for this copy of Launcher.
+/// This copy's single-account credential key, from before multiple accounts.
 pub fn current_cred_key() -> String {
     format!("{CRED_GITHUB_PREFIX}{}", install_tag())
+}
+
+/// Credential key for one account of this copy of Launcher.
+fn account_cred_key(login: &str) -> String {
+    format!("{}/{}", current_cred_key(), login.to_ascii_lowercase())
+}
+
+/// True when `key` is one of this copy's credentials (legacy or per-account).
+fn is_this_copy(key: &str, current: &str) -> bool {
+    key == current || key.strip_prefix(current).is_some_and(|rest| rest.starts_with('/') && rest.len() > 1)
 }
 
 /// One Launcher credential entry discovered in the OS credential store (no secret included).
@@ -76,24 +183,45 @@ pub struct StoredCredential {
     pub dir_exists: bool,
 }
 
+/// One signed-in account as the WebView sees it.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountStatus {
+    pub login: String,
+    pub avatar_url: Option<String>,
+}
+
 /// Non-secret auth summary sent to the WebView.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthStatus {
     pub logged_in: bool,
+    /// The default account's login.
     pub username: Option<String>,
     pub avatar_url: Option<String>,
+    pub accounts: Vec<AccountStatus>,
     pub store_name: &'static str,
     pub current_key: String,
 }
 
 impl AuthStatus {
     pub fn from_settings(settings: &Settings) -> Self {
-        let logged_in = current_token().is_some();
+        let accounts: Vec<AccountStatus> = account_logins()
+            .into_iter()
+            .map(|login| {
+                let avatar_url = settings
+                    .github_accounts
+                    .iter()
+                    .find(|a| a.login.eq_ignore_ascii_case(&login))
+                    .and_then(|a| a.avatar_url.clone());
+                AccountStatus { login, avatar_url }
+            })
+            .collect();
         Self {
-            logged_in,
-            username: if logged_in { settings.github_user.clone() } else { None },
-            avatar_url: if logged_in { settings.github_avatar.clone() } else { None },
+            logged_in: !accounts.is_empty(),
+            username: accounts.first().map(|a| a.login.clone()),
+            avatar_url: accounts.first().and_then(|a| a.avatar_url.clone()),
+            accounts,
             store_name: store_name(),
             current_key: current_cred_key(),
         }
@@ -122,6 +250,8 @@ pub struct RepoSummary {
     pub private: bool,
     pub updated_at: String,
     pub html_url: String,
+    /// Login of the signed-in account that can see this repository.
+    pub account: String,
 }
 
 /// Preview shown in the "Where should this app appear?" popup before adding a repo.
@@ -138,47 +268,135 @@ pub struct RepoPreview {
     pub latest_version: Option<String>,
     pub matched_asset: Option<String>,
     pub has_releases: bool,
+    /// Login of the signed-in account whose token reached the repository, if any.
+    pub account: Option<String>,
 }
 
-/// Loads this copy's saved GitHub PAT from the OS credential store on startup.
-/// Returns `true` if a previously saved login was removed from the OS store.
-pub fn init_from_store(settings: &mut Settings) -> bool {
-    let key = current_cred_key();
-    match os_store::read_token(&key) {
-        Ok(Some((token, account, _method))) => {
-            set_current_token(Some(token));
-            if settings.github_user.is_none() && !account.is_empty() {
-                settings.github_user = Some(account);
-            }
-            false
-        }
-        _ => {
-            set_current_token(None);
-            let had_login = settings.github_user.is_some() || settings.github_avatar.is_some();
-            if had_login {
-                settings.github_user = None;
-                settings.github_avatar = None;
-                let _ = settings.save();
-            }
-            had_login
+/// Loads this copy's saved GitHub accounts from the OS credential store on startup, in
+/// the order Settings lists them. Returns the logins Settings remembered whose token is
+/// no longer in the store (removed from outside Launcher); Settings is updated to match.
+pub fn init_from_store(settings: &mut Settings) -> Vec<String> {
+    let cur = current_cred_key();
+    let mut keys: Vec<String> = os_store::list_entries()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|e| e.key)
+        .filter(|k| is_this_copy(k, &cur))
+        .collect();
+    // Enumeration can come back short; read the expected keys directly too.
+    let expected = std::iter::once(cur.clone())
+        .chain(settings.github_accounts.iter().map(|a| account_cred_key(&a.login)));
+    for k in expected {
+        if !keys.contains(&k) {
+            keys.push(k);
         }
     }
+
+    let mut found: Vec<Account> = Vec::new();
+    for key in keys {
+        let Ok(Some((token, account, _method))) = os_store::read_token(&key) else {
+            continue;
+        };
+        let login = if !account.trim().is_empty() {
+            account
+        } else if let Some(l) = key.strip_prefix(&format!("{cur}/")) {
+            l.to_string()
+        } else if let Some(first) = settings.github_accounts.first() {
+            // A legacy entry saved without a username: it belonged to the one account.
+            first.login.clone()
+        } else {
+            "github".to_string()
+        };
+        match found.iter_mut().find(|a| a.login.eq_ignore_ascii_case(&login)) {
+            // Prefer the per-account entry over the legacy one for the same login.
+            Some(existing) => {
+                if existing.key == cur {
+                    *existing = Account { login, token, key };
+                }
+            }
+            None => found.push(Account { login, token, key }),
+        }
+    }
+
+    // Settings order first, then anything only the store knew about.
+    let mut ordered: Vec<Account> = Vec::new();
+    let mut removed = Vec::new();
+    for meta in &settings.github_accounts {
+        if let Some(pos) = found.iter().position(|a| a.login.eq_ignore_ascii_case(&meta.login)) {
+            ordered.push(found.remove(pos));
+        } else {
+            removed.push(meta.login.clone());
+        }
+    }
+    ordered.extend(found);
+
+    let before = settings.github_accounts.clone();
+    settings.github_accounts = ordered
+        .iter()
+        .map(|a| GitHubAccount {
+            login: a.login.clone(),
+            avatar_url: before
+                .iter()
+                .find(|m| m.login.eq_ignore_ascii_case(&a.login))
+                .and_then(|m| m.avatar_url.clone()),
+        })
+        .collect();
+    if settings.github_accounts != before {
+        let _ = settings.save();
+    }
+    if let Ok(mut g) = ACCOUNTS.write() {
+        *g = ordered;
+    }
+    forget_repo_accounts();
+    removed
 }
 
-/// Saves the PAT in the OS credential store for this copy of Launcher and activates it.
-pub fn save_active_token(token: &str, username: &str) -> Result<(), String> {
-    let key = current_cred_key();
+/// Saves the PAT in the OS credential store under its own account key and activates it
+/// alongside any accounts already signed in. Signing in again as the same login replaces
+/// that account's token. Returns true when the account is new.
+pub fn add_account(token: &str, username: &str) -> Result<bool, String> {
+    let key = account_cred_key(username);
     let comment = encode_comment("pat", &app_dir().display().to_string());
     os_store::write_token(&key, username, &comment, token)?;
-    set_current_token(Some(token.to_string()));
-    Ok(())
+    let mut stale_key = None;
+    let is_new = {
+        let mut g = ACCOUNTS.write().map_err(|_| "Account list is unavailable.".to_string())?;
+        if let Some(a) = g.iter_mut().find(|a| a.login.eq_ignore_ascii_case(username)) {
+            if a.key != key {
+                stale_key = Some(a.key.clone());
+            }
+            *a = Account { login: username.to_string(), token: token.to_string(), key };
+            false
+        } else {
+            g.push(Account { login: username.to_string(), token: token.to_string(), key });
+            true
+        }
+    };
+    // The same account was saved under the old single-account key: drop that copy.
+    if let Some(old) = stale_key {
+        let _ = os_store::delete_entry(&old, Some(username));
+    }
+    forget_repo_accounts();
+    Ok(is_new)
 }
 
-/// Signs out this copy of Launcher by removing its entry from the OS credential store.
-pub fn sign_out(account: Option<&str>) -> Result<(), String> {
-    let key = current_cred_key();
-    set_current_token(None);
-    os_store::delete_entry(&key, account)
+/// Signs one account out of this copy of Launcher, removing its token from the OS
+/// credential store. Returns false when no such account was signed in.
+pub fn remove_account(login: &str) -> Result<bool, String> {
+    let removed = {
+        let mut g = ACCOUNTS.write().map_err(|_| "Account list is unavailable.".to_string())?;
+        g.iter()
+            .position(|a| a.login.eq_ignore_ascii_case(login))
+            .map(|pos| g.remove(pos))
+    };
+    forget_repo_accounts();
+    match removed {
+        Some(a) => {
+            os_store::delete_entry(&a.key, Some(&a.login))?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
 }
 
 /// Lists every Launcher credential currently in the OS credential store (including old copies).
@@ -186,61 +404,66 @@ pub fn list_credentials() -> Result<Vec<StoredCredential>, String> {
     let cur = current_cred_key();
     let mut entries = os_store::list_entries()?;
     for e in &mut entries {
-        e.is_current = e.key == cur;
+        e.is_current = is_this_copy(&e.key, &cur);
         e.dir_exists = !e.install_dir.is_empty() && Path::new(&e.install_dir).exists();
     }
-    // Current copy first, then newest/alphabetical.
+    // This copy's entries first, then alphabetical.
     entries.sort_by(|a, b| b.is_current.cmp(&a.is_current).then_with(|| a.key.cmp(&b.key)));
     Ok(entries)
 }
 
-/// Deletes one specific credential entry from the OS credential store.
-/// If it was the current copy's entry, also clears the in-memory token.
-pub fn delete_credential(key: &str, account: Option<&str>) -> Result<bool, String> {
+/// Deletes one specific credential entry from the OS credential store. If it held one
+/// of this copy's signed-in accounts, that account is signed out and its login returned.
+pub fn delete_credential(key: &str, account: Option<&str>) -> Result<Option<String>, String> {
     if !key.starts_with(CRED_PREFIX) {
         return Err("Refusing to delete a credential that does not belong to Launcher.".into());
     }
-    let was_current = key == current_cred_key();
     os_store::delete_entry(key, account)?;
-    if was_current {
-        set_current_token(None);
+    let removed = ACCOUNTS.write().ok().and_then(|mut g| {
+        g.iter().position(|a| a.key == key).map(|pos| g.remove(pos).login)
+    });
+    if removed.is_some() {
+        forget_repo_accounts();
     }
-    Ok(was_current)
+    Ok(removed)
 }
 
 /// Deletes every Launcher credential belonging to other or deleted copies of Launcher,
-/// keeping this copy's active credential intact.
+/// keeping this copy's accounts intact.
 pub fn clear_old_credentials() -> Result<usize, String> {
     let cur = current_cred_key();
     let entries = os_store::list_entries()?;
     let mut removed = 0;
     for e in entries {
-        if e.key != cur {
-            if os_store::delete_entry(&e.key, Some(&e.account)).is_ok() {
-                removed += 1;
-            }
+        if !is_this_copy(&e.key, &cur) && os_store::delete_entry(&e.key, Some(&e.account)).is_ok() {
+            removed += 1;
         }
     }
     Ok(removed)
 }
 
-/// Deletes EVERY Launcher credential from the OS credential store (current + old/duplicates)
-/// and signs out this copy.
-pub fn clear_all_credentials() -> Result<usize, String> {
+/// Deletes EVERY Launcher credential from the OS credential store (this copy's accounts
+/// and old/duplicate copies) and signs every account out. Returns how many entries were
+/// removed and the logins that were signed out.
+pub fn clear_all_credentials() -> Result<(usize, Vec<String>), String> {
     let entries = os_store::list_entries()?;
     let mut removed = 0;
+    let mut deleted_keys = Vec::new();
     for e in entries {
         if os_store::delete_entry(&e.key, Some(&e.account)).is_ok() {
             removed += 1;
+            deleted_keys.push(e.key);
         }
     }
-    // Also attempt direct deletion of this copy's key in case enumeration missed it.
-    let cur = current_cred_key();
-    if removed == 0 && os_store::delete_entry(&cur, None).is_ok() {
-        removed = 1;
+    // Also delete this copy's keys directly in case enumeration missed them.
+    let signed_in = ACCOUNTS.write().map(|mut g| std::mem::take(&mut *g)).unwrap_or_default();
+    for a in &signed_in {
+        if !deleted_keys.contains(&a.key) && os_store::delete_entry(&a.key, Some(&a.login)).is_ok() {
+            removed += 1;
+        }
     }
-    set_current_token(None);
-    Ok(removed)
+    forget_repo_accounts();
+    Ok((removed, signed_in.into_iter().map(|a| a.login).collect()))
 }
 
 fn encode_comment(method: &str, dir: &str) -> String {
@@ -300,11 +523,41 @@ struct GhOwner {
     login: String,
 }
 
-/// Lists private repositories accessible to the signed-in user.
+/// Lists private repositories every signed-in account can see, each tagged with the
+/// account that sees it (the first, when several do). An account whose listing fails is
+/// skipped; the call fails only when every account does.
 pub fn fetch_private_repos() -> Result<Vec<RepoSummary>, String> {
-    let Some(token) = current_token() else {
+    let all = accounts();
+    if all.is_empty() {
         return Err("Sign in to GitHub first to browse private repositories.".into());
-    };
+    }
+    let mut out: Vec<RepoSummary> = Vec::new();
+    let mut first_err = None;
+    let mut any_ok = false;
+    for a in &all {
+        match fetch_private_repos_for(&a.token, &a.login) {
+            Ok(repos) => {
+                any_ok = true;
+                for r in repos {
+                    if !out.iter().any(|o| o.full_name.eq_ignore_ascii_case(&r.full_name)) {
+                        remember_repo_account(&r.full_name, &a.login);
+                        out.push(r);
+                    }
+                }
+            }
+            Err(e) => {
+                let e = if all.len() > 1 { format!("@{}: {e}", a.login) } else { e };
+                first_err.get_or_insert(e);
+            }
+        }
+    }
+    match (any_ok, first_err) {
+        (false, Some(e)) => Err(e),
+        _ => Ok(out),
+    }
+}
+
+fn fetch_private_repos_for(token: &str, login: &str) -> Result<Vec<RepoSummary>, String> {
     let mut out = Vec::new();
     for page in 1..=2 {
         let url = format!(
@@ -335,6 +588,7 @@ pub fn fetch_private_repos() -> Result<Vec<RepoSummary>, String> {
                             private: true,
                             updated_at: r.updated_at.unwrap_or_default(),
                             html_url: r.html_url,
+                            account: login.to_string(),
                         });
                     }
                 }
@@ -342,8 +596,8 @@ pub fn fetch_private_repos() -> Result<Vec<RepoSummary>, String> {
                     break;
                 }
             }
-            401 => return Err("Your GitHub sign-in expired. Sign in again.".into()),
-            403 => return Err("Your GitHub token doesn't have permission to list private repositories (needs 'repo' or Contents read access).".into()),
+            401 => return Err("This GitHub token was rejected or has expired. Remove it and add a new one.".into()),
+            403 => return Err("This GitHub token doesn't have permission to list private repositories (needs 'repo' or Contents read access).".into()),
             s => return Err(format!("GitHub answered with HTTP {s}.")),
         }
     }
@@ -397,42 +651,72 @@ pub fn parse_github_repo(input: &str) -> Result<String, String> {
 /// Inspects a GitHub repository (public or private) to populate the category-chooser popup.
 pub fn inspect_repo(input: &str, prereleases: bool) -> Result<RepoPreview, String> {
     let repo_slug = parse_github_repo(input)?;
-    let token = current_token();
+
+    // Try the account remembered for this repo first, then every other signed-in
+    // account in order, so a friend's private repo is found with the friend's token.
+    let mut candidates: Vec<(String, String)> = accounts().into_iter().map(|a| (a.login, a.token)).collect();
+    if let Some(login) = remembered_account(&repo_slug) {
+        if let Some(pos) = candidates.iter().position(|(l, _)| l.eq_ignore_ascii_case(&login)) {
+            let c = candidates.remove(pos);
+            candidates.insert(0, c);
+        }
+    }
+    let signed_in = !candidates.is_empty();
 
     let repo_url = format!("{}/repos/{repo_slug}", api_base());
-    let mut req = agent()
-        .get(&repo_url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(tok) = &token {
-        req = req.header("Authorization", &format!("Bearer {tok}"));
+    let mut status = 0u16;
+    let mut found = None;
+    let attempts: Vec<Option<(String, String)>> = if signed_in {
+        candidates.into_iter().map(Some).collect()
+    } else {
+        vec![None]
+    };
+    for cand in attempts {
+        let mut req = agent()
+            .get(&repo_url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some((_, tok)) = &cand {
+            req = req.header("Authorization", &format!("Bearer {tok}"));
+        }
+        let resp = req
+            .call()
+            .map_err(|_| "Couldn't reach GitHub. Are you online?".to_string())?;
+        status = resp.status().as_u16();
+        if status == 200 {
+            found = Some((resp, cand));
+            break;
+        }
+        // 401/403/404 with one token: another account may still have access.
+        if !matches!(status, 401 | 403 | 404) {
+            break;
+        }
     }
-    let mut resp = req
-        .call()
-        .map_err(|_| "Couldn't reach GitHub. Are you online?".to_string())?;
-    match resp.status().as_u16() {
-        200 => {}
-        401 => return Err("Your GitHub sign-in expired. Sign in again in Settings.".into()),
-        403 | 429 => {
-            return Err(if token.is_some() {
-                "GitHub denied access to that repository.".into()
-            } else {
+    let Some((mut resp, chosen)) = found else {
+        return Err(match status {
+            401 => "A saved GitHub token was rejected or has expired. Remove it in Settings and add a new one.".into(),
+            403 | 429 if !signed_in => {
                 "GitHub's anonymous rate limit was reached. Sign in to GitHub below for 5,000 requests/hour.".into()
-            });
-        }
-        404 => {
-            return Err(if token.is_some() {
-                format!("Repository {repo_slug} wasn't found, or your account doesn't have access to it.")
-            } else {
-                format!("Repository {repo_slug} wasn't found. If it's a private repo, sign in to GitHub at the bottom of Settings first.")
-            });
-        }
-        s => return Err(format!("GitHub answered with HTTP {s}.")),
-    }
+            }
+            403 | 429 => "GitHub denied access to that repository.".into(),
+            404 if signed_in => {
+                format!("Repository {repo_slug} wasn't found, or none of your GitHub accounts have access to it. To use a friend's private repo, add their token in Settings.")
+            }
+            404 => format!("Repository {repo_slug} wasn't found. If it's a private repo, sign in to GitHub at the bottom of Settings first."),
+            s => format!("GitHub answered with HTTP {s}."),
+        });
+    };
+    let (account, token) = match chosen {
+        Some((login, tok)) => (Some(login), Some(tok)),
+        None => (None, None),
+    };
     let meta: GhRepoItem = resp
         .body_mut()
         .read_json()
         .map_err(|e| format!("Couldn't read repository metadata ({e})."))?;
+    if let Some(login) = &account {
+        remember_repo_account(&meta.full_name, login);
+    }
 
     // Check whether this repo publishes Launcher's `updates` branch (`update.json` / `update-macos.json`).
     let own_format = has_updates_branch(&meta.full_name, token.as_deref());
@@ -494,6 +778,7 @@ pub fn inspect_repo(input: &str, prereleases: bool) -> Result<RepoPreview, Strin
         latest_version,
         matched_asset,
         has_releases,
+        account,
     })
 }
 
@@ -937,6 +1222,60 @@ mod tests {
         assert!(parse_github_repo("https://gitlab.com/owner/repo").is_err());
         assert!(parse_github_repo("https://github.com/onlyowner").is_err());
         assert!(parse_github_repo("").is_err());
+    }
+
+    #[test]
+    fn this_copy_owns_its_legacy_and_per_account_keys_only() {
+        let cur = "JavacrafterLauncher/github/1234abcd";
+        assert!(is_this_copy(cur, cur));
+        assert!(is_this_copy("JavacrafterLauncher/github/1234abcd/alice", cur));
+        assert!(!is_this_copy("JavacrafterLauncher/github/1234abcd/", cur));
+        assert!(!is_this_copy("JavacrafterLauncher/github/1234abcdef", cur));
+        assert!(!is_this_copy("JavacrafterLauncher/github/deadbeef/alice", cur));
+    }
+
+    /// Runs against the file-backed store, so only where that store is the real one.
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    #[test]
+    fn several_accounts_sign_in_and_out_independently() {
+        let _ = clear_all_credentials();
+        // A token saved by a single-account copy, plus one account that has since vanished.
+        os_store::write_token(&current_cred_key(), "alice", "pat|here", "tok-a").unwrap();
+        let mut settings = Settings {
+            github_accounts: vec![
+                GitHubAccount { login: "alice".into(), avatar_url: Some("a.png".into()) },
+                GitHubAccount { login: "gone".into(), avatar_url: None },
+            ],
+            ..Settings::default()
+        };
+        assert_eq!(init_from_store(&mut settings), vec!["gone".to_string()]);
+        assert_eq!(account_logins(), vec!["alice"]);
+        assert_eq!(settings.github_accounts.len(), 1);
+        assert_eq!(settings.github_accounts[0].avatar_url.as_deref(), Some("a.png"));
+
+        // A friend's token is added beside it instead of replacing it.
+        assert!(add_account("tok-b", "Bob").unwrap());
+        assert_eq!(account_logins(), vec!["alice", "Bob"]);
+        remember_repo_account("Bob/Secret", "bob");
+        assert_eq!(token_for_repo("bob/secret").as_deref(), Some("tok-b"));
+
+        // Re-adding alice replaces her token and moves it off the legacy key.
+        assert!(!add_account("tok-a2", "alice").unwrap());
+        let keys: Vec<String> = list_credentials().unwrap().into_iter().map(|c| c.key).collect();
+        assert!(!keys.contains(&current_cred_key()), "{keys:?}");
+        assert!(keys.contains(&account_cred_key("alice")) && keys.contains(&account_cred_key("bob")));
+
+        // Signing the friend out leaves alice signed in; reloading finds the same.
+        assert!(remove_account("bob").unwrap());
+        assert_eq!(account_logins(), vec!["alice"]);
+        settings.github_accounts.push(GitHubAccount { login: "Bob".into(), avatar_url: None });
+        assert_eq!(init_from_store(&mut settings), vec!["Bob".to_string()]);
+        assert_eq!(token_for_repo("any/repo").as_deref(), Some("tok-a2"));
+
+        let (_, signed_out) = clear_all_credentials().unwrap();
+        assert_eq!(signed_out, vec!["alice"]);
+        assert!(!has_accounts());
+        let _ = std::fs::remove_file(crate::settings::data_dir().join("settings.json"));
     }
 
     #[test]
