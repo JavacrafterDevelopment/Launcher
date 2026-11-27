@@ -240,14 +240,10 @@ pub struct Settings {
     pub pinned: Vec<String>,
     /// User-added GitHub repositories populated into the launcher.
     pub custom_apps: Vec<CustomApp>,
-    /// Optional GitHub OAuth App Client ID for Device Flow login when none is compiled in.
-    pub github_oauth_client_id: Option<String>,
     /// Cached GitHub username for UI display (the token itself lives ONLY in the OS credential store).
     pub github_user: Option<String>,
     /// Cached GitHub avatar URL for UI display.
     pub github_avatar: Option<String>,
-    /// Cached GitHub login method ("oauth" or "pat").
-    pub github_method: Option<String>,
 }
 
 /// The colour schemes ui/app.css defines for Legacy look, the default first. Kept in data\
@@ -278,10 +274,8 @@ impl Default for Settings {
             sort: "name-asc".into(),
             pinned: Vec::new(),
             custom_apps: Vec::new(),
-            github_oauth_client_id: None,
             github_user: None,
             github_avatar: None,
-            github_method: None,
         }
     }
 }
@@ -466,7 +460,6 @@ mod tests {
                 own_format: false,
             }],
             github_user: Some("alice".into()),
-            github_method: Some("oauth".into()),
             ..Settings::default()
         };
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();

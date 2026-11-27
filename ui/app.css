@@ -2573,63 +2573,10 @@ code {
 }
 .gh-login-wrap.on { display: flex; }
 
-.gh-auth-panel {
-  display: none;
+.gh-pat-form {
+  display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.gh-auth-panel.on { display: flex; }
-
-.gh-cid-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.gh-cid-wrap.hidden { display: none; }
-
-.gh-device-box {
-  display: none;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--accent);
-  background: var(--accent-wash);
-}
-.gh-device-box.on { display: flex; }
-:root[data-look="legacy"] .gh-device-box {
-  border-radius: 10px;
-  border-color: var(--gilt);
-  background: var(--gilt-wash);
-}
-
-.gh-device-code-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.gh-device-code {
-  font-family: var(--mono);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: var(--ink-strong);
-  padding: 4px 10px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
-  user-select: all;
-  -webkit-user-select: all;
-}
-:root[data-look="legacy"] .gh-device-code {
-  border-radius: 7px;
-  background: var(--card);
-}
-
-.gh-device-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .gh-cred-section {

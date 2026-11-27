@@ -140,22 +140,7 @@ const el = {
   ghSignedOut:     $('gh-auth-signed-out'),
   ghUserAvatar:    $('gh-user-avatar'),
   ghUserName:      $('gh-user-name'),
-  ghUserMethod:    $('gh-user-method'),
   btnGhLogout:     $('btn-gh-logout'),
-  ghAuthModeBtns:  document.querySelectorAll('#gh-auth-mode-group .cell'),
-  ghPanelOauth:    $('gh-panel-oauth'),
-  ghPanelPat:      $('gh-panel-pat'),
-  ghOauthCidRow:   $('gh-oauth-cid-row'),
-  ghOauthCid:      $('gh-oauth-client-id'),
-  linkGhDev:       $('link-gh-dev'),
-  ghOauthStartRow: $('gh-oauth-start-row'),
-  btnGhOauth:      $('btn-gh-oauth'),
-  ghDeviceBox:     $('gh-oauth-device-box'),
-  ghDeviceCode:    $('gh-device-code'),
-  btnGhCopyCode:   $('btn-gh-copy-code'),
-  btnGhOpenDev:    $('btn-gh-open-device'),
-  ghDeviceStatus:  $('gh-device-status'),
-  btnGhCancelOauth:$('btn-gh-cancel-oauth'),
   linkGhTokens:    $('link-gh-tokens'),
   ghPatInput:      $('gh-pat-input'),
   btnGhPat:        $('btn-gh-pat'),
@@ -205,24 +190,18 @@ const state = {
     sort: 'name-asc',
     pinned: [],
     customApps: [],
-    githubOauthClientId: null,
     githubUser: null,
     githubAvatar: null,
-    githubMethod: null,
   }, BOOT.settings || {}),
   auth:             Object.assign({
     loggedIn: false,
     username: null,
     avatarUrl: null,
-    method: null,
     storeName: CURRENT_OS === 'MacOS' ? 'macOS Keychain' : 'Windows Credential Manager',
-    hasBuiltinOauth: false,
     currentKey: '',
   }, BOOT.auth || {}),
-  authMode:         'oauth',        // 'oauth' | 'pat'
   authBusy:         false,
   authMsg:          null,           // { kind: 'ok'|'bad'|'info', text }
-  oauth:            { state: 'idle', userCode: '', verificationUri: 'https://github.com/login/device' },
   credentials:      [],
   credsLoaded:      false,
   clearAllArmed:    false,
@@ -506,17 +485,8 @@ const I18N = {
     'Signing in…': 'Выполняется вход…',
     'Private repositories enabled · 5,000 GitHub requests/hour': 'Доступ к приватным репозиториям включён · 5 000 запросов/час',
     'Sign out': 'Выйти',
-    'Sign in to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Войдите, чтобы загружать приватные репозитории и увеличить лимит запросов GitHub. Токены безопасно хранятся в системном хранилище учётных данных.',
-    'GitHub OAuth': 'GitHub OAuth',
+    'Sign in with a Personal Access Token to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Войдите с помощью персонального токена доступа, чтобы загружать приватные репозитории и увеличить лимит запросов GitHub. Токены безопасно хранятся в системном хранилище учётных данных.',
     'Personal Access Token': 'Персональный токен',
-    'OAuth App Client ID': 'Client ID приложения OAuth',
-    'Create GitHub OAuth App ↗': 'Создать OAuth-приложение ↗',
-    'Enable Device Flow in your GitHub OAuth App settings (no client secret needed).': 'Включите Device Flow в настройках OAuth-приложения GitHub (секрет не нужен).',
-    'Sign in with GitHub': 'Войти через GitHub',
-    'Copy code': 'Скопировать код',
-    'Copied!': 'Скопировано!',
-    'Open GitHub ↗': 'Открыть GitHub ↗',
-    'Enter this code on GitHub to finish signing in…': 'Введите этот код на GitHub для завершения входа…',
     'Cancel': 'Отмена',
     'Create token on GitHub ↗': 'Создать токен на GitHub ↗',
     'Connect token': 'Подключить токен',
@@ -538,6 +508,11 @@ const I18N = {
     'Confirm': 'Подтвердить',
     'Remove from Launcher': 'Убрать из Launcher',
     'Click again to remove from Launcher': 'Нажмите ещё раз, чтобы убрать из Launcher',
+    'Can’t remove {name}': 'Нельзя убрать {name}',
+    '{name} is still installed. Uninstall it first before removing it from Launcher.': '{name} всё ещё установлено. Сначала удалите приложение, прежде чем убирать его из Launcher.',
+    'Private apps removed': 'Приватные приложения убраны',
+    'Removed uninstalled private app {name} because your GitHub token was removed.': 'Неустановленное приватное приложение {name} убрано, так как ваш токен GitHub был удалён.',
+    'Removed {n} uninstalled private apps ({names}) because your GitHub token was removed.': 'Убрано неустановленных приватных приложений: {n} ({names}), так как ваш токен GitHub был удалён.',
     'Add Repository to Launcher': 'Добавить репозиторий в Launcher',
     'Display name': 'Отображаемое имя',
     'Where should this appear?': 'Где должно отображаться?',
@@ -785,17 +760,8 @@ const I18N = {
     'Signing in…': 'Iniciando sesión…',
     'Private repositories enabled · 5,000 GitHub requests/hour': 'Repositorios privados habilitados · 5.000 solicitudes/hora',
     'Sign out': 'Cerrar sesión',
-    'Sign in to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Inicia sesión para obtener repositorios privados y aumentar el límite de GitHub. Los tokens se guardan de forma segura en el almacén de credenciales del sistema.',
-    'GitHub OAuth': 'GitHub OAuth',
+    'Sign in with a Personal Access Token to pull private repositories and raise GitHub\'s rate limit. Tokens are stored securely in your OS credential store.': 'Inicia sesión con un token de acceso personal para obtener repositorios privados y aumentar el límite de GitHub. Los tokens se guardan de forma segura en el almacén de credenciales del sistema.',
     'Personal Access Token': 'Token de acceso personal',
-    'OAuth App Client ID': 'Client ID de la app OAuth',
-    'Create GitHub OAuth App ↗': 'Crear app OAuth en GitHub ↗',
-    'Enable Device Flow in your GitHub OAuth App settings (no client secret needed).': 'Activa Device Flow en la configuración de tu app OAuth de GitHub (no requiere secreto).',
-    'Sign in with GitHub': 'Iniciar sesión con GitHub',
-    'Copy code': 'Copiar código',
-    'Copied!': '¡Copiado!',
-    'Open GitHub ↗': 'Abrir GitHub ↗',
-    'Enter this code on GitHub to finish signing in…': 'Introduce este código en GitHub para completar el inicio de sesión…',
     'Cancel': 'Cancelar',
     'Create token on GitHub ↗': 'Crear token en GitHub ↗',
     'Connect token': 'Conectar token',
@@ -817,6 +783,11 @@ const I18N = {
     'Confirm': 'Confirmar',
     'Remove from Launcher': 'Quitar de Launcher',
     'Click again to remove from Launcher': 'Haz clic de nuevo para quitar de Launcher',
+    'Can’t remove {name}': 'No se puede quitar {name}',
+    '{name} is still installed. Uninstall it first before removing it from Launcher.': '{name} todavía está instalado. Desinstálalo primero antes de quitarlo de Launcher.',
+    'Private apps removed': 'Apps privadas eliminadas',
+    'Removed uninstalled private app {name} because your GitHub token was removed.': 'Se quitó la app privada sin instalar {name} porque se eliminó tu token de GitHub.',
+    'Removed {n} uninstalled private apps ({names}) because your GitHub token was removed.': 'Se quitaron {n} apps privadas sin instalar ({names}) porque se eliminó tu token de GitHub.',
     'Add Repository to Launcher': 'Añadir repositorio a Launcher',
     'Display name': 'Nombre para mostrar',
     'Where should this appear?': '¿Dónde debería aparecer?',
@@ -2373,7 +2344,7 @@ function fillCardMenu(a) {
     addItem(label, () => removeCustomClick(a.id), {
       cls: armed ? 'danger armed' : 'danger',
       disabled: busy,
-      keepOpen: !armed,
+      keepOpen: !armed && !a.installed,
     });
   }
 }
@@ -2687,11 +2658,23 @@ function confirmAddAppModal() {
 }
 
 function removeCustomClick(id) {
+  const live = library.apps.find((x) => x.id === id);
+  if (live && live.installed) {
+    clearTimeout(state.removeArmedTimer);
+    state.removeArmedId = null;
+    closeCardMenu();
+    const msg = t('{name} is still installed. Uninstall it first before removing it from Launcher.', {
+      name: live.name,
+    });
+    setRepoMsg('bad', msg);
+    flashToast(t('Can’t remove {name}', { name: live.name }), msg);
+    return;
+  }
   clearTimeout(state.removeArmedTimer);
   if (state.removeArmedId === id) {
     state.removeArmedId = null;
     closeCardMenu();
-    post({ cmd: 'customAppRemove', id, uninstall: false });
+    post({ cmd: 'customAppRemove', id });
   } else {
     state.removeArmedId = id;
     state.removeArmedTimer = setTimeout(() => {
@@ -2717,11 +2700,13 @@ function renderCustomAppsList() {
   el.customAppsList.replaceChildren();
 
   for (const c of list) {
+    const live = library.apps.find((x) => x.id === c.id);
     const row = h('div', 'gh-row');
     const main = h('div', 'gh-row-main');
     const title = h('div', 'gh-row-title');
     title.append(document.createTextNode(c.name));
     if (c.private) title.append(h('span', 'hud-badge warn', t('Private')));
+    if (live && live.installed) title.append(h('span', 'hud-badge good', t('Installed')));
     main.append(title, h('div', 'gh-row-sub', c.repo));
 
     const acts = h('div', 'gh-row-acts');
@@ -2880,7 +2865,7 @@ function renderGitHubSettings() {
   if (a.loggedIn) {
     el.ghAuthPill.className = 'pill ok';
     el.ghAuthPillText.textContent = a.username ? `@${a.username}` : t('Signed in');
-  } else if (state.oauth.state === 'starting' || state.oauth.state === 'pending' || state.authBusy) {
+  } else if (state.authBusy) {
     el.ghAuthPill.className = 'pill busy';
     el.ghAuthPillText.textContent = t('Signing in…');
   } else {
@@ -2893,7 +2878,6 @@ function renderGitHubSettings() {
 
   if (a.loggedIn) {
     el.ghUserName.textContent = a.username ? `@${a.username}` : t('GitHub User');
-    el.ghUserMethod.textContent = a.method === 'oauth' ? t('GitHub OAuth') : t('Personal Access Token');
     el.ghUserAvatar.replaceChildren();
     if (a.avatarUrl) {
       const img = document.createElement('img');
@@ -2904,25 +2888,6 @@ function renderGitHubSettings() {
       el.ghUserAvatar.textContent = (a.username || 'G')[0].toUpperCase();
     }
   } else {
-    el.ghAuthModeBtns.forEach((b) => b.classList.toggle('on', b.dataset.authMode === state.authMode));
-    el.ghPanelOauth.classList.toggle('on', state.authMode === 'oauth');
-    el.ghPanelPat.classList.toggle('on', state.authMode === 'pat');
-
-    el.ghOauthCidRow.classList.toggle('hidden', !!a.hasBuiltinOauth);
-    if (!a.hasBuiltinOauth && document.activeElement !== el.ghOauthCid) {
-      el.ghOauthCid.value = state.settings.githubOauthClientId || '';
-    }
-
-    const pending = state.oauth.state === 'pending';
-    const starting = state.oauth.state === 'starting';
-    el.ghOauthStartRow.style.display = pending ? 'none' : 'flex';
-    el.btnGhOauth.disabled = starting || state.authBusy;
-    el.btnGhOauth.textContent = starting ? t('Starting sign-in…') : t('Sign in with GitHub');
-    el.ghDeviceBox.classList.toggle('on', pending);
-    if (pending) {
-      el.ghDeviceCode.textContent = state.oauth.userCode || '';
-    }
-
     el.btnGhPat.disabled = state.authBusy;
     el.btnGhPat.textContent = state.authBusy ? t('Connecting…') : t('Connect token');
   }
@@ -2968,38 +2933,9 @@ el.addAppName.addEventListener('keydown', (e) => {
 });
 
 // Event bindings for GitHub Account & OS Credential Store
-el.ghAuthModeBtns.forEach((btn) => btn.addEventListener('click', () => {
-  state.authMode = btn.dataset.authMode;
-  setAuthMsg('', '');
-}));
-el.ghOauthCid.addEventListener('change', () => {
-  post({ cmd: 'githubSaveClientId', clientId: el.ghOauthCid.value.trim() });
-});
-el.linkGhDev.addEventListener('click', (e) => {
-  e.preventDefault();
-  post({ cmd: 'openUrl', url: 'https://github.com/settings/developers' });
-});
 el.linkGhTokens.addEventListener('click', (e) => {
   e.preventDefault();
   post({ cmd: 'openUrl', url: 'https://github.com/settings/tokens' });
-});
-el.btnGhOauth.addEventListener('click', () => {
-  setAuthMsg('', '');
-  post({ cmd: 'githubStartOAuth', clientId: el.ghOauthCid ? el.ghOauthCid.value.trim() : '' });
-});
-el.btnGhCopyCode.addEventListener('click', () => {
-  if (state.oauth.userCode && navigator.clipboard) {
-    navigator.clipboard.writeText(state.oauth.userCode).then(() => {
-      el.btnGhCopyCode.textContent = t('Copied!');
-      setTimeout(() => { el.btnGhCopyCode.textContent = t('Copy code'); }, 1800);
-    }).catch(() => {});
-  }
-});
-el.btnGhOpenDev.addEventListener('click', () => {
-  post({ cmd: 'openUrl', url: state.oauth.verificationUri || 'https://github.com/login/device' });
-});
-el.btnGhCancelOauth.addEventListener('click', () => {
-  post({ cmd: 'githubCancelOAuth' });
 });
 
 function submitPat() {
@@ -3076,6 +3012,7 @@ window.onHost = (msg) => {
       renderLibrary();
       renderActivity();
       renderPrivateRepos();
+      renderCustomAppsList();
       checkBackgroundAppUpdates();
       reportMenuCheck();
       break;
@@ -3091,18 +3028,8 @@ window.onHost = (msg) => {
       renderGitHubSettings();
       break;
     }
-    case 'githubOAuth':
-      state.oauth = {
-        state: msg.state || 'idle',
-        userCode: msg.userCode || '',
-        verificationUri: msg.verificationUri || 'https://github.com/login/device',
-      };
-      if (msg.state === 'idle') state.authBusy = false;
-      renderGitHubSettings();
-      break;
     case 'githubAuthError':
       state.authBusy = false;
-      state.oauth.state = 'idle';
       setAuthMsg('bad', msg.message || t('GitHub sign-in failed.'));
       break;
     case 'githubCredentials':
@@ -3160,6 +3087,27 @@ window.onHost = (msg) => {
         t('Populated into {section} — checking for releases.', { section: categoryLabel(msg.category) }),
       );
       break;
+    case 'customAppRemoveBlocked': {
+      const name = msg.name || '';
+      const text = msg.message || t('{name} is still installed. Uninstall it first before removing it from Launcher.', { name });
+      setRepoMsg('bad', text);
+      flashToast(t('Can’t remove {name}', { name }), text);
+      break;
+    }
+    case 'privateAppsPruned': {
+      const names = Array.isArray(msg.names) ? msg.names : [];
+      if (names.length) {
+        const text = names.length === 1
+          ? t('Removed uninstalled private app {name} because your GitHub token was removed.', { name: names[0] })
+          : t('Removed {n} uninstalled private apps ({names}) because your GitHub token was removed.', {
+            n: names.length,
+            names: names.join(', '),
+          });
+        setRepoMsg('info', text);
+        flashToast(t('Private apps removed'), text);
+      }
+      break;
+    }
   }
 };
 

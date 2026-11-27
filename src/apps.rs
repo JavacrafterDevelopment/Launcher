@@ -855,6 +855,19 @@ impl Library {
         self.apps.iter().map(|a| a.info.folder.clone()).collect()
     }
 
+    /// Checks on disk whether the app is currently installed (updating its cached state).
+    pub fn is_installed(&mut self, id: &str) -> bool {
+        let Some(a) = self.apps.iter_mut().find(|a| a.info.id == id) else {
+            return false;
+        };
+        a.refresh_installed(&self.install_root);
+        a.installed.is_some()
+    }
+
+    pub fn app_name(&self, id: &str) -> Option<String> {
+        self.apps.iter().find(|a| a.info.id == id).map(|a| a.info.name.clone())
+    }
+
     pub fn set_install_root(&mut self, root: std::path::PathBuf) {
         self.install_root = root;
         for a in &mut self.apps {
@@ -1544,6 +1557,55 @@ fn png_data_url(bytes: &[u8]) -> String {
 }
 
 
+/// Checks on disk whether a custom GitHub app is currently installed under `root`
+/// (or the default `portableApplications` directory).
+pub fn is_custom_app_installed(c: &crate::settings::CustomApp, root: &std::path::Path) -> bool {
+    let preferred = Target::custom_in(&c.repo, &c.folder, c.own_format, c.private, root);
+    if preferred.installed().is_some() {
+        return true;
+    }
+    let default_root = crate::settings::app_dir().join(crate::updater::APPS_DIR);
+    if root != default_root {
+        let legacy = Target::custom_in(&c.repo, &c.folder, c.own_format, c.private, &default_root);
+        if legacy.installed().is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+/// Removes private custom apps that are not installed on disk when the user's GitHub PAT
+/// is removed. Installed private apps and all public apps are preserved. Returns the
+/// display names of the removed apps.
+pub fn prune_uninstalled_private_apps(settings: &mut crate::settings::Settings) -> Vec<String> {
+    let root = settings.apps_root();
+    prune_uninstalled_private_apps_with(settings, |c| is_custom_app_installed(c, &root))
+}
+
+fn prune_uninstalled_private_apps_with<F>(
+    settings: &mut crate::settings::Settings,
+    mut is_installed: F,
+) -> Vec<String>
+where
+    F: FnMut(&crate::settings::CustomApp) -> bool,
+{
+    let mut removed_ids = std::collections::HashSet::new();
+    let mut removed_names = Vec::new();
+    settings.custom_apps.retain(|c| {
+        if c.private && !is_installed(c) {
+            removed_ids.insert(c.id.clone());
+            removed_names.push(c.name.clone());
+            false
+        } else {
+            true
+        }
+    });
+    if !removed_ids.is_empty() {
+        settings.pinned.retain(|p| !removed_ids.contains(p));
+    }
+    removed_names
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1588,5 +1650,45 @@ mod tests {
             let bytes = app.icon.unwrap_or_else(|| panic!("{id} should have an embedded icon"));
             assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "{id} icon should be a valid PNG");
         }
+    }
+
+    #[test]
+    fn prune_uninstalled_private_apps_keeps_installed_and_public() {
+        use crate::settings::{CustomApp, Settings};
+
+        let make = |id: &str, name: &str, private: bool| CustomApp {
+            id: id.into(),
+            name: name.into(),
+            folder: name.into(),
+            repo: format!("me/{name}"),
+            tagline: String::new(),
+            publisher: "me".into(),
+            category: "apps".into(),
+            platforms: vec!["Windows".into()],
+            private,
+            own_format: false,
+        };
+
+        let mut settings = Settings::default();
+        settings.custom_apps = vec![
+            make("priv-uninstalled", "SecretNotInstalled", true),
+            make("priv-installed", "SecretInstalled", true),
+            make("pub-uninstalled", "PublicNotInstalled", false),
+            make("pub-installed", "PublicInstalled", false),
+        ];
+        settings.pinned = vec![
+            "priv-uninstalled".into(),
+            "priv-installed".into(),
+            "pub-uninstalled".into(),
+        ];
+
+        let removed = prune_uninstalled_private_apps_with(&mut settings, |c| {
+            c.id == "priv-installed" || c.id == "pub-installed"
+        });
+
+        assert_eq!(removed, vec!["SecretNotInstalled".to_string()]);
+        let remaining: Vec<&str> = settings.custom_apps.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(remaining, vec!["priv-installed", "pub-uninstalled", "pub-installed"]);
+        assert_eq!(settings.pinned, vec!["priv-installed", "pub-uninstalled"]);
     }
 }
