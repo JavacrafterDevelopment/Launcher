@@ -1,5 +1,5 @@
-# Builds and tests every pull request on Windows and macOS (Apple Silicon and
-# Intel), the same targets Release builds, so a PR can't break the release.
+# Builds and tests every pull request on Windows and macOS (Apple Silicon),
+# the same targets Release builds, so a PR can't break the release.
 
 name: CI
 
@@ -24,8 +24,6 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-latest
-            target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +39,5 @@ jobs:
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
 
-      # Tests run natively: macos-latest is Apple Silicon, so the Intel build is
-      # compiled but not run.
       - name: Test
-        if: matrix.target != 'x86_64-apple-darwin'
         run: cargo test --locked --target ${{ matrix.target }}

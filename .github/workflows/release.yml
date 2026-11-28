@@ -4,8 +4,8 @@
 #   2. merge it into main: tag-on-merge.yml tags v0.2.8 and starts this workflow
 #      (or tag by hand: git tag v0.2.8 && git push origin main v0.2.8)
 #
-# Builds both Windows (x86_64-pc-windows-msvc) and macOS universal
-# (aarch64-apple-darwin + x86_64-apple-darwin), packages each with a manifest of
+# Builds Windows (x86_64-pc-windows-msvc) and macOS for Apple Silicon only
+# (aarch64-apple-darwin), packages each with a manifest of
 # SHA-256 hashes, attaches the Windows and macOS packages to the GitHub release,
 # and updates update.json (Windows) and update-macos.json (macOS) on the
 # `updates` branch.
@@ -75,21 +75,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build macOS (Apple Silicon & Intel Universal)
-        run: |
-          cargo build --release --locked --target aarch64-apple-darwin
-          cargo build --release --locked --target x86_64-apple-darwin
-          mkdir -p target/release-universal
-          lipo -create -output target/release-universal/Launcher \
-            target/aarch64-apple-darwin/release/Launcher \
-            target/x86_64-apple-darwin/release/Launcher
+      - name: Build macOS (Apple Silicon)
+        run: cargo build --release --locked --target aarch64-apple-darwin
 
       - name: Package macOS
-        run: ./tools/package-macos.sh target/release-universal/Launcher dist
+        run: ./tools/package-macos.sh target/aarch64-apple-darwin/release/Launcher dist
 
       - uses: actions/upload-artifact@v4
         with:
