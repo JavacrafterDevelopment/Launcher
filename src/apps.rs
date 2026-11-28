@@ -179,7 +179,8 @@ pub const CATALOG: &[AppInfo] = &[
         repo: "JavacrafterDevelopment/TempCraftBackup",
         tagline: "Backs up the current source code of every Craft app into one 7z archive.",
         icon: None,
-        platforms: &["Windows"],
+        // macOS from its release that ships TempCraftBackup-macos.zip.
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::Own,
         category: Category::Temporary,

@@ -108,6 +108,7 @@ const el = {
   btnDownload:     $('btn-download'),
   btnRestart:      $('btn-restart'),
   currentVersion:  $('current-version'),
+  heroVersion:     $('settings-hero-sub'),
   last:            $('upd-last'),
   setLanguage:     $('set-language'),
   setCheckEvery:   $('set-check-every'),
@@ -1029,8 +1030,17 @@ function applyLanguage() {
   if (el.currentVersion) {
     el.currentVersion.textContent = `${t('Current Version')} : ${BOOT.version}`;
   }
+  renderHeroVersion();
   renderPortableDesc();
 }
+
+/** Settings header: "JAVACRAFTER LAUNCHER: 0.3.23", so the running version is visible at a glance. */
+function renderHeroVersion() {
+  if (el.heroVersion && BOOT.version) {
+    el.heroVersion.textContent = `JAVACRAFTER LAUNCHER: ${BOOT.version}`;
+  }
+}
+renderHeroVersion();
 
 /* ----------------------------------------------------------- helpers */
 
