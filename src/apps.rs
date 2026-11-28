@@ -54,19 +54,6 @@ impl AppInfo {
 pub enum Source {
     /// Built and packaged with `tools/package.ps1` or `tools/package-macos.sh`.
     Own,
-    /// An open-source app from another author's GitHub releases. `package` is the
-    /// release archive name (`{version}` is replaced with the release's version) and
-    /// `exe` is the program inside it.
-    ThirdParty {
-        win_package: &'static str,
-        win_exe: &'static str,
-        mac_package: &'static str,
-        mac_exe: &'static str,
-        /// Whether the macOS build keeps its data in `<Name>Data` beside the app
-        /// when the launcher points it there (see `shell_open`). False for apps
-        /// that always use ~/Library/Application Support.
-        mac_portable: bool,
-    },
 }
 
 /// Which tab an app is listed under.
@@ -186,253 +173,6 @@ pub const CATALOG: &[AppInfo] = &[
         bat: None,
     },
     AppInfo {
-        id: "photocraft",
-        name: "PhotoCraft",
-        folder: None,
-        repo: "storytold/photocraft",
-        tagline: "Open-source raster photo editor and image manipulation tool written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/photocraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "photocraft-{version}-windows-x64-portable.zip",
-            win_exe: "photocraft.exe",
-            mac_package: "photocraft-{version}-macos-universal.dmg",
-            mac_exe: "PhotoCraft.app/Contents/MacOS/PhotoCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "vectorcraft",
-        name: "VectorCraft",
-        folder: None,
-        repo: "storytold/vectorcraft",
-        tagline: "Open-source vector art and illustration tool written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/vectorcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "vectorcraft-{version}-windows-x64-portable.zip",
-            win_exe: "vectorcraft.exe",
-            mac_package: "vectorcraft-{version}-macos-universal.dmg",
-            mac_exe: "VectorCraft.app/Contents/MacOS/VectorCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "filmcraft",
-        name: "FilmCraft",
-        folder: None,
-        repo: "storytold/filmcraft",
-        tagline: "Open-source non-linear video editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/filmcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "filmcraft-{version}-windows-x64-portable.zip",
-            win_exe: "filmcraft.exe",
-            mac_package: "filmcraft-{version}-macos-universal.dmg",
-            mac_exe: "FilmCraft.app/Contents/MacOS/FilmCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "effectcraft",
-        name: "EffectCraft",
-        folder: None,
-        repo: "storytold/effectcraft",
-        tagline: "Open-source motion graphics and compositing tool written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/effectcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "effectcraft-{version}-windows-x64-portable.zip",
-            win_exe: "effectcraft.exe",
-            mac_package: "effectcraft-{version}-macos-universal.dmg",
-            mac_exe: "EffectCraft.app/Contents/MacOS/EffectCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "lightcraft",
-        name: "LightCraft",
-        folder: None,
-        repo: "storytold/lightcraft",
-        tagline: "Open-source non-destructive RAW and photo workflow editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/lightcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "lightcraft-{version}-windows-x64-portable.zip",
-            win_exe: "lightcraft.exe",
-            mac_package: "lightcraft-{version}-macos-universal.dmg",
-            mac_exe: "LightCraft.app/Contents/MacOS/LightCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "designcraft",
-        name: "DesignCraft",
-        folder: None,
-        repo: "storytold/designcraft",
-        tagline: "Open-source page and layout publishing design editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/designcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "designcraft-{version}-windows-x64-portable.zip",
-            win_exe: "designcraft.exe",
-            mac_package: "designcraft-{version}-macos-universal.dmg",
-            mac_exe: "DesignCraft.app/Contents/MacOS/DesignCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "pdfcraft",
-        name: "PdfCraft",
-        folder: None,
-        repo: "storytold/pdfcraft",
-        tagline: "Open-source PDF reader and editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/pdfcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "pdfcraft-{version}-windows-x64-portable.zip",
-            win_exe: "pdfcraft.exe",
-            mac_package: "pdfcraft-{version}-macos-universal.dmg",
-            mac_exe: "PdfCraft.app/Contents/MacOS/PdfCraft",
-            mac_portable: false,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "figcraft",
-        name: "FigCraft",
-        folder: None,
-        repo: "storytold/figcraft",
-        tagline: "Open-source interface design and interactive prototyping tool written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/figcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "figcraft-{version}-windows-x64-portable.zip",
-            win_exe: "figcraft.exe",
-            mac_package: "figcraft-{version}-macos-universal.dmg",
-            mac_exe: "FigCraft.app/Contents/MacOS/FigCraft",
-            mac_portable: false,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "soundcraft",
-        name: "SoundCraft",
-        folder: None,
-        repo: "storytold/soundcraft",
-        tagline: "Open-source digital audio workstation written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/soundcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "soundcraft-{version}-windows-x64-portable.zip",
-            win_exe: "soundcraft.exe",
-            mac_package: "soundcraft-{version}-macos-universal.dmg",
-            mac_exe: "SoundCraft.app/Contents/MacOS/SoundCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "cadcraft",
-        name: "CADCraft",
-        folder: None,
-        repo: "storytold/cadcraft",
-        tagline: "Open-source computer-aided design and drafting tool written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/cadcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "cadcraft-{version}-windows-x64-portable.zip",
-            win_exe: "cadcraft.exe",
-            mac_package: "cadcraft-{version}-macos-universal.dmg",
-            mac_exe: "CADCraft.app/Contents/MacOS/CADCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "deckcraft",
-        name: "DeckCraft",
-        folder: None,
-        repo: "storytold/deckcraft",
-        tagline: "Open-source presentation and slide show editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/deckcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "deckcraft-{version}-windows-x64-portable.zip",
-            win_exe: "deckcraft.exe",
-            mac_package: "deckcraft-{version}-macos-universal.dmg",
-            mac_exe: "DeckCraft.app/Contents/MacOS/DeckCraft",
-            mac_portable: false,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "gridcraft",
-        name: "GridCraft",
-        folder: None,
-        repo: "storytold/gridcraft",
-        tagline: "Open-source spreadsheet editor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/gridcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "gridcraft-{version}-windows-x64-portable.zip",
-            win_exe: "gridcraft.exe",
-            mac_package: "gridcraft-{version}-macos-universal.dmg",
-            mac_exe: "GridCraft.app/Contents/MacOS/GridCraft",
-            mac_portable: false,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
-        id: "wordcraft",
-        name: "WordCraft",
-        folder: None,
-        repo: "storytold/wordcraft",
-        tagline: "Open-source word processor written from scratch in pure Rust.",
-        icon: Some(include_bytes!("../assets/wordcraft.png")),
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::ThirdParty {
-            win_package: "wordcraft-{version}-windows-x64-portable.zip",
-            win_exe: "wordcraft.exe",
-            mac_package: "wordcraft-{version}-macos-universal.dmg",
-            mac_exe: "WordCraft.app/Contents/MacOS/WordCraft",
-            mac_portable: true,
-        },
-        category: Category::Apps,
-        bat: None,
-    },
-    AppInfo {
         id: "tempcraftbackup",
         name: "TempCraftBackup",
         folder: None,
@@ -506,13 +246,8 @@ const LOG_LINES: usize = 300;
 #[derive(Clone)]
 enum RuntimeSource {
     Own,
-    ThirdParty {
-        win_package: String,
-        win_exe: String,
-        mac_package: String,
-        mac_exe: String,
-        mac_portable: bool,
-    },
+    /// Added from Settings by pasting a GitHub link: the release asset is picked
+    /// automatically for this OS (see `updater::select_release_asset_for_os`).
     GitHubAuto {
         own_format: bool,
         private: bool,
@@ -540,15 +275,6 @@ impl RuntimeApp {
     fn from_builtin(info: &'static AppInfo) -> Self {
         let source = match info.source {
             Source::Own => RuntimeSource::Own,
-            Source::ThirdParty { win_package, win_exe, mac_package, mac_exe, mac_portable } => {
-                RuntimeSource::ThirdParty {
-                    win_package: win_package.into(),
-                    win_exe: win_exe.into(),
-                    mac_package: mac_package.into(),
-                    mac_exe: mac_exe.into(),
-                    mac_portable,
-                }
-            }
         };
         Self {
             id: info.id.into(),
@@ -602,17 +328,6 @@ impl RuntimeApp {
     fn supported_on_current_os(&self) -> bool {
         self.platforms.iter().any(|p| p.eq_ignore_ascii_case(CURRENT_OS))
     }
-
-    fn portable_here(&self) -> Option<bool> {
-        match self.source {
-            RuntimeSource::ThirdParty { mac_portable, .. }
-                if cfg!(target_os = "macos") && self.supported_on_current_os() =>
-            {
-                Some(mac_portable)
-            }
-            _ => None,
-        }
-    }
 }
 
 struct AppState {
@@ -644,9 +359,8 @@ pub fn icons() -> Value {
     Value::Object(map)
 }
 
-/// Brand colours `(accent, ink_light, ink_dark)` for the Modern theme: matches the Craft suite
-/// colours for ArtCraft apps, gives Javacrafter apps distinct accents, and hashes custom apps
-/// onto a curated palette.
+/// Brand colours `(accent, ink_light, ink_dark)` for the Modern theme: gives Javacrafter apps
+/// distinct accents, and hashes custom apps onto a curated palette.
 fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
     match id {
         "lighthouse" => ("#d99326", "#9a630a", "#f2bc5a"),
@@ -655,19 +369,6 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
         "kittyconnect" => ("#2d81ff", "#1659c4", "#74aaff"),
         "inkcognito" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
         "tempcraftbackup" => ("#64748b", "#475569", "#94a3b8"),
-        "photocraft" => ("#2f7bf5", "#1a5bc4", "#7fb0ff"),
-        "vectorcraft" => ("#e8573f", "#b83a24", "#ff8a70"),
-        "filmcraft" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
-        "effectcraft" => ("#e0368f", "#b0206c", "#ff7ab8"),
-        "lightcraft" => ("#f2a516", "#8a5800", "#ffc14d"),
-        "designcraft" => ("#7bb51c", "#457008", "#a6e04a"),
-        "pdfcraft" => ("#e8204f", "#b70228", "#f23a62"),
-        "figcraft" => ("#02da96", "#047a56", "#4fe8b6"),
-        "soundcraft" => ("#1fa5c9", "#0e7290", "#5fd0ee"),
-        "cadcraft" => ("#3ea6e8", "#1a6fa8", "#7cc8ff"),
-        "deckcraft" => ("#f07a1e", "#a84f0a", "#ffa060"),
-        "gridcraft" => ("#1f9d55", "#12703a", "#4fd68a"),
-        "wordcraft" => ("#3f5fe0", "#2a44b8", "#8ea2ff"),
         other => {
             const PALETTE: &[(&str, &str, &str)] = &[
                 ("#2d81ff", "#1659c4", "#74aaff"),
@@ -688,8 +389,6 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
 fn publisher_of(info: &AppInfo) -> &'static str {
     match info.source {
         Source::Own => "Javacrafter",
-        Source::ThirdParty { .. } if info.repo.starts_with("storytold/") => "ArtCraft",
-        Source::ThirdParty { .. } => "Community",
     }
 }
 
@@ -713,14 +412,6 @@ impl AppState {
     fn target_in(&self, root: &std::path::Path) -> Target {
         match &self.info.source {
             RuntimeSource::Own => Target::app_in(&self.info.repo, self.info.folder(), root),
-            RuntimeSource::ThirdParty { win_package, win_exe, mac_package, mac_exe, .. } => {
-                let (package, exe) = if cfg!(target_os = "macos") {
-                    (mac_package.as_str(), mac_exe.as_str())
-                } else {
-                    (win_package.as_str(), win_exe.as_str())
-                };
-                Target::third_party_in(&self.info.repo, self.info.folder(), package, exe, root)
-            }
             RuntimeSource::GitHubAuto { own_format, private } => {
                 Target::custom_in(&self.info.repo, self.info.folder(), *own_format, *private, root)
             }
@@ -909,10 +600,9 @@ impl Library {
                     "inkDark": ink_dark,
                     "platforms": a.info.platforms,
                     "supported": a.info.supported_on_current_os(),
-                    "thirdParty": matches!(a.info.source, RuntimeSource::ThirdParty { .. }),
+                    "thirdParty": a.info.custom,
                     "custom": a.info.custom,
                     "private": a.info.private,
-                    "portable": a.info.portable_here(),
                     "category": a.info.category.id(),
                     "installed": a.installed,
                     "latest": a.latest,
@@ -1508,11 +1198,10 @@ fn shell_open(info: &RuntimeApp, exe: &std::path::Path, dir: &std::path::Path) -
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755));
 
-    // Point Craft apps at `<dir>/<Name>Data` so all settings, presets, and recovery
-    // files stay inside the app's portable folder on macOS rather than
-    // ~/Library/Application Support. Apps differ in what they read: most take
-    // `<ID>_CONFIG_DIR`, FilmCraft `<ID>_DATA_DIR`, WordCraft `<ID>_PROFILE_DIR`;
-    // all three are set. Apps marked `mac_portable: false` read none of them.
+    // Point apps that support it at `<dir>/<Name>Data` so their settings stay inside
+    // the app's portable folder on macOS rather than ~/Library/Application Support.
+    // Apps differ in what they read (`<ID>_CONFIG_DIR`, `<ID>_DATA_DIR` or
+    // `<ID>_PROFILE_DIR`), so all three are set; apps that read none ignore them.
     let id = info.id.to_ascii_uppercase();
     let portable_data = dir.join(format!("{}Data", info.folder()));
     let vars = [format!("{id}_CONFIG_DIR"), format!("{id}_DATA_DIR"), format!("{id}_PROFILE_DIR")];

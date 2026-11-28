@@ -1976,7 +1976,7 @@ function buildAppCard(a) {
   renderWordmark(a.name, nameEl);
   nameRow.append(nameEl);
 
-  const pub = a.publisher || (a.thirdParty ? 'ArtCraft' : 'Javacrafter');
+  const pub = a.publisher || (a.thirdParty ? 'GitHub' : 'Javacrafter');
   const pubBadge = h('span', `hud-badge${pub === 'Javacrafter' || pub === 'ArtCraft' ? ' info' : ''}`, t('by {name}', { name: pub }));
   nameRow.append(pubBadge);
 
@@ -1997,13 +1997,6 @@ function buildAppCard(a) {
   }
   if (a.private) {
     badges.append(h('span', 'hud-badge warn', t('Private')));
-  }
-  if (a.portable != null) {
-    const pTag = h('span', `hud-badge${a.portable ? ' good' : ''}`, a.portable ? t('Portable') : t('Not portable'));
-    pTag.title = a.portable
-      ? t('Keeps its settings and data in {folder}Data, inside its own folder.', { folder: a.folder })
-      : t('Keeps its settings in ~/Library/Application Support/{name}, outside its own folder.', { name: a.name });
-    badges.append(pTag);
   }
   body.append(badges);
 
@@ -2150,7 +2143,7 @@ function buildTableView(list) {
     const tdRel = h('td', 'tbl-date', (a.latest && a.latest.published && fmtDate(a.latest.published)) || '—');
 
     // Author cell
-    const tdAuth = h('td', 'tbl-author', a.publisher || (a.thirdParty ? 'ArtCraft' : 'Javacrafter'));
+    const tdAuth = h('td', 'tbl-author', a.publisher || (a.thirdParty ? 'GitHub' : 'Javacrafter'));
 
     // Actions cell
     const tdAct = h('td');
