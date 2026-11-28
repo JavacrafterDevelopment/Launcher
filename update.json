@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.21",
-      "published": "2026-11-27T08:09:28Z",
-      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
+      "version": "0.3.22",
+      "published": "2026-11-28T09:29:38Z",
+      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-windows-x64.zip",
-        "size": 1715110,
-        "sha256": "a6704e5151388bd57a9ee7a3e4f0e18078f353b8a31d6763e8c9829ac3a88de1"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-windows-x64.zip",
+        "size": 1540877,
+        "sha256": "c2aea92c4998e9e40afa16afb1b2f46fb5e5a3630b053bc5b38607741cfc2348"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2735104,
-          "sha256": "924295425cc739fcbc733581c1c93093fe04c05b6841bab16b88c54ce8a60391"
+          "size": 2555392,
+          "sha256": "9b7694192709120b53f55918876987f76d3b427a1ae36029160aef44060d9156"
         }
       ]
     },
     "stable": {
-      "version": "0.3.21",
-      "published": "2026-11-27T08:09:28Z",
-      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
+      "version": "0.3.22",
+      "published": "2026-11-28T09:29:38Z",
+      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-windows-x64.zip",
-        "size": 1715110,
-        "sha256": "a6704e5151388bd57a9ee7a3e4f0e18078f353b8a31d6763e8c9829ac3a88de1"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-windows-x64.zip",
+        "size": 1540877,
+        "sha256": "c2aea92c4998e9e40afa16afb1b2f46fb5e5a3630b053bc5b38607741cfc2348"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2735104,
-          "sha256": "924295425cc739fcbc733581c1c93093fe04c05b6841bab16b88c54ce8a60391"
+          "size": 2555392,
+          "sha256": "9b7694192709120b53f55918876987f76d3b427a1ae36029160aef44060d9156"
         }
       ]
     }

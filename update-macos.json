@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.21",
-      "published": "2026-11-27T08:09:28Z",
-      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
+      "version": "0.3.22",
+      "published": "2026-11-28T09:29:38Z",
+      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-macos.zip",
-        "size": 3713387,
-        "sha256": "e956a49e7318b48f4995b3d151a5a96d24724d81d9928f88165518a3b438d06a"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-macos.zip",
+        "size": 3365366,
+        "sha256": "68f1d99f93173cec08e518cb308c7f8d06da02e0a0f7e22a10064068a6dd66d7"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "368a0b3d0940f27b5f02db79dfe15bd624aa48774b5e1e622c1d6b5268669d12"
+          "sha256": "8bd061827857ed774c747e7fd1109d1be76a346fe7263d3f13b73554ee9f1be0"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 6051392,
-          "sha256": "aeadee4f2c1d752cff0d615e6e653d9aea8c4f2d85962a41d0a7e2038754a1aa"
+          "size": 5690496,
+          "sha256": "d21cb0d76831dbe2b0c190b043ac92962ed6a7e788a0595caf97e0296bc1a2da"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.21",
-      "published": "2026-11-27T08:09:28Z",
-      "notes": "## What's Changed\n* Support multiple GitHub PATs in Settings by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/8\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.20...v0.3.21",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.21",
+      "version": "0.3.22",
+      "published": "2026-11-28T09:29:38Z",
+      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.21/Launcher-macos.zip",
-        "size": 3713387,
-        "sha256": "e956a49e7318b48f4995b3d151a5a96d24724d81d9928f88165518a3b438d06a"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-macos.zip",
+        "size": 3365366,
+        "sha256": "68f1d99f93173cec08e518cb308c7f8d06da02e0a0f7e22a10064068a6dd66d7"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "368a0b3d0940f27b5f02db79dfe15bd624aa48774b5e1e622c1d6b5268669d12"
+          "sha256": "8bd061827857ed774c747e7fd1109d1be76a346fe7263d3f13b73554ee9f1be0"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 6051392,
-          "sha256": "aeadee4f2c1d752cff0d615e6e653d9aea8c4f2d85962a41d0a7e2038754a1aa"
+          "size": 5690496,
+          "sha256": "d21cb0d76831dbe2b0c190b043ac92962ed6a7e788a0595caf97e0296bc1a2da"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
