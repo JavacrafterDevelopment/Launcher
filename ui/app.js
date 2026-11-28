@@ -217,12 +217,12 @@ const state = {
   repoBusy:         false,
   repoMsg:          null,           // { kind: 'ok'|'bad'|'info', text }
   pendingRepo:      null,           // RepoPreview currently open in category modal
-  pendingCategory:  'apps',         // 'apps' | 'temporary' | 'games'
+  pendingCategory:  'apps',         // 'apps' | 'games'
   removeArmedId:    null,
   removeArmedTimer: null,
   update:           { state: 'idle' },
   updateMode:       'manual',
-  tab:              'library',      // 'library' | 'temporary' | 'games'
+  tab:              'library',      // 'library' | 'games'
   settingsOpen:     false,
   search:           '',
   bannerDismissed:  false,
@@ -261,8 +261,6 @@ const I18N = {
     'Your apps': 'Ваши приложения',
     'Apps': 'Приложения',
     'App updates available': 'Доступны обновления приложений',
-    'Short-lived tools': 'Временные утилиты',
-    'Temporary Apps': 'Временные',
     'Your games': 'Ваши игры',
     'Games': 'Игры',
     'Game updates available': 'Доступны обновления игр',
@@ -403,7 +401,6 @@ const I18N = {
     'status.Installed': 'Установлено',
     'Not installed': 'Не установлены',
     'No matches for “{q}”.': 'Ничего не найдено по запросу «{q}».',
-    'No temporary apps right now.': 'Сейчас нет временных приложений.',
     'No games yet. They’ll appear here once they’re added.': 'Игр пока нет. Они появятся здесь после добавления.',
     'No apps found.': 'Приложения не найдены.',
     'Queued · Cancel': 'В очереди · Отмена',
@@ -535,7 +532,6 @@ const I18N = {
     'Display name': 'Отображаемое имя',
     'Where should this appear?': 'Где должно отображаться?',
     'Main app library': 'Основная библиотека приложений',
-    'Short-lived tools & utilities': 'Временные инструменты и утилиты',
     'Games library': 'Библиотека игр',
     'Add to Launcher': 'Добавить в Launcher',
   },
@@ -550,8 +546,6 @@ const I18N = {
     'Your apps': 'Tus aplicaciones',
     'Apps': 'Aplicaciones',
     'App updates available': 'Actualizaciones de aplicaciones disponibles',
-    'Short-lived tools': 'Herramientas temporales',
-    'Temporary Apps': 'Temporales',
     'Your games': 'Tus juegos',
     'Games': 'Juegos',
     'Game updates available': 'Actualizaciones de juegos disponibles',
@@ -692,7 +686,6 @@ const I18N = {
     'status.Installed': 'Instalada',
     'Not installed': 'No instaladas',
     'No matches for “{q}”.': 'No hay resultados para «{q}».',
-    'No temporary apps right now.': 'No hay aplicaciones temporales ahora mismo.',
     'No games yet. They’ll appear here once they’re added.': 'Aún no hay juegos. Aparecerán aquí cuando se añadan.',
     'No apps found.': 'No se encontraron aplicaciones.',
     'Queued · Cancel': 'En cola · Cancelar',
@@ -824,7 +817,6 @@ const I18N = {
     'Display name': 'Nombre para mostrar',
     'Where should this appear?': '¿Dónde debería aparecer?',
     'Main app library': 'Biblioteca principal de apps',
-    'Short-lived tools & utilities': 'Herramientas y utilidades temporales',
     'Games library': 'Biblioteca de juegos',
     'Add to Launcher': 'Añadir a Launcher',
   },
@@ -893,7 +885,6 @@ const TAGLINES = {
     deckcraft: 'Редактор презентаций и слайд-шоу с открытым исходным кодом на чистом Rust.',
     gridcraft: 'Редактор электронных таблиц с открытым исходным кодом на чистом Rust.',
     wordcraft: 'Текстовый процессор с открытым исходным кодом, написанный с нуля на чистом Rust.',
-    tempcraftbackup: 'Сохраняет исходный код всех приложений Craft в один архив 7z.',
   },
   es: {
     lighthouse: 'Búsqueda instantánea en todos los archivos y carpetas de cada unidad, con los iconos del Explorador.',
@@ -914,7 +905,6 @@ const TAGLINES = {
     deckcraft: 'Editor de presentaciones y diapositivas de código abierto escrito desde cero en Rust puro.',
     gridcraft: 'Editor de hojas de cálculo de código abierto escrito desde cero en Rust puro.',
     wordcraft: 'Procesador de textos de código abierto escrito desde cero en Rust puro.',
-    tempcraftbackup: 'Guarda una copia del código fuente actual de todas las aplicaciones Craft en un archivo 7z.',
   },
 };
 
@@ -1640,8 +1630,7 @@ const library = {
 const APP_ICONS = BOOT.icons || {};
 
 function tabOf(a) {
-  const cat = a.category || 'apps';
-  return cat === 'apps' ? 'library' : cat;
+  return a.category === 'games' ? 'games' : 'library';
 }
 
 function summarizeApps(list, noun = 'app') {
@@ -2206,15 +2195,12 @@ function renderGridSection(title, list) {
 function renderLibrary() {
   const all = library.apps;
   const libApps  = all.filter((a) => tabOf(a) === 'library');
-  const tempApps = all.filter((a) => tabOf(a) === 'temporary');
   const gameApps = all.filter((a) => tabOf(a) === 'games');
 
   // Update tab badges (both Modern & Legacy)
   setBadge('lib-badge', libApps);
-  setBadge('temp-badge', tempApps);
   setBadge('games-badge', gameApps);
   setBadge('legacy-lib-badge', libApps);
-  setBadge('legacy-temp-badge', tempApps);
   setBadge('legacy-games-badge', gameApps);
 
   // Refresh button spinning state
@@ -2231,7 +2217,7 @@ function renderLibrary() {
     : t('Update all ({count})', { count: updatable.length });
 
   // Active tab list + search filter
-  const tabList = state.tab === 'temporary' ? tempApps : state.tab === 'games' ? gameApps : libApps;
+  const tabList = state.tab === 'games' ? gameApps : libApps;
   el.catalogSummary.textContent = summarizeApps(tabList, state.tab === 'games' ? 'game' : 'app');
 
   const q = state.search.trim().toLowerCase();
@@ -2248,11 +2234,9 @@ function renderLibrary() {
   if (filtered.length === 0) {
     const emptyMsg = q
       ? t('No matches for “{q}”.', { q: state.search.trim() })
-      : state.tab === 'temporary'
-        ? t('No temporary apps right now.')
-        : state.tab === 'games'
-          ? t('No games yet. They’ll appear here once they’re added.')
-          : t('No apps found.');
+      : state.tab === 'games'
+        ? t('No games yet. They’ll appear here once they’re added.')
+        : t('No apps found.');
     el.catalogContent.append(h('div', 'apps-empty', emptyMsg));
   } else if (state.settings.view === 'table') {
     const pinned = filtered.filter((a) => isPinned(a.id));
@@ -2619,7 +2603,6 @@ function setAuthMsg(kind, text) {
 }
 
 function categoryLabel(cat) {
-  if (cat === 'temporary') return t('Temporary Apps');
   if (cat === 'games') return t('Games');
   return t('Apps');
 }
@@ -2754,7 +2737,6 @@ function renderCustomAppsList() {
     sel.setAttribute('aria-label', t('Section for {name}', { name: c.name }));
     for (const [val, label] of [
       ['apps', t('Apps')],
-      ['temporary', t('Temporary Apps')],
       ['games', t('Games')],
     ]) {
       const opt = document.createElement('option');

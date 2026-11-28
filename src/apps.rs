@@ -60,8 +60,6 @@ pub enum Source {
 #[derive(Clone, Copy)]
 pub enum Category {
     Apps,
-    /// Short-lived tools, kept apart so they're easy to find and remove later.
-    Temporary,
     /// Games, installed and launched like any app.
     Games,
 }
@@ -70,14 +68,14 @@ impl Category {
     fn id(self) -> &'static str {
         match self {
             Category::Apps => "apps",
-            Category::Temporary => "temporary",
             Category::Games => "games",
         }
     }
 
+    /// Anything that isn't `"games"` is listed under Apps, including the
+    /// `"temporary"` section older versions had.
     pub fn from_id(s: &str) -> Self {
         match s {
-            "temporary" => Category::Temporary,
             "games" => Category::Games,
             _ => Category::Apps,
         }
@@ -170,20 +168,6 @@ pub const CATALOG: &[AppInfo] = &[
         stop: Stop::CloseWindows,
         source: Source::Own,
         category: Category::Games,
-        bat: None,
-    },
-    AppInfo {
-        id: "tempcraftbackup",
-        name: "TempCraftBackup",
-        folder: None,
-        repo: "JavacrafterDevelopment/TempCraftBackup",
-        tagline: "Backs up the current source code of every Craft app into one 7z archive.",
-        icon: None,
-        // macOS from its release that ships TempCraftBackup-macos.zip.
-        platforms: &["Windows", "MacOS"],
-        stop: Stop::CloseWindows,
-        source: Source::Own,
-        category: Category::Temporary,
         bat: None,
     },
 ];
@@ -369,7 +353,6 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
         "rustwinutil" => ("#e0622d", "#a83e12", "#ff9668"),
         "kittyconnect" => ("#2d81ff", "#1659c4", "#74aaff"),
         "inkcognito" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
-        "tempcraftbackup" => ("#64748b", "#475569", "#94a3b8"),
         other => {
             const PALETTE: &[(&str, &str, &str)] = &[
                 ("#2d81ff", "#1659c4", "#74aaff"),
