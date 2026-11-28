@@ -170,6 +170,21 @@ pub const CATALOG: &[AppInfo] = &[
         category: Category::Games,
         bat: None,
     },
+    AppInfo {
+        id: "craftbackup",
+        name: "CraftBackup",
+        folder: None,
+        repo: "JavacrafterDevelopment/CraftBackup",
+        tagline: "Backs up the source code of your Craft apps into one archive.",
+        icon: None,
+        // Its releases ship CraftBackup-windows-x64.zip and CraftBackup-macos.zip
+        // (Apple Silicon), packaged like the launcher's own.
+        platforms: &["Windows", "MacOS"],
+        stop: Stop::CloseWindows,
+        source: Source::Own,
+        category: Category::Apps,
+        bat: None,
+    },
 ];
 
 /// How long to wait for an app to quit when asked before ending it outright.
@@ -353,6 +368,7 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
         "rustwinutil" => ("#e0622d", "#a83e12", "#ff9668"),
         "kittyconnect" => ("#2d81ff", "#1659c4", "#74aaff"),
         "inkcognito" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
+        "craftbackup" => ("#64748b", "#475569", "#94a3b8"),
         other => {
             const PALETTE: &[(&str, &str, &str)] = &[
                 ("#2d81ff", "#1659c4", "#74aaff"),
@@ -1310,6 +1326,16 @@ mod tests {
         assert_eq!(a.platforms, &["Windows", "MacOS"]);
         let t = Target::app(a.repo, a.folder());
         assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("Ink-cognito")), "{}", t.dir().display());
+    }
+
+    #[test]
+    fn craftbackup_is_an_app_for_windows_and_macos_from_its_own_releases() {
+        let a = CATALOG.iter().find(|a| a.id == "craftbackup").unwrap();
+        assert_eq!(a.category.id(), "apps");
+        assert!(matches!(a.source, Source::Own));
+        assert_eq!(a.platforms, &["Windows", "MacOS"]);
+        let t = Target::app(a.repo, a.folder());
+        assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("CraftBackup")), "{}", t.dir().display());
     }
 
     #[test]

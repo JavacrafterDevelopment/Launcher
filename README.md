@@ -62,6 +62,7 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | ScreenshotApp | [JavacrafterDevelopment/ScreenshotApp](https://github.com/JavacrafterDevelopment/ScreenshotApp) | Library |
 | RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
 | Portside (formerly KittyConnect) | [JavacrafterDevelopment/KittyConnect](https://github.com/JavacrafterDevelopment/KittyConnect) | Library |
+| CraftBackup | [JavacrafterDevelopment/CraftBackup](https://github.com/JavacrafterDevelopment/CraftBackup) | Library |
 | Ink-cognito | [JavacrafterDevelopment/Ink-cognito](https://github.com/JavacrafterDevelopment/Ink-cognito) | Games |
 
 Any other app can be added from **Settings → Add App from GitHub** by pasting
