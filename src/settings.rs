@@ -126,7 +126,7 @@ pub struct CustomApp {
     /// GitHub owner / publisher shown in the badge.
     #[serde(default)]
     pub publisher: String,
-    /// Which tab it appears under: `"apps"`, `"temporary"`, or `"games"`.
+    /// Which tab it appears under: `"apps"` or `"games"`.
     #[serde(default = "default_category")]
     pub category: String,
     /// Platforms this repository has releases for (`"Windows"`, `"MacOS"`).
@@ -155,10 +155,10 @@ pub struct GitHubAccount {
 }
 
 impl CustomApp {
-    /// Normalizes a category string to one of `"apps"`, `"temporary"`, or `"games"`.
+    /// Normalizes a category string to `"apps"` or `"games"`. The `"temporary"`
+    /// section older versions had is folded into `"apps"`.
     pub fn normalize_category(cat: &str) -> String {
         match cat {
-            "temporary" => "temporary".into(),
             "games" => "games".into(),
             _ => "apps".into(),
         }
@@ -478,7 +478,7 @@ mod tests {
         assert_eq!(CustomApp::make_id("acme/tool", &existing_ids), "custom-acme-tool-2");
         assert_eq!(CustomApp::make_folder("Tool", "acme", &existing_folders), "acme-Tool");
         assert_eq!(CustomApp::normalize_category("games"), "games");
-        assert_eq!(CustomApp::normalize_category("temporary"), "temporary");
+        assert_eq!(CustomApp::normalize_category("temporary"), "apps");
         assert_eq!(CustomApp::normalize_category("other"), "apps");
 
         let s = Settings {
@@ -489,7 +489,7 @@ mod tests {
                 repo: "acme/secret".into(),
                 tagline: "Private internal utility".into(),
                 publisher: "acme".into(),
-                category: "temporary".into(),
+                category: "games".into(),
                 platforms: vec!["Windows".into(), "MacOS".into()],
                 private: true,
                 own_format: false,
@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(back.custom_apps.len(), 1);
         assert_eq!(back.custom_apps[0].repo, "acme/secret");
         assert!(back.custom_apps[0].private);
-        assert_eq!(back.custom_apps[0].category, "temporary");
+        assert_eq!(back.custom_apps[0].category, "games");
         assert_eq!(back.custom_apps[0].account.as_deref(), Some("bob"));
         assert_eq!(back.github_accounts[0].login, "alice");
     }

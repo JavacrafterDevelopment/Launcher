@@ -60,8 +60,6 @@ pub enum Source {
 #[derive(Clone, Copy)]
 pub enum Category {
     Apps,
-    /// Short-lived tools, kept apart so they're easy to find and remove later.
-    Temporary,
     /// Games, installed and launched like any app.
     Games,
 }
@@ -70,14 +68,14 @@ impl Category {
     fn id(self) -> &'static str {
         match self {
             Category::Apps => "apps",
-            Category::Temporary => "temporary",
             Category::Games => "games",
         }
     }
 
+    /// Anything that isn't `"games"` is listed under Apps, including the
+    /// `"temporary"` section older versions had.
     pub fn from_id(s: &str) -> Self {
         match s {
-            "temporary" => Category::Temporary,
             "games" => Category::Games,
             _ => Category::Apps,
         }
@@ -173,16 +171,18 @@ pub const CATALOG: &[AppInfo] = &[
         bat: None,
     },
     AppInfo {
-        id: "tempcraftbackup",
-        name: "TempCraftBackup",
+        id: "craftbackup",
+        name: "CraftBackup",
         folder: None,
-        repo: "JavacrafterDevelopment/TempCraftBackup",
-        tagline: "Backs up the current source code of every Craft app into one 7z archive.",
+        repo: "JavacrafterDevelopment/CraftBackup",
+        tagline: "Backs up the source code of your Craft apps into one archive.",
         icon: None,
-        platforms: &["Windows"],
+        // Its releases ship CraftBackup-windows-x64.zip and CraftBackup-macos.zip
+        // (Apple Silicon), packaged like the launcher's own.
+        platforms: &["Windows", "MacOS"],
         stop: Stop::CloseWindows,
         source: Source::Own,
-        category: Category::Temporary,
+        category: Category::Apps,
         bat: None,
     },
 ];
@@ -368,7 +368,7 @@ fn app_colors(id: &str) -> (&'static str, &'static str, &'static str) {
         "rustwinutil" => ("#e0622d", "#a83e12", "#ff9668"),
         "kittyconnect" => ("#2d81ff", "#1659c4", "#74aaff"),
         "inkcognito" => ("#8b5cf6", "#6a3fd6", "#b69cff"),
-        "tempcraftbackup" => ("#64748b", "#475569", "#94a3b8"),
+        "craftbackup" => ("#64748b", "#475569", "#94a3b8"),
         other => {
             const PALETTE: &[(&str, &str, &str)] = &[
                 ("#2d81ff", "#1659c4", "#74aaff"),
@@ -1326,6 +1326,16 @@ mod tests {
         assert_eq!(a.platforms, &["Windows", "MacOS"]);
         let t = Target::app(a.repo, a.folder());
         assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("Ink-cognito")), "{}", t.dir().display());
+    }
+
+    #[test]
+    fn craftbackup_is_an_app_for_windows_and_macos_from_its_own_releases() {
+        let a = CATALOG.iter().find(|a| a.id == "craftbackup").unwrap();
+        assert_eq!(a.category.id(), "apps");
+        assert!(matches!(a.source, Source::Own));
+        assert_eq!(a.platforms, &["Windows", "MacOS"]);
+        let t = Target::app(a.repo, a.folder());
+        assert!(t.dir().ends_with(std::path::Path::new(APPS_DIR).join("CraftBackup")), "{}", t.dir().display());
     }
 
     #[test]

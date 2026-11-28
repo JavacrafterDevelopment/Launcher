@@ -227,28 +227,6 @@ impl Target {
         }
     }
 
-    /// A third-party app published on GitHub releases, installed at
-    /// `portableApplications\<name>`. `package` may contain `{version}`.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn third_party(repo: &str, name: &str, package: &str, exe: &str) -> Self {
-        Self::third_party_in(repo, name, package, exe, &app_dir().join(APPS_DIR))
-    }
-
-    /// A third-party app published on GitHub releases, installed at `<root>/<name>`.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn third_party_in(repo: &str, name: &str, package: &str, exe: &str, root: &Path) -> Self {
-        Self {
-            repo: repo.into(),
-            package: package.into(),
-            dir: root.join(name),
-            self_exe: None,
-            update_json: false,
-            default_exe: Some(exe.into()),
-            auto_match: false,
-            private: false,
-        }
-    }
-
     /// A user-added GitHub repository (public or private) whose release assets and
     /// executable are auto-detected, installed at `<root>/<folder>`.
     pub fn custom_in(repo: &str, folder: &str, own_format: bool, private: bool, root: &Path) -> Self {
