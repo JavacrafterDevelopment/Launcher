@@ -2,40 +2,40 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.22",
-      "published": "2026-11-28T09:29:38Z",
-      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
+      "version": "0.3.23",
+      "published": "2026-11-28T10:12:34Z",
+      "notes": "## What's Changed\n* v0.3.23: Version in Settings header, add CraftBackup, remove TempCraftBackup & Temporary Apps tab, Apple Silicon-only Mac build, PR CI by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/10\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.22...v0.3.23",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.23",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-windows-x64.zip",
-        "size": 1540877,
-        "sha256": "c2aea92c4998e9e40afa16afb1b2f46fb5e5a3630b053bc5b38607741cfc2348"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.23/Launcher-windows-x64.zip",
+        "size": 1540136,
+        "sha256": "179e3eb511e0d67d0453a60e7bd38d1c8136c0c21184df28ef36787e966da50e"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2555392,
-          "sha256": "9b7694192709120b53f55918876987f76d3b427a1ae36029160aef44060d9156"
+          "size": 2553344,
+          "sha256": "2ad1d6d0b6eb7a854c754f766584612c453ebceefbfd84c075cb9a48cf861011"
         }
       ]
     },
     "stable": {
-      "version": "0.3.22",
-      "published": "2026-11-28T09:29:38Z",
-      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
+      "version": "0.3.23",
+      "published": "2026-11-28T10:12:34Z",
+      "notes": "## What's Changed\n* v0.3.23: Version in Settings header, add CraftBackup, remove TempCraftBackup & Temporary Apps tab, Apple Silicon-only Mac build, PR CI by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/10\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.22...v0.3.23",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.23",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-windows-x64.zip",
-        "size": 1540877,
-        "sha256": "c2aea92c4998e9e40afa16afb1b2f46fb5e5a3630b053bc5b38607741cfc2348"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.23/Launcher-windows-x64.zip",
+        "size": 1540136,
+        "sha256": "179e3eb511e0d67d0453a60e7bd38d1c8136c0c21184df28ef36787e966da50e"
       },
       "exe": "Launcher.exe",
       "files": [
         {
           "path": "Launcher.exe",
-          "size": 2555392,
-          "sha256": "9b7694192709120b53f55918876987f76d3b427a1ae36029160aef44060d9156"
+          "size": 2553344,
+          "sha256": "2ad1d6d0b6eb7a854c754f766584612c453ebceefbfd84c075cb9a48cf861011"
         }
       ]
     }

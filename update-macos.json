@@ -2,26 +2,26 @@
   "schema": 1,
   "channels": {
     "beta": {
-      "version": "0.3.22",
-      "published": "2026-11-28T09:29:38Z",
-      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
+      "version": "0.3.23",
+      "published": "2026-11-28T10:12:34Z",
+      "notes": "## What's Changed\n* v0.3.23: Version in Settings header, add CraftBackup, remove TempCraftBackup & Temporary Apps tab, Apple Silicon-only Mac build, PR CI by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/10\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.22...v0.3.23",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.23",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-macos.zip",
-        "size": 3365366,
-        "sha256": "68f1d99f93173cec08e518cb308c7f8d06da02e0a0f7e22a10064068a6dd66d7"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.23/Launcher-macos.zip",
+        "size": 1671190,
+        "sha256": "2680eb4ed376b0b90fe02704bc90af6d40f78995606fedba44b0228688f68780"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "8bd061827857ed774c747e7fd1109d1be76a346fe7263d3f13b73554ee9f1be0"
+          "sha256": "76da6d9284cf09f89459bf50440414d58b2614aa1dca9a0d134c2eef92d6052f"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 5690496,
-          "sha256": "d21cb0d76831dbe2b0c190b043ac92962ed6a7e788a0595caf97e0296bc1a2da"
+          "size": 2741344,
+          "sha256": "7af6ca396eee821f9b1d9ba505e675cc5d43809e6acda6dab9f829e2f6b341af"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
@@ -36,26 +36,26 @@
       ]
     },
     "stable": {
-      "version": "0.3.22",
-      "published": "2026-11-28T09:29:38Z",
-      "notes": "## What's Changed\n* v0.3.22: Remove built-in ArtCraft apps, smarter portable/Apple Silicon asset picking, release on merge by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/9\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/0.3.21...v0.3.22",
-      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.22",
+      "version": "0.3.23",
+      "published": "2026-11-28T10:12:34Z",
+      "notes": "## What's Changed\n* v0.3.23: Version in Settings header, add CraftBackup, remove TempCraftBackup & Temporary Apps tab, Apple Silicon-only Mac build, PR CI by @JavacrafterDevelopment in https://github.com/JavacrafterDevelopment/Launcher/pull/10\n\n\n**Full Changelog**: https://github.com/JavacrafterDevelopment/Launcher/compare/v0.3.22...v0.3.23",
+      "page": "https://github.com/JavacrafterDevelopment/Launcher/releases/tag/v0.3.23",
       "package": {
-        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.22/Launcher-macos.zip",
-        "size": 3365366,
-        "sha256": "68f1d99f93173cec08e518cb308c7f8d06da02e0a0f7e22a10064068a6dd66d7"
+        "url": "https://github.com/JavacrafterDevelopment/Launcher/releases/download/v0.3.23/Launcher-macos.zip",
+        "size": 1671190,
+        "sha256": "2680eb4ed376b0b90fe02704bc90af6d40f78995606fedba44b0228688f68780"
       },
       "exe": "Launcher.app/Contents/MacOS/Launcher",
       "files": [
         {
           "path": "Launcher.app/Contents/Info.plist",
           "size": 928,
-          "sha256": "8bd061827857ed774c747e7fd1109d1be76a346fe7263d3f13b73554ee9f1be0"
+          "sha256": "76da6d9284cf09f89459bf50440414d58b2614aa1dca9a0d134c2eef92d6052f"
         },
         {
           "path": "Launcher.app/Contents/MacOS/Launcher",
-          "size": 5690496,
-          "sha256": "d21cb0d76831dbe2b0c190b043ac92962ed6a7e788a0595caf97e0296bc1a2da"
+          "size": 2741344,
+          "sha256": "7af6ca396eee821f9b1d9ba505e675cc5d43809e6acda6dab9f829e2f6b341af"
         },
         {
           "path": "Launcher.app/Contents/Resources/launcher.icns",
