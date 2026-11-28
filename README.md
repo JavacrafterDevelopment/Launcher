@@ -63,15 +63,18 @@ The Library page lists the apps in [src/apps.rs](src/apps.rs):
 | RustWinUtil | [JavacrafterDevelopment/RustWinUtil](https://github.com/JavacrafterDevelopment/RustWinUtil) | Library |
 | Portside (formerly KittyConnect) | [JavacrafterDevelopment/KittyConnect](https://github.com/JavacrafterDevelopment/KittyConnect) | Library |
 | Ink-cognito | [JavacrafterDevelopment/Ink-cognito](https://github.com/JavacrafterDevelopment/Ink-cognito) | Games |
-| PhotoCraft | [storytold/photocraft](https://github.com/storytold/photocraft) | Third-party apps |
-| VectorCraft | [storytold/vectorcraft](https://github.com/storytold/vectorcraft) | Third-party apps |
-| FilmCraft | [storytold/filmcraft](https://github.com/storytold/filmcraft) | Third-party apps |
-| EffectCraft | [storytold/effectcraft](https://github.com/storytold/effectcraft) | Third-party apps |
-| LightCraft | [storytold/lightcraft](https://github.com/storytold/lightcraft) | Third-party apps |
-| DesignCraft | [storytold/designcraft](https://github.com/storytold/designcraft) | Third-party apps |
-| PdfCraft | [storytold/pdfcraft](https://github.com/storytold/pdfcraft) | Third-party apps |
-| FigCraft | [storytold/figcraft](https://github.com/storytold/figcraft) | Third-party apps |
-| SoundCraft | [storytold/soundcraft](https://github.com/storytold/soundcraft) | Third-party apps |
+
+Any other app can be added from **Settings → Add App from GitHub** by pasting
+its repository link (`https://github.com/owner/repo`, `owner/repo`, a `.git` or a
+releases link all work). The launcher picks the release download for your OS on
+its own, preferring a portable package over an installer:
+
+- **Windows**: a `.zip` (or bare `.exe`) labelled `windows`/`win64`/`x64`, with
+  `portable` ranked first and `setup`/`installer` builds last.
+- **macOS**: a `.zip` or `.dmg` labelled `macos`/`darwin`/`osx`/`mac`/`apple`. On
+  Apple Silicon, `arm64`, `aarch64`, `arm`, `silicon` or `m1`/`m2`/`m3`/`m4` builds
+  come first, then `universal`, then Intel builds (which run under Rosetta);
+  `portable` is preferred among those. On an Intel Mac, ARM-only builds are skipped.
 
 **Install** puts an app in `portableApplications\<Name>\` (an app renamed
 after people installed it, like Portside, keeps its old folder, so it updates

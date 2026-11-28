@@ -1,7 +1,8 @@
 # Publishes a release whenever a version tag is pushed:
 #
 #   1. bump `version` in Cargo.toml (e.g. 0.2.8) and commit
-#   2. git tag v0.2.8 && git push origin main v0.2.8
+#   2. merge it into main: tag-on-merge.yml tags v0.2.8 and starts this workflow
+#      (or tag by hand: git tag v0.2.8 && git push origin main v0.2.8)
 #
 # Builds both Windows (x86_64-pc-windows-msvc) and macOS universal
 # (aarch64-apple-darwin + x86_64-apple-darwin), packages each with a manifest of
@@ -14,6 +15,9 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Started by tag-on-merge.yml with the new tag as the ref: a tag pushed with the
+  # workflow's own token doesn't fire `push` events, but a dispatch does.
+  workflow_dispatch:
 
 # One release at a time, so two tags pushed together can't race on update.json.
 concurrency: release

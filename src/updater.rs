@@ -235,6 +235,7 @@ impl Target {
     }
 
     /// A third-party app published on GitHub releases, installed at `<root>/<name>`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn third_party_in(repo: &str, name: &str, package: &str, exe: &str, root: &Path) -> Self {
         Self {
             repo: repo.into(),
@@ -1498,9 +1499,18 @@ fn resolve_authenticated_download_url(api_asset_url: &str, token: &str) -> Resul
 
 /// Scores a GitHub release asset for either Windows (`macos == false`) or macOS (`macos == true`).
 /// Returns `None` if the asset is definitely not installable on that OS.
+///
+/// Portable packages win: a `.zip` beats an installer, and a name with `portable` in it
+/// beats one without. On macOS, Apple Silicon builds (`arm64`, `aarch64`, `arm`,
+/// `silicon`, `m1`…`m4`) come first on an ARM Mac, then `universal`, then Intel builds
+/// (Rosetta); an Intel Mac skips ARM-only builds.
 fn score_asset_for_os(name: &str, macos: bool) -> Option<i32> {
+    score_asset(name, macos, cfg!(target_arch = "aarch64"))
+}
+
+fn score_asset(name: &str, macos: bool, host_arm: bool) -> Option<i32> {
     let n = name.to_ascii_lowercase();
-    // Skip checksums, signatures, source tarballs, docs, Linux/mobile packages.
+    // Skip checksums, signatures, source tarballs, docs, Linux/mobile packages and installers.
     for skip in [
         ".sha256", ".sha512", ".md5", ".sig", ".asc", ".txt", ".json", ".yml", ".yaml", ".blockmap",
         ".appimage", ".deb", ".rpm", ".flatpak", ".snap", ".apk", ".ipa", ".tar.gz", ".tgz", ".tar.xz",
@@ -1514,18 +1524,34 @@ fn score_asset_for_os(name: &str, macos: bool) -> Option<i32> {
         return None;
     }
 
+    // Whole words of the name (`app-1.2-macos-arm64.zip` → app, 1, 2, macos, arm64, zip),
+    // so short keywords like `arm`, `mac` or `m1` don't match inside other words.
+    let words: Vec<&str> = n.split(|c: char| !c.is_ascii_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let word = |w: &[&str]| words.iter().any(|x| w.contains(x));
+
+    let is_mac = n.contains("macos") || n.contains("darwin") || n.contains("osx") || n.contains("silicon")
+        || word(&["mac", "apple", "macintosh"]);
+    let is_win = n.contains("windows") || n.ends_with(".exe") || word(&["win", "win32", "win64", "msvc"]);
+    let is_arm = n.contains("arm64") || n.contains("aarch64") || n.contains("silicon")
+        || word(&["arm", "armv8", "m1", "m2", "m3", "m4"]);
+    let is_intel = n.contains("x86_64") || n.contains("x86-64") || n.contains("amd64") || n.contains("intel")
+        || word(&["x64", "x86", "i686", "win64"]);
+    let is_universal = n.contains("universal") || (is_arm && is_intel);
+    let is_zip = n.ends_with(".zip");
+    let portable = n.contains("portable");
+    let installer = n.contains("setup") || n.contains("installer");
+
     if macos {
-        if n.contains("windows") || n.contains("win64") || n.contains("win32") || n.contains("-win-") || n.ends_with(".exe") {
+        if is_win && !is_mac {
             return None;
         }
         let is_dmg = n.ends_with(".dmg");
-        let is_zip = n.ends_with(".zip");
         if !is_dmg && !is_zip {
             return None;
         }
+        // A zip unpacks straight into the app's folder; a dmg has to be mounted first.
         let mut score = if is_zip { 25 } else { 20 };
-        let has_mac_tag = n.contains("macos") || n.contains("darwin") || n.contains("osx") || n.contains("-mac") || n.contains("_mac");
-        if has_mac_tag {
+        if is_mac {
             score += 40;
         } else if is_dmg {
             score += 35;
@@ -1533,43 +1559,44 @@ fn score_asset_for_os(name: &str, macos: bool) -> Option<i32> {
             // Unlabelled `.zip` could be anything; only pick if nothing better exists.
             score -= 10;
         }
-        let host_arm = cfg!(target_arch = "aarch64");
-        if n.contains("universal") {
+        if is_universal {
             score += 20;
-        } else if host_arm && (n.contains("arm64") || n.contains("aarch64")) {
+        } else if is_arm {
+            if !host_arm {
+                return None; // an ARM-only build can't run on an Intel Mac
+            }
             score += 25;
-        } else if !host_arm && (n.contains("x86_64") || n.contains("x64") || n.contains("amd64") || n.contains("intel")) {
-            score += 25;
-        } else if host_arm && (n.contains("x86_64") || n.contains("x64") || n.contains("intel")) {
-            score += 5; // Rosetta fallback
-        } else if !host_arm && (n.contains("arm64") || n.contains("aarch64")) {
-            return None; // arm64 binary cannot run on Intel Mac
+        } else if is_intel {
+            score += if host_arm { 5 } else { 25 }; // Rosetta fallback on Apple Silicon
+        }
+        if portable {
+            score += 15;
+        }
+        if installer {
+            score -= 40;
         }
         Some(score)
     } else {
-        if n.contains("macos") || n.contains("darwin") || n.contains("osx") || n.contains("-mac") || n.contains("_mac") || n.ends_with(".dmg") {
+        if is_mac || n.ends_with(".dmg") {
             return None;
         }
-        let is_zip = n.ends_with(".zip");
         let is_exe = n.ends_with(".exe");
         if !is_zip && !is_exe {
             return None;
         }
         let mut score = if is_zip { 30 } else { 10 };
-        if n.contains("windows") || n.contains("win64") || n.contains("win32") || n.contains("-win") || n.contains("_win") {
+        if is_win {
             score += 40;
         }
-        if n.contains("portable") {
+        if portable {
             score += 20;
         }
-        if n.contains("x64") || n.contains("x86_64") || n.contains("amd64") || n.contains("win64") {
+        if is_intel && !is_arm {
             score += 15;
-        } else if n.contains("arm64") || n.contains("aarch64") {
+        } else if is_arm {
             score -= 10;
-        } else if n.contains("x86") || n.contains("i686") || n.contains("win32") {
-            score += 2;
         }
-        if n.contains("setup") || n.contains("installer") {
+        if installer {
             score -= 40;
         }
         Some(score)
@@ -2660,5 +2687,93 @@ mod tests {
         );
         let refs: Vec<&GhAsset> = assets.iter().collect();
         assert_eq!(detect_platforms_from_assets(&refs), vec!["Windows", "MacOS"]);
+    }
+
+    /// Picks the best of `names` for the given OS/CPU with the same rules as
+    /// `select_release_asset_for_os`.
+    fn pick<'a>(names: &[&'a str], macos: bool, host_arm: bool) -> Option<&'a str> {
+        names
+            .iter()
+            .filter_map(|n| Some((score_asset(n, macos, host_arm)?, *n)))
+            .max_by_key(|(s, _)| *s)
+            .map(|(_, n)| n)
+    }
+
+    #[test]
+    fn apple_silicon_prefers_arm_portable_zip() {
+        let names = [
+            "Tool-2.0.0-mac-x64.zip",
+            "Tool-2.0.0-mac-arm64.dmg",
+            "Tool-2.0.0-mac-arm64.zip",
+            "Tool-2.0.0-win-x64-portable.zip",
+            "Tool-2.0.0-win-x64-setup.exe",
+            "Tool-2.0.0-linux-arm64.AppImage",
+        ];
+        assert_eq!(pick(&names, true, true), Some("Tool-2.0.0-mac-arm64.zip"));
+        assert_eq!(pick(&names, true, false), Some("Tool-2.0.0-mac-x64.zip"));
+        assert_eq!(pick(&names, false, false), Some("Tool-2.0.0-win-x64-portable.zip"));
+    }
+
+    #[test]
+    fn apple_silicon_keywords_are_recognised() {
+        // "silicon" and "apple" mark a macOS build even without "mac" in the name.
+        let names = ["app-apple-silicon.zip", "app-intel.zip", "app-windows.zip"];
+        assert_eq!(pick(&names, true, true), Some("app-apple-silicon.zip"));
+        assert_eq!(pick(&names, true, false), Some("app-intel.zip"));
+        assert_eq!(pick(&names, false, false), Some("app-windows.zip"));
+
+        // Bare "arm" / "m1" as whole words, but not inside other words.
+        assert_eq!(pick(&["app_macos_arm.zip", "app_macos_x86_64.zip"], true, true), Some("app_macos_arm.zip"));
+        assert_eq!(pick(&["app-macOS-M1.dmg", "app-macOS-Intel.dmg"], true, true), Some("app-macOS-M1.dmg"));
+        assert!(score_asset("farmer-macos.zip", true, false).is_some(), "'farm' isn't 'arm'");
+
+        // ARM-only builds can't run on an Intel Mac.
+        assert_eq!(score_asset("app-macos-arm64.zip", true, false), None);
+        assert_eq!(score_asset("app-darwin-aarch64.zip", true, false), None);
+    }
+
+    #[test]
+    fn artcraft_releases_resolve_when_added_from_settings() {
+        // The asset names the ArtCraft (storytold/*) apps publish, which used to be
+        // hard-coded in the catalog: pasting their repo link must still find them.
+        for app in ["photocraft", "wordcraft", "pdfcraft"] {
+            let names = [
+                format!("{app}-0.9.0-windows-x64-portable.zip"),
+                format!("{app}-0.9.0-macos-universal.dmg"),
+                format!("{app}-0.9.0-windows-x64-portable.zip.sha256"),
+            ];
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            assert_eq!(pick(&names, false, false), Some(names[0]));
+            assert_eq!(pick(&names, true, true), Some(names[1]));
+            assert_eq!(pick(&names, true, false), Some(names[1]));
+        }
+    }
+
+    #[test]
+    fn macos_prefers_portable_and_universal_and_skips_installers() {
+        // Portable zip beats a dmg of the same build.
+        assert_eq!(
+            pick(&["app-1.0-macos-universal.dmg", "app-1.0-macos-universal-portable.zip"], true, true),
+            Some("app-1.0-macos-universal-portable.zip")
+        );
+        // Universal beats Intel-only on Apple Silicon and on Intel... but a native build beats universal on ARM.
+        assert_eq!(pick(&["app-macos-universal.zip", "app-macos-x86_64.zip"], true, true), Some("app-macos-universal.zip"));
+        assert_eq!(pick(&["app-macos-universal.zip", "app-macos-arm64.zip"], true, true), Some("app-macos-arm64.zip"));
+        // .pkg installers and Windows builds are never chosen on macOS.
+        assert_eq!(pick(&["app-macos-arm64.pkg", "app-win64.zip"], true, true), None);
+        // Typical Tauri / Electron names.
+        assert_eq!(
+            pick(&["App_1.0.0_aarch64.dmg", "App_1.0.0_x64.dmg", "App_1.0.0_x64-setup.exe", "App_1.0.0_x64_en-US.msi"], true, true),
+            Some("App_1.0.0_aarch64.dmg")
+        );
+        assert_eq!(
+            pick(&["App-1.0.0-arm64-mac.zip", "App-1.0.0-mac.zip", "App-1.0.0-arm64.dmg", "App Setup 1.0.0.exe"], true, true),
+            Some("App-1.0.0-arm64-mac.zip")
+        );
+        assert_eq!(
+            pick(&["App_1.0.0_aarch64.dmg", "App_1.0.0_x64.dmg", "App_1.0.0_x64-setup.exe", "App_1.0.0_x64_en-US.msi"], false, false),
+            Some("App_1.0.0_x64-setup.exe"),
+            "an installer exe is only a last resort on Windows"
+        );
     }
 }
